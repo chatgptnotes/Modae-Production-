@@ -38,8 +38,8 @@ export function recommendTerms(opp, config = {}) {
   // Per-class payment terms live on the class rule; classRules is the legacy
   // key kept for states saved before the rules became configurable.
   const payment = classRule(config, opp.customerStatus)?.paymentTerms
-    || config.classRules?.[opp.customerStatus]
-    || '100% prepayment only'
+    ?? config.classRules?.[opp.customerStatus]
+    ?? ''
   const delivery = opp.route === 'Spares' ? '6-8 weeks ex-works'
     : opp.route === 'Service' ? 'Engineer mobilisation within 2 weeks of PO'
     : '16-20 weeks per milestone schedule'

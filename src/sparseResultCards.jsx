@@ -56,7 +56,7 @@ export function LeadSummaryCard({ lead: l, selected, onSelect, onStar, completen
     <div className="sparse-card-footer">
       <label className="sparse-card-select"><input type="checkbox" checked={selected} onChange={onSelect} aria-label={`Select ${l.subject}`} /> Select</label>
       <button type="button" className={`sparse-card-star${l.starred ? ' starred' : ''}`} onClick={onStar} aria-label={`${l.starred ? 'Unstar' : 'Star'} lead ${l.subject}`} aria-pressed={!!l.starred}>{l.starred ? '★' : '☆'}</button>
-      {l.oppId && <Link className="sparse-card-linked" to={`/opp/${l.oppId}`}>Opportunity {l.oppId}</Link>}
+      {l.oppId && <Link className="sparse-card-linked" to={`/opp/${l.oppId}`}>Opportunity {displayOpportunityId(l.oppId)}</Link>}
       <Link className="sparse-card-open" to={`/inbox/${l.id}`}>Open lead <span aria-hidden="true">→</span></Link>
     </div>
   </article>

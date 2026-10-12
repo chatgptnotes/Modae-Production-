@@ -694,7 +694,8 @@ h1, h2, h3, h4, h5, h6 { font-family: var(--font-heading); }
 }
 /* On the dark sidebar the tile would vanish into the background — lift it */
 .sidenav .modae-mark rect, .tablet-bar .modae-mark rect { fill: var(--palette-c6206cbf); }
-.side-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0; }
+.side-nav { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 8px 0; scrollbar-width: none; }
+.side-nav::-webkit-scrollbar { display: none; }
 .side-nav-group + .side-nav-group { margin-top: 10px; }
 .side-nav-heading { padding: 5px 16px 3px; color: var(--palette-1fb54521); font-size: 10px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; }
 .side-item {
@@ -6890,7 +6891,10 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .tracker-date-pop-actions button { min-height: 30px; padding: 5px 10px; }
 @media (max-width: 760px) { .tracker-date-pop { width: min(300px, calc(100vw - 16px)); min-width: 0; } .tracker-date-error { white-space: normal; } }
 .tracker-page table.sheet td input, .tracker-page table.sheet td select { min-width: 0; text-overflow: clip; }
-.tracker-stage-cell { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.tracker-stage-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; min-width: 0; }
+.tracker-stage-cell > :first-child { flex: 0 0 auto; max-width: 100%; }
+.tracker-stage-cell .mark-won-control { flex: 0 0 auto; white-space: nowrap; overflow-wrap: normal; }
+.tracker-stage-cell .mark-won-control span { flex: none; }
 .tracker-terminal-stage { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
 .tracker-outcome-label { font-size: 11px; font-weight: 800; letter-spacing: .02em; }
 .tracker-terminal-stage.won .tracker-outcome-label { color: var(--won-text); }
@@ -6909,7 +6913,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .close-outcome-form textarea { min-height: 58px; resize: vertical; }
 .tracker-page table.sheet td.num input { text-align: right; }
 
-/* Key fields share the page width, with wrapping instead of sideways scroll. */
+/* Key fields wrap within the space after the frozen identity columns. */
 .tracker-page table.sheet.cols-key th.th-filter { height: auto; min-height: 46px; }
 .tracker-page table.sheet.cols-key th.th-filter { font-size: 12px; }
 .tracker-page table.sheet.cols-key td input,
@@ -6917,7 +6921,7 @@ html, body { overflow-x: hidden; max-width: 100%; }
   text-overflow: clip;
 }
 
-/* Fixed layout keeps headers and editors aligned with the percentage columns. */
+/* Fixed layout keeps headers and editors aligned with the shared column tracks. */
 .tracker-page table.sheet.cols-key { table-layout: fixed; }
 /* At high zoom, even a single long token has to stay inside its cell. */
 .tracker-page .sheet.cols-key th, .tracker-page .sheet.cols-key td {
@@ -6952,24 +6956,14 @@ html, body { overflow-x: hidden; max-width: 100%; }
 .tracker-page .sheet.cols-key th,
 .tracker-page .sheet.cols-key td { padding: 5px 4px; }
 .tracker-page .sheet.cols-key th.th-filter { padding: 4px; }
-/* There is no sideways movement in key view, so pinning the first cells would
-   make them overlap when their percentage tracks become narrow at zoom. */
-.tracker-page table.sheet.cols-key tbody :is(td.rowhead, td.oppid) {
-  position: static;
-  left: auto;
-}
-.tracker-page table.sheet.cols-key thead :is(th.rowhead, th:nth-child(2)) {
-  left: auto;
-}
 .tracker-page .sheet.cols-key .tracker-stage-cell {
   flex-wrap: wrap;
   gap: 3px;
 }
 .tracker-page .sheet.cols-key .mark-won-control {
-  flex: 0 1 auto;
-  min-width: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 .tracker-page .sheet.cols-key .mark-won-control input {
   flex: none;
@@ -7012,7 +7006,6 @@ table.sheet td .wrapcell:focus {
   word-break: normal;
 }
 .tracker-page .sheet:not(.cols-key) .wrapcell {
-  height: auto !important;
   white-space: normal;
   overflow-wrap: break-word;
   word-break: normal;
@@ -7029,18 +7022,7 @@ table.sheet td .wrapcell:focus {
   word-break: normal;
 }
 
-/* Scrolling sideways past a dozen columns loses you the row you were reading,
-   so the Sl number and the Opp ID pin to the left edge. A sticky cell needs an
-   opaque background of its own or the scrolled columns show through it — hence
-   the striping and hover fills repeated here at matching specificity. */
-.tracker-page .sheet:not(.cols-key) th.rowhead { left: 0; z-index: 3; }
-.tracker-page .sheet:not(.cols-key) td.rowhead { position: sticky; left: 0; z-index: 2; }
-.tracker-page .sheet:not(.cols-key) thead tr > :nth-child(2) { left: 34px; z-index: 3; }
-.tracker-page .sheet:not(.cols-key) tbody tr > :nth-child(2) {
-  position: sticky; left: 34px; z-index: 2; background: var(--palette-4843938);
-}
-.tracker-page .sheet:not(.cols-key) tbody tr:nth-child(even) > :nth-child(2) { background: var(--palette-2e00a314); }
-.tracker-page .sheet:not(.cols-key) tbody tr:hover > :nth-child(2) { background: var(--select-fill); }
+
 
 /* Final tracker alignment contract. The route-level page owns the available
    width; the full workbook may scroll inside the sheet, but neither the
@@ -17677,9 +17659,7 @@ table.sheet tbody tr:hover td {
   color: var(--action-secondary-text) !important;
 }
 
-/* Give the two workflow hand-off columns enough room for their real values.
-   Date editors stay inside the date column and the owner selector stays inside
-   Next Action instead of pushing into the table edge. */
+/* Keep order-date editors inside their column in the compact view. */
 .opportunities-page .tracker-grid-shell table.sheet.cols-key th:nth-child(22),
 .opportunities-page .tracker-grid-shell table.sheet.cols-key td:nth-child(22) {
   min-width: 0;
@@ -17691,19 +17671,7 @@ table.sheet tbody tr:hover td {
   max-width: 100%;
   white-space: nowrap;
 }
-.opportunities-page .tracker-grid-shell table.sheet.cols-key th:nth-child(32),
-.opportunities-page .tracker-grid-shell table.sheet.cols-key td:nth-child(32) {
-  min-width: 0;
-}
-.opportunities-page .tracker-grid-shell table.sheet.cols-key td:nth-child(32) select {
-  box-sizing: border-box;
-  width: 100%;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+
 .opportunities-page .tracker-grid-shell > .toolbar .tracker-search-group {
   min-width: min(360px, 100%);
 }
@@ -18303,7 +18271,8 @@ table.sheet tbody tr:hover td {
   z-index: 30;
   display: grid;
   grid-template-areas: "title search controls utilities";
-  grid-template-columns: minmax(150px, 1fr) minmax(220px, 340px) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 280px) auto auto;
+  flex: 0 0 auto;
   align-items: center;
   gap: 12px;
   min-height: 58px;
@@ -18317,7 +18286,7 @@ table.sheet tbody tr:hover td {
 .workspace-topbar-search { grid-area: search; }
 .workspace-topbar__controls { grid-area: controls; display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: 0; }
 .workspace-topbar__utilities { grid-area: utilities; display: flex; align-items: center; justify-content: flex-end; gap: 7px; min-width: max-content; }
-.workspace-topbar.has-local-search { grid-template-areas: "title controls utilities"; grid-template-columns: minmax(150px, 1fr) minmax(0, 1fr) auto; }
+.workspace-topbar.has-local-search { grid-template-areas: "title controls utilities"; grid-template-columns: minmax(0, 1fr) auto auto; }
 .workspace-topbar-search { position: relative; display: flex; align-items: center; gap: 8px; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-tertiary); background: var(--surface-sunken); }
 .workspace-topbar-search:focus-within { border-color: #A8A29E; background: var(--surface-default); }
 .workspace-topbar-search input { width: 100%; min-width: 0; border: 0 !important; outline: 0 !important; box-shadow: none !important; padding: 0 !important; background: transparent !important; color: var(--text-primary); font-size: 12px; }
@@ -18355,11 +18324,6 @@ table.sheet tbody tr:hover td {
 .workspace-guide-button, .workspace-theme-toggle { min-height: 31px; padding: 4px 7px; border: 1px solid var(--border-default); border-radius: 5px; background: var(--surface-default); color: var(--text-secondary); font-size: 10px; }
 .workspace-theme-toggle { display: inline-grid; width: 31px; place-items: center; padding: 0; }
 .workspace-guide-popover { position: absolute; top: calc(100% + 7px); right: 0; z-index: 90; width: 260px; padding: 10px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--surface-default); color: var(--text-secondary); box-shadow: 0 12px 32px rgba(40, 40, 40, .14); font-size: 11px; line-height: 1.45; }
-.workspace-system-status { display: grid; gap: 4px; padding: 2px 5px 8px; border-bottom: 1px solid rgba(255,255,255,.1); color: rgba(255,255,255,.58); font-family: var(--font-mono); font-size: 8px; letter-spacing: .03em; text-transform: uppercase; }
-.workspace-ai-health { display: inline-flex; align-items: center; gap: 5px; }
-.workspace-ai-health i { width: 6px; height: 6px; border-radius: 50%; background: #A8A29E; }
-.workspace-ai-health.is-online i { background: #37A64A; }
-.workspace-ai-health.is-unreachable i { background: #C93838; }
 .workspace-owner-filter { display: inline-flex; align-items: center; gap: 7px; color: var(--text-secondary); font-size: 11px; }
 .workspace-owner-filter select { min-height: 32px; border: 1px solid var(--border-default); border-radius: 5px; background: var(--surface-default); color: var(--text-primary); font-size: 11px; }
 .side-access-badge { margin-left: auto; padding: 2px 4px; border: 1px solid rgba(255,255,255,.14); border-radius: 3px; color: rgba(255,255,255,.5); font-family: var(--font-mono); font-size: 8px; letter-spacing: .04em; }
@@ -18416,6 +18380,7 @@ table.sheet tbody tr:hover td {
 .mailbox-page > .mail-search-row { margin-bottom: 8px; }
 .mailbox-page > .workspace-insights { min-height: 34px; margin: 0 0 6px; padding: 4px 10px; border-color: #F0D9A8; border-left: 3px solid #D99200; border-radius: 5px; background: #FFFBF1; }
 .mailbox-split { display: grid; flex: 1 1 auto; grid-template-columns: minmax(0, 4fr) minmax(300px, 1.15fr); grid-template-rows: minmax(0, 1fr); gap: 14px; min-height: 0; align-items: stretch; }
+.shell .mailbox-page .mailbox-split.mailbox-split--no-preview { grid-template-columns: minmax(0, 1fr); gap: 0; }
 .mailbox-list-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .mailbox-list-panel > .mailbox-list { flex: 1 1 auto; min-height: 0; min-width: 0; overflow-x: auto; overflow-y: auto; }
 .mailbox-page > .list-pagination { flex: 0 0 auto; width: 100%; min-height: 44px; background: #FFF; }
@@ -18672,26 +18637,30 @@ table.sheet tbody tr:hover td {
   .proposal-sent-register-actions { align-items: flex-start; flex-direction: column; }
 }
 
-@media (max-width: 1280px) {
-  .workspace-topbar { grid-template-areas: "title search utilities" "controls controls utilities"; grid-template-columns: minmax(120px, 1fr) minmax(180px, 1fr) auto; gap: 6px 10px; padding-inline: 12px; }
-  .workspace-topbar.has-local-search { grid-template-areas: "title utilities" "controls controls"; grid-template-columns: minmax(0, 1fr) auto; }
-  .workspace-topbar__controls { justify-content: flex-end; }
-  .workspace-role-access { display: none; }
-}
-@media (max-width: 900px) {
-  .workspace-topbar { grid-template-areas: "title utilities" "search search" "controls controls"; grid-template-columns: minmax(0, 1fr) auto; }
-  .workspace-topbar.has-local-search { grid-template-areas: "title utilities" "controls controls"; }
-  .workspace-topbar__utilities { justify-content: flex-end; }
-  .workspace-topbar__controls { justify-content: flex-start; }
-}
+/* Use actual header space, including sidebar width and browser zoom. */
+.workspace-topbar-title { overflow: hidden; text-overflow: ellipsis; }
+.workspace-topbar__controls, .workspace-topbar__utilities { flex-wrap: nowrap; }
+.workspace-topbar[data-compact="true"] { grid-template-areas: "title search controls utilities"; grid-template-columns: minmax(0, 1fr) 34px auto auto; gap: 8px; padding: 8px 12px; }
+.workspace-topbar.has-local-search[data-compact="true"] { grid-template-areas: "title controls utilities"; grid-template-columns: minmax(0, 1fr) auto auto; }
+.workspace-topbar[data-compact="true"] .workspace-role-access { display: none; }
+.workspace-topbar[data-compact="true"] .workspace-topbar-search { position: static; height: 34px; padding: 0; border: 0; background: transparent; }
+.workspace-search-toggle, .workspace-topbar-more > summary { display: inline-flex; align-items: center; justify-content: center; width: 34px; min-height: 34px; padding: 4px; border: 1px solid var(--border-default); border-radius: 6px; color: var(--text-primary); background: var(--surface-default); cursor: pointer; }
+.workspace-topbar[data-compact="true"] .workspace-topbar-search input { display: none; }
+.workspace-topbar[data-compact="true"] .workspace-topbar-search[data-expanded="true"] input { display: block; position: absolute; top: calc(100% + 6px); left: 12px; width: calc(100% - 24px); height: 40px; padding: 8px 12px !important; border: 1px solid var(--border-control) !important; border-radius: 6px; background: var(--surface-default) !important; box-shadow: 0 5px 14px #0002 !important; }
+.workspace-topbar[data-compact="true"] .workspace-search-results { top: calc(100% + 50px); left: 12px; right: 12px; max-height: min(390px, 60dvh); }
+.workspace-topbar-more { position: relative; }
+.workspace-topbar-more > summary { list-style: none; font-weight: 700; }
+.workspace-topbar-more > summary::-webkit-details-marker { display: none; }
+.workspace-topbar-more-panel { position: absolute; z-index: 85; top: calc(100% + 8px); right: 0; width: min(260px, calc(100vw - 32px)); display: grid; gap: 12px; padding: 14px; border: 1px solid var(--border-default); border-radius: 8px; color: var(--text-primary); background: var(--surface-default); box-shadow: 0 8px 24px #0002; }
+.workspace-topbar-more-panel .workspace-live { display: flex; }
+.workspace-topbar-more-panel .workspace-guide-popover { position: static; width: auto; margin-top: 8px; }
+.workspace-topbar-more-panel > button { text-align: left; }
+.workspace-topbar[data-narrow="true"] { gap: 5px; padding-inline: 8px; }
+.workspace-topbar[data-narrow="true"] .workspace-topbar-title { font-size: 14px; }
+.workspace-topbar[data-narrow="true"] .workspace-company-selector select { width: 106px; min-width: 0; max-width: 106px; padding-inline: 4px; }
+.workspace-topbar[data-narrow="true"] :is(.workspace-topbar__controls, .workspace-topbar__utilities) { gap: 4px; }
+.workspace-topbar[data-compact="true"] .workspace-refresh { width: 34px; justify-content: center; padding-inline: 4px; }
 @media (max-width: 640px) {
-  .workspace-topbar { grid-template-areas: "title utilities" "search search" "controls controls"; min-height: 52px; padding: 7px 12px; }
-  .workspace-topbar.has-local-search { grid-template-areas: "title utilities" "controls controls"; }
-  .workspace-topbar-title { font-size: 14px; }
-  .workspace-topbar__utilities { gap: 4px; }
-  .workspace-refresh { padding-inline: 4px; }
-  .workspace-live { display: none; }
-  .workspace-company-selector select { min-width: 118px; }
   .opportunity-stage-strip { grid-template-columns: repeat(6, minmax(0,1fr)); }
   .opportunity-stage-strip button { min-width: 0; padding: 7px 4px; gap: 3px 3px; }
   .opportunity-stage-strip button span { font-size: 8px; }
@@ -18899,7 +18868,7 @@ html[data-workspace-theme="dark"], html[data-workspace-theme="dark"] body {
 }
 :is(.shell[data-theme="dark"], html[data-workspace-theme="dark"] [data-modae-portal-root]) :is(h1, h2, h3, h4, h5, h6, .workspace-topbar-title, .workspace-page-title,
   .sc-value, .dw-kpi strong, .home-forecast-value, .reference-kpi strong,
-  .reference-table td > strong, .reference-funnel-row > b, .reference-funnel-totals strong,
+  .reference-table td > strong, .reference-funnel-row > b, .reference-funnel-total,
   .mail-subject-title, .mail-sender b, .mail-ref, .dashboard-action-title,
   .dashboard-wl-reason-name, .home-panel-title):not(:where(.propdoc, .propdoc *, .template-workbook-page, .template-workbook-page *, .att-view-document, .att-view-document *, .att-view-table-wrap, .att-view-table-wrap *)) {
   color: var(--text-primary) !important;
@@ -19242,4 +19211,57 @@ html[data-workspace-theme="dark"], html[data-workspace-theme="dark"] body {
   .inbox-toolbar-new > span { display: none; }
   .shell .inbox-toolbar .inbox-view-trigger { max-width: 150px; padding-inline: 6px; }
   .inbox-view-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* Excel-style frozen identity tracks, shared by Key and All Columns. */
+.tracker-page table.sheet {
+  --tracker-sl-width: 40px;
+  --tracker-id-width: 144px;
+  --tracker-customer-width: 240px;
+  --tracker-frozen-width: calc(var(--tracker-sl-width) + var(--tracker-id-width) + var(--tracker-customer-width));
+}
+.tracker-page table.sheet tr > :nth-child(1) { --tracker-frozen-cell-width: var(--tracker-sl-width); --tracker-frozen-left: 0px; }
+.tracker-page table.sheet tr > :nth-child(2) { --tracker-frozen-cell-width: var(--tracker-id-width); --tracker-frozen-left: var(--tracker-sl-width); }
+.tracker-page table.sheet tr > :nth-child(3) { --tracker-frozen-cell-width: var(--tracker-customer-width); --tracker-frozen-left: calc(var(--tracker-sl-width) + var(--tracker-id-width)); }
+.opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet :is(thead, tbody) tr > :nth-child(-n+3) {
+  position: sticky;
+  left: var(--tracker-frozen-left);
+  width: var(--tracker-frozen-cell-width);
+  min-width: var(--tracker-frozen-cell-width) !important;
+  max-width: var(--tracker-frozen-cell-width);
+  box-sizing: border-box;
+  z-index: 3;
+}
+.opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet thead tr > :nth-child(-n+3) { z-index: 5; }
+.shell .tracker-page table.sheet tbody tr > :nth-child(3) { background: var(--surface-default) !important; }
+.shell .tracker-page table.sheet tbody tr:hover > :nth-child(3) { background: var(--surface-raised) !important; }
+.tracker-page table.sheet :is(thead, tbody) tr > :nth-child(3) { box-shadow: 1px 0 0 var(--grid-line); }
+@media (max-width: 600px) {
+  .tracker-page table.sheet {
+    --tracker-sl-width: 32px;
+    --tracker-id-width: 112px;
+    --tracker-customer-width: 160px;
+  }
+}
+
+.opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet tfoot td.rowhead {
+  width: var(--tracker-sl-width);
+  min-width: var(--tracker-sl-width) !important;
+  max-width: var(--tracker-sl-width);
+}
+
+/* Keep draft actions within reach while editing a long opportunity preview. */
+.drawer-opportunity-editor .opportunity-details-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 12px 0;
+  background: var(--surface-default);
+  border-top: 1px solid var(--border-default);
+}
+.tracker-oppid-actions .tracker-preview {
+  padding: 1px 5px;
+  min-height: 22px;
+  margin-left: 4px;
+  font-size: 12px;
 }

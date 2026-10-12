@@ -4,6 +4,24 @@
 Start each scenario from a clean **Reset all demo data** (Demo Launcher or Admin).
 Record browser, viewport, role, result and console errors.
 
+## Confirmed bookings and performance
+
+- At desktop and phone widths, verify imported Won opportunities show booking
+  verification pending; Lost/No Bid/other closed outcomes never appear as orders.
+  Without verified bookings, Performance explains unavailable data and hides
+  the gap. Confirm a historical PO reference, actual date, net K₹ value and
+  evidence as LJS/AH/Admin; the same value must appear in Purchase Orders and
+  the matching YTD/QTD Performance period. Future or invalid dates are rejected.
+- Simulate PO receipt on an active opportunity: no booking is created. Save
+  real booking details, resolve the comparison lines, and obtain both LJS/AH
+  signatures; one signature does not book the order. Changing details resets
+  signatures. Repeated acceptance and reload never duplicate the booking.
+- Review FY targets in More reports & settings: untouched defaults require
+  confirmation, quarterly targets must reconcile with the annual target,
+  and saving marks the configured FY. Switch owner scope and periods; personal
+  booking totals must reconcile with company totals. An unrelated edit from
+  another browser must preserve the confirmed booking snapshot.
+
 ## Phone mode and More
 
 - At desktop width, select Phone mode. Confirm the current page stays open in
@@ -253,6 +271,12 @@ Our Ref 2511096RS) are retained with the local reference documents.
   URLs, filenames, IDs, and pasted descriptions wrap inside their cards or cells.
 - Toolbars, filters, headers, metadata rows, and action groups wrap or stack;
   no controls overlap or force the whole page sideways.
+- Desktop top navigation is the exception: company, Global/My View and refresh
+  remain in one row at 100%, 125%, 150% and 200% zoom. Search becomes an icon
+  and secondary utilities move into More. Verify search focuses on opening,
+  Enter opens a result, Escape returns focus, and More retains Guide, clock,
+  Phone mode and theme access. Check Dashboard and Opportunities in both themes;
+  dashboard content must start below the header, with no overlapping controls.
 - Wide tables scroll horizontally inside their local table container; the page
   itself does not gain an unexpected horizontal scrollbar.
 - On Opportunities, both key and all-column views stay as tables at high zoom
@@ -373,3 +397,70 @@ Our Ref 2511096RS) are retained with the local reference documents.
   form edits, published rates and existing approval/transition requirements.
 - Inspect light/dark themes, keyboard access, safe areas and 768/1440px layouts.
   Check truthful local-save/shared-sync failure and retry feedback.
+## Phone readability regression
+
+- In a list with more than ten records, use Next, Previous and the page picker;
+  verify ranges, first/last disabled states, and reset after filtering. Check
+  the picker fits at 320px and explicit Phone mode, and stays hidden on desktop.
+- Check every permitted destination in Phone mode at 320, 375, 390 and 440px,
+  in light and dark themes, and explicit Phone mode on a wide desktop viewport.
+- Use long customer names, enquiry subjects, IDs, filenames and large values.
+  Names and subjects must wrap fully; inbox message previews may stop after
+  three lines. Ordinary pages must not scroll sideways or clip actions.
+- Expand all dashboard reports; check filter chips, quarter selection, full-width
+  card actions and labeled Analytics totals. Open Admin category tabs.
+- Edit registration, intake, lead details, opportunity summaries and sourcing
+  fields. Verify labels wrap, inputs remain readable and draft values survive
+  navigation. Exercise search, filters, approval gates and table editing.
+- Open dialogs and drawers, focus the last field with the on-screen keyboard,
+  enlarge text, and verify the final action stays reachable above navigation.
+  Check keyboard focus indicators and safe areas on a physical phone.
+- Confirm spreadsheet regions still scroll independently and desktop, tablet
+  and printed proposals retain their existing layouts.
+
+## Customer-mail rules and dashboard
+
+- On desktop and phone, open Top 5 in My View and Global View. Confirm the
+  current quarter is selected, nearest order dates come first, matching dates
+  prefer larger values, and probability is visible. All dates puts undated
+  opportunities last. Won stays in the funnel and is excluded from open Top 5.
+- Admin: make Contact Phone optional with a reason, register a qualified lead
+  without it, then restore the requirement. Confirm the required marker follows
+  the setting in both lead review and registration. Sell-to cannot be disabled.
+- Change a customer-health adjustment and confirm the displayed health changes
+  while saved opportunity probability does not. Reject empty/invalid numeric
+  rules, missing change reasons and saves against externally changed settings.
+- Blue KYC: incomplete, cancelled and skipped requests must block proposal
+  readiness. Complete all documents and verify the block clears; a completed
+  existing KYC record must not be requested twice. Sales users must not see or
+  apply a bypass. An authorized category exception needs a reason and must
+  display as bypassed, never completed.
+- New role selectors must offer Standard, Management and Admin User only.
+  Existing legacy Team Lead users retain their current access until a deliberate
+  replacement is selected; changing application roles must preserve owner IDs.
+- Import an Excel date at a fiscal-quarter boundary in India and UTC timezones.
+  Review additions and conflicts before a live merge; verify all target database
+  migrations are applied, and confirm existing edits and deletions are preserved.
+
+### Access rules and numbering
+
+- In Network, leave Approvals and Workbench idle for two minutes: no periodic
+  workspace/presence requests or live-event connections. Return from another
+  tab or press Refresh; verify newly saved shared records appear. Parallel
+  datastore reads should use bounded `select_many` requests; save failures must
+  still retain edits and revoked permissions must still reject new requests.
+
+- As Admin, load Access rules, change one Standard page/action, give a reason
+  and save. Verify a second session refreshes the rules, direct denied URLs show
+  an access message, and denied server writes do not change data.
+- Open two Admin editors; save the first, then verify the second gets a revision
+  conflict and retains its draft until reload. Admin access must remain available.
+- Verify Standard Global dashboard still shows order dates, pipeline revenue,
+  Top 5 and booked performance while other owners' costs/margins remain hidden.
+- Preview and save a numbering prefix; create opportunities concurrently. Verify
+  unique final IDs, unchanged historical links and visible retry on reservation
+  failure. Changing format must not reuse an issued ID.
+- At phone and desktop widths verify permission tables, numbering inputs, reason,
+  save/reload and error messages are readable and usable.
+- Verify ordinary owner PO updates still work, but another approver's signature
+  cannot be changed; confirmed bookings survive opportunity deletion.

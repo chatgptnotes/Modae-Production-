@@ -23,6 +23,10 @@ const isAllowedTransition = (current, incoming) => {
 export function mergeOpportunityRow(current, incoming) {
   if (!current) return incoming
   if (!incoming) return current
+  // A confirmed booking is an immutable acceptance snapshot. Stale browser
+  // edits to opportunity details must not replace or erase it during rebase.
+  if (current.booking) incoming = { ...incoming, booking: current.booking }
+  if (current.bookingRequiresPO) incoming = { ...incoming, bookingRequiresPO: true }
   const currentIndex = milestoneIndex(current.milestone)
   const incomingIndex = milestoneIndex(incoming.milestone)
   if (currentIndex < 0 || incomingIndex < 0 || incomingIndex === currentIndex) {

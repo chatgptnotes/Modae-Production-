@@ -1,3 +1,7 @@
+import { previewOpportunityNumber, validateOpportunityNumbering } from './opportunityNumbering.js'
+import { canPerform as policyCanPerform, effectiveAccess, validateAccessPolicy } from './accessPolicy.js'
+import { readAdminPolicy, saveAdminPolicy } from './adminPolicyApi.js'
+import { accountChangeError, deletedProfile, isActiveUser, isDeletedUser, matchesAccount } from './userManagement.js'
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import * as filestore from './filestore.js'
 import * as datastore from './datastore.js'
@@ -13,8 +17,8 @@ import {
 } from './seed.js'
 import { leadConfig, opportunityOwnerFor, routeOwner, expiredLeadDeadline, aiAuditDetail } from './leadRules.js'
 import { withoutSimulated, simulatedCount } from './simulatedLeads.js'
-import { KEY, migrate, seedState, emptyState, applyLocalWorkbook, stateFromSaved, syncedOf, defaultViewMode, followViewportMode, VIEW_MODE_PREFERENCE_REV, LOCAL_WORKBOOK_ID } from './appState.js'
-import { unitCostINR, unitSellINR, setRoleNameConfig, nowIST, toISTISOString, canManagePriceLists, isAdminRole } from './utils.js'
+import { KEY, migrate, seedState, emptyState, stateFromSaved, syncedOf, defaultViewMode, followViewportMode, VIEW_MODE_PREFERENCE_REV } from './appState.js'
+import { unitCostINR, unitSellINR, setRoleNameConfig, setPermissionContext, nowIST, toISTISOString, canManagePriceLists, isAdminRole } from './utils.js'
 import { PRICE_SOURCES, isConfirmableSparesLine, normalizePriceFields, sparesLineFinancials } from './pricing.js'
 import { validServiceRatePatch, validPriceListParts } from './priceListEditing.js'
 import { clarificationTopic } from './leadClarification.js'
@@ -30,15 +34,26 @@ import {
   orderedSparesProposalBom,
   restoreSparesLinesFromProposal,
 } from './proposal/sparesBoq.js'
+import { createKycOverride } from './kycPolicy.js'
 import { releaseState, transitionBlockers } from './gates.js'
 import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
 import { isLocalDemoSession } from './authMode.js'
 import { workspaceSyncStatus } from './syncStatus.js'
-import { readLiveData, startLiveEvents } from './liveSync.js'
+import { readLiveData } from './liveSync.js'
 import { purgeWorkspace } from './workspacePurge.js'
+import { fiscalQuarter, financials, mergeWorkbookData, applyCustomerChange } from './excelLogic.js'
+import { importWorkspaceWorkbook } from './workspaceApi.js'
+import { validateWorkbookConfig } from './workbookGovernance.js'
 import { applySparesBatchToState } from './sparesBatchState.js'
+import { approvePurchaseOrder, recordBooking, confirmSalesTarget, stagePODetails, retainBookingOnDelete } from './orderBookings.js'
 
 const StoreCtx = createContext(null)
+function applyAuthoritativeProfile(state, users) {
+  if (!Array.isArray(users) || !state.auth?.user) return state
+  const profile = users.find(user => matchesAccount(user, state.auth.user))
+  const roles = isActiveUser(profile) ? userRoles(profile) : []
+  return { ...state, roles, auth: { ...state.auth, user: { ...state.auth.user, roles } } }
+}
 const workflowTransition = (from, to, reason = '', id = null) => ({
   id: id || `WFT-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
   from, to, reason: String(reason || ''),
@@ -103,10 +118,8 @@ const initialState = () => {
   // reseed an empty workspace when Supabase was unavailable.
   const saved = localStorage.getItem(KEY)
   const state = stateFromSaved(saved)
-  // Local-only startup upgrades the browser snapshot to the pinned workbook
-  // dataset once; the marker then lets later local edits survive reloads.
   const next = reconcileApprovedSubmissions(state.demoData === true ? emptyState(state) : state)
-  return datastore.dbEnabled() ? next : applyLocalWorkbook(next)
+  return next
 }
 
 // Supabase is the authoritative store for catalogues, files, and the full
@@ -136,6 +149,9 @@ const localSnapshot = state => ({
   approvals: state.approvals,
   customers: state.customers,
   importedWorkbook: state.importedWorkbook,
+  sales: state.sales,
+  poCompare: state.poCompare,
+  handover: state.handover,
   users: state.users,
   config: state.config,
   rateSheets: state.rateSheets,
@@ -221,7 +237,7 @@ function applyApprovalEffects(s, appr) {
     if (appr.status === 'Approved' || appr.status === 'Approved with conditions') {
       next = {
         ...next,
-        customers: next.customers.map(c => (c.name === appr.customerName ? { ...c, ...appr.patch } : c)),
+        ...applyCustomerChange(next, appr.customerName, appr.patch),
       }
     }
   }
@@ -350,9 +366,11 @@ export function StoreProvider({ children }) {
   const [sourcingDataError, setSourcingDataError] = useState('')
   const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null })
   setRoleNameConfig(state.config)
+  setPermissionContext({ ...state.auth?.user, role: state.role, roles: state.roles }, state.config)
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
   const stateRef = useRef(state)
   stateRef.current = state
+  const localAccessRevisionRef = useRef(0)
 
   // ---- Supabase records-state sync (see datastore.js). localStorage is an
   // offline working snapshot; Supabase is authoritative for shared slices.
@@ -572,7 +590,7 @@ export function StoreProvider({ children }) {
       // written back on the next debounce or pagehide.
       lastSavedRef.current = { ...syncedOf(merged), ...serverSlices }
       hydratedRef.current = true
-      setState(merged)
+      setState(applyAuthoritativeProfile(merged, accepted.users))
       setSourcingDataStatus(sourcingError ? 'error' : 'ready')
       setTimeout(flushSaves, 0)
     }
@@ -593,7 +611,10 @@ export function StoreProvider({ children }) {
       const hasSavedBaseline = Object.prototype.hasOwnProperty.call(lastSavedRef.current, k)
       const baseline = hasSavedBaseline ? lastSavedRef.current[k] : bootRef.current[k]
       const dirty = k in s && JSON.stringify(s[k]) !== JSON.stringify(baseline)
-      if (dirty) continue
+      if (dirty) {
+        if (k === 'config') updates.config = { ...s.config, accessPolicy: v.accessPolicy, opportunityNumbering: v.opportunityNumbering }
+        continue
+      }
       if (JSON.stringify(s[k]) === JSON.stringify(v)) continue
       updates[k] = v
     }
@@ -615,7 +636,7 @@ export function StoreProvider({ children }) {
       ...baselineUpdates,
     }))
     lastSavedRef.current = { ...lastSavedRef.current, ...Object.fromEntries(Object.entries(serverSlices)) }
-    setState(merged)
+    setState(applyAuthoritativeProfile(merged, serverSlices.users))
   }
 
   const loadApprovedPriceLists = async ({ force = false } = {}) => {
@@ -655,11 +676,8 @@ export function StoreProvider({ children }) {
     return flushSaves()
   }
 
-  // A lead created on another device must reach an already-open inbox without
-  // making every browser poll the full workspace continuously. The server's
-  // lightweight event stream identifies changed collaborative slices; this
-  // pull is deduplicated so reconnect, focus, and visibility events cannot
-  // queue overlapping full reads.
+  // Pull only on user/lifecycle events. Idle browsers must not reconnect a
+  // stream or poll shared data continuously.
   const pullSharedData = ({ force = false } = {}) => {
     if (!datastore.dbEnabled()) return false
     if (!force && sharedPullInFlightRef.current) return sharedPullInFlightRef.current
@@ -694,20 +712,6 @@ export function StoreProvider({ children }) {
     initialHydrationRef.current = userId
     hydrate()
     loadApprovedPriceLists()
-    const stopLiveEvents = startLiveEvents({
-      onChange: async entities => {
-        try {
-          const slices = await readLiveData(entities)
-          if (slices) applyServer(slices)
-          setLiveSyncStatus('live')
-        } catch (error) {
-          if (!invalidateSupabaseAuth(error)) setLiveSyncStatus('error')
-        }
-      },
-      onError: error => {
-        if (!isSupabaseAuthError(error)) setLiveSyncStatus('error')
-      },
-    })
     const onFocus = () => {
       if (!hydratedRef.current) return
       void pullSharedData()
@@ -727,7 +731,6 @@ export function StoreProvider({ children }) {
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', onPageHide)
     return () => {
-      stopLiveEvents?.()
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('online', onOnline)
       document.removeEventListener('visibilitychange', onVisibility)
@@ -767,6 +770,47 @@ export function StoreProvider({ children }) {
   const api = {
     ...state,
     flushPersistence,
+    canPerform(action) {
+      const current = stateRef.current
+      return policyCanPerform(current.roles || current.role, action, current.config)
+    },
+    async getAccessRules() {
+      const current = stateRef.current
+      if (!effectiveAccess(current.roles || current.role, current.config).isAdmin) throw new Error('Only administrators can manage access rules.')
+      if (!datastore.dbEnabled()) return { config: current.config, rev: localAccessRevisionRef.current, local: true }
+      if (!datastore.dbEnabled() || !hydratedRef.current) throw new Error('Wait for the shared workspace to connect.')
+      if (await flushPersistence() === false) throw new Error('Save pending workspace changes before loading access rules.')
+      return readAdminPolicy()
+    },
+    async saveAccessRules(patch, rev, reason) {
+      const current = stateRef.current
+      if (!effectiveAccess(current.roles || current.role, current.config).isAdmin) throw new Error('Only administrators can manage access rules.')
+      if (!reason?.trim()) throw new Error('A reason is required.')
+      const checked = validateAccessPolicy(patch.accessPolicy)
+      if (!checked.valid) throw new Error(checked.errors.join('; '))
+      const changes = { accessPolicy: checked.policy, opportunityNumbering: validateOpportunityNumbering(patch.opportunityNumbering) }
+      if (!datastore.dbEnabled()) {
+        if (rev !== localAccessRevisionRef.current) throw Object.assign(new Error('Access rules changed. Reload before saving.'), { status: 409 })
+        const config = { ...current.config, ...changes }
+        localAccessRevisionRef.current += 1
+        const next = withAudit({ ...current, config }, 'Access rules updated', 'admin', JSON.stringify({ reason: reason.trim(), before: { accessPolicy: current.config.accessPolicy, opportunityNumbering: current.config.opportunityNumbering }, after: changes }))
+        stateRef.current = next
+        setState(next)
+        return { config, rev: localAccessRevisionRef.current, local: true }
+      }
+      if (!datastore.dbEnabled() || !hydratedRef.current) throw new Error('Wait for the shared workspace to connect.')
+      if (await flushPersistence() === false) throw new Error('Save pending workspace changes before changing access rules.')
+      const requestedConfig = stateRef.current.config
+      const result = await saveAdminPolicy({ ...changes, rev, reason: reason.trim() })
+      datastore.acceptAccessConfig(result.config, result.rev)
+      lastSavedRef.current = { ...lastSavedRef.current, config: result.config }
+      const latest = stateRef.current
+      const concurrentEdits = Object.fromEntries(Object.entries(latest.config).filter(([key, value]) => !['accessPolicy', 'opportunityNumbering'].includes(key) && JSON.stringify(value) !== JSON.stringify(requestedConfig[key])))
+      const next = { ...latest, config: { ...result.config, ...concurrentEdits } }
+      stateRef.current = next
+      setState(next)
+      return result
+    },
     sourcingDataStatus,
     sourcingDataError,
     priceListsStatus,
@@ -792,8 +836,8 @@ export function StoreProvider({ children }) {
       // yields workbench-ready rows — migrate() only backfills on reload.
       const normalized = {
         milestone: milestoneForStage(opp.stage, opp.status),
-        route: routeForType(opp.oppType),
-        context: contextForType(opp.oppType),
+        route: routeForType(opp.oppType, stateRef.current.config),
+        context: contextForType(opp.oppType, stateRef.current.config),
         ...opp,
       }
       const owner = String(normalized.owner || '').trim()
@@ -816,30 +860,40 @@ export function StoreProvider({ children }) {
       spTrack(opp.id, 'Open', () => filestore.ensureOppFolder(opp))
     },
 
-    // Replace the local browser workspace with the supplied workbook. This is
-    // deliberately local-only: production/shared Supabase workspaces must use
-    // the reviewed server import path instead of a browser file upload.
-    async importWorkbookData(importData) {
-      if (datastore.dbEnabled()) return { ok: false, error: 'Excel import is disabled while Supabase is configured.' }
-      const opportunities = Array.isArray(importData?.opportunities) ? importData.opportunities : []
-      const customers = Array.isArray(importData?.customers) ? importData.customers : []
-      if (!opportunities.length) return { ok: false, error: 'The workbook has no importable opportunities.' }
-      const base = emptyState(stateRef.current)
-      const files = Object.fromEntries(opportunities.map(opp => [opp.id, Object.fromEntries(SUBFOLDERS.map(folder => [folder, []]))]))
-      const imported = withAudit({
-        ...base,
-        demoData: false,
-        opportunities,
-        customers,
-        importedWorkbook: LOCAL_WORKBOOK_ID,
-        files,
-        audit: [],
-        pendingOpportunitySyncIds: [],
-        deletedOpportunityIds: [],
-      }, 'Excel workbook imported', 'Betser Sales Pipeline Usage.xlsx', `${opportunities.length} opportunities and ${customers.length} customers loaded locally`)
+    async previewWorkbookData(importData) {
+      if (!isAdminRole(stateRef.current.role)) throw new Error('Only administrators can import a workbook.')
+      if (datastore.dbEnabled()) {
+        if (!hydratedRef.current) throw new Error('Wait for the authoritative workspace to load.')
+        await flushPersistence()
+        return importWorkspaceWorkbook(importData)
+      }
+      const current = stateRef.current
+      const merged = mergeWorkbookData(current, importData)
+      return { ok: true, opportunities: merged.opportunities.length, customers: merged.customers.length,
+        addedOpportunities: merged.opportunities.length - current.opportunities.length,
+        addedCustomers: merged.customers.length - current.customers.length,
+        skippedDeleted: (importData.opportunities || []).filter(row => current.deletedOpportunityIds?.includes(row.id)).length,
+        conflicts: merged.conflicts }
+    },
+
+    async importWorkbookData(importData, reviewToken = '') {
+      if (!isAdminRole(stateRef.current.role)) return { ok: false, error: 'Only administrators can import a workbook.' }
+      if (!importData?.opportunities?.length) return { ok: false, error: 'The workbook has no importable opportunities.' }
+      if (datastore.dbEnabled()) {
+        if (!hydratedRef.current) return { ok: false, error: 'Wait for the authoritative workspace to load.' }
+        await flushPersistence()
+        const result = await importWorkspaceWorkbook(importData, { action: 'commit', reviewToken })
+        await pullSharedData({ force: true })
+        return result
+      }
+      const merged = mergeWorkbookData(stateRef.current, importData)
+      const { conflicts, ...next } = merged
+      const config = { ...next.config }
+      if (!config.customerClassificationGuidance?.length && importData.customerClassificationGuidance?.length) config.customerClassificationGuidance = importData.customerClassificationGuidance
+      const imported = withAudit({ ...next, config, demoData: false }, 'Excel workbook merged', 'Workbook import', `${importData.opportunities.length} opportunities reviewed; ${conflicts.length} differences preserved`)
       persistLocalSnapshot(imported)
       setState(imported)
-      return { ok: true, opportunities: opportunities.length, customers: customers.length }
+      return { ok: true, opportunities: imported.opportunities.length, customers: imported.customers.length, conflicts }
     },
 
     updateOpportunity(id, patch) {
@@ -847,6 +901,11 @@ export function StoreProvider({ children }) {
       // Status-folder diff BEFORE the patch lands — a stage change (Won/Lost/
       // reopen) moves the SharePoint folder between the four status folders.
       const before = stateRef.current.opportunities.find(o => o.id === id)
+      if (before && (patch.status || before.status) === 'Closed' && (patch.stage || before.stage) === 'Won'
+        && !(before.status === 'Closed' && before.stage === 'Won')) patch = { ...patch, bookingRequiresPO: true }
+      // Booking snapshots can only be created through the confirmation action.
+      const { booking: ignoredBooking, ...opportunityPatch } = patch
+      patch = opportunityPatch
       // Level 2 keeps customer and commercial details editable through the active workflow.
       // Only the assigned owner and administrators may make
       // those changes; every change remains audited and approval snapshots
@@ -854,16 +913,19 @@ export function StoreProvider({ children }) {
       const role = stateRef.current.role
       const canEdit = before && (before.owner === role || ROLES[role]?.admin)
       const detailFields = new Set([
-        'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK',
+        'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'cogsK', 'gmK', 'gmPct', 'fqFy',
         'sellTo', 'category', 'location', 'customerStatus', 'eucName',
         'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product',
         'prob', 'contactPerson', 'contactPhone', 'contactEmail',
         'additionalCustomerInformation', 'sellToCustomerLocation',
         'commercialNotes', 'paymentTerms', 'deliveryTerms', 'incoterms',
+        'orderDate', 'invoiceDate', 'deliveryDate', 'offerDate',
       ])
       if (before && !canEdit) {
         patch = Object.fromEntries(Object.entries(patch).filter(([key]) => !detailFields.has(key)))
       }
+      if ('orderDate' in patch) patch = { ...patch, fqFy: fiscalQuarter(patch.orderDate) }
+      if (before && ('valueK' in patch || 'cogsK' in patch)) patch = { ...patch, ...financials({ ...before, ...patch }) }
       // Legacy pipeline edits still need to move the canonical workflow. The
       // milestone is what the workbench and list views use to choose the page.
       if (patch.stage && !patch.milestone) {
@@ -886,7 +948,7 @@ export function StoreProvider({ children }) {
       // A type change re-derives both branching axes — leaving a Retrofit on
       // the Greenfield lane would silently skip the B-01..B-05 chain.
       if (patch.oppType) {
-        patch = { route: routeForType(patch.oppType), context: contextForType(patch.oppType), ...patch }
+        patch = { route: routeForType(patch.oppType, stateRef.current.config), context: contextForType(patch.oppType, stateRef.current.config), ...patch }
       }
       const shouldSyncProposal = shouldSyncProposalFromOpportunity(patch)
       setState(s => {
@@ -924,7 +986,7 @@ export function StoreProvider({ children }) {
         const { [id]: _c, ...communications } = s.communications || {}
         return withAudit(
           {
-            ...s, opportunities: s.opportunities.filter(o => o.id !== id), files, proposals, communications,
+            ...retainBookingOnDelete(s, id), opportunities: s.opportunities.filter(o => o.id !== id), files, proposals, communications,
             deletedOpportunityIds: [...new Set([...(s.deletedOpportunityIds || []), id])],
             pendingOpportunitySyncIds: (s.pendingOpportunitySyncIds || []).filter(pendingId => pendingId !== id),
             // Ghost approvals would inflate pending counts forever.
@@ -1043,7 +1105,7 @@ export function StoreProvider({ children }) {
             snapshot: snapshotProposal(p),
           }],
         }
-        const restoredSparesLines = routeForType(opp?.oppType) === 'Spares'
+        const restoredSparesLines = routeForType(opp?.oppType, stateRef.current.config) === 'Spares'
           ? restoreSparesLinesFromProposal(
             s.sparesLines.filter(line => line.oppId === oppId),
             p,
@@ -1157,13 +1219,13 @@ export function StoreProvider({ children }) {
 
     // Closing a lost opportunity always carries a reason — the diagram's
     // "Capture Loss Reason & Close Opportunity" box. Callers must pass one.
-    closeLost(oppId, reason, competitor = null, reasonNote = '') {
-      if (!reason) return
+    closeLost(oppId, reason, competitor = null, reasonNote = '', outcome = 'Lost') {
+      if (!reason || !['Lost', 'Abandoned', 'No Bid'].includes(outcome)) return
       setState(s => {
         const next = withAudit({
           ...s,
           opportunities: s.opportunities.map(o => (o.id === oppId
-          ? { ...o, stage: 'Lost', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' ? reasonNote : '', milestone: 'Follow-up', lastUpdated: nowIST().slice(0, 10),
+          ? { ...o, stage: outcome, status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' ? reasonNote : '', milestone: 'Follow-up', lastUpdated: nowIST().slice(0, 10),
                 workflowTransition: workflowTransition(o.milestone, 'Follow-up', reason) }
             : o)),
         }, 'Opportunity lost', oppId, reason)
@@ -1173,7 +1235,7 @@ export function StoreProvider({ children }) {
       })
       const before = stateRef.current.opportunities.find(o => o.id === oppId)
       if (before) {
-        const after = { ...before, stage: 'Lost', status: 'Closed' }
+        const after = { ...before, stage: outcome, status: 'Closed' }
         const from = statusFolderFor(before)
         const to = statusFolderFor(after)
         if (from !== to) spTrack(oppId, to, () => filestore.moveOppFolder(after, from, to))
@@ -1187,7 +1249,7 @@ export function StoreProvider({ children }) {
       setState(s => withAudit({
         ...s,
         opportunities: s.opportunities.map(o => (o.id === oppId
-          ? { ...o, stage: 'Won', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' ? reasonNote : '', milestone: 'Handover', lastUpdated: today,
+          ? { ...o, stage: 'Won', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' ? reasonNote : '', milestone: 'Handover', lastUpdated: today, bookingRequiresPO: true,
               workflowTransition: workflowTransition(o.milestone, 'Handover', reason) }
           : o)),
       }, 'Opportunity won', oppId, reason))
@@ -1509,7 +1571,7 @@ export function StoreProvider({ children }) {
     updateCustomer(name, patch, reason = '') {
       setState(s => (ROLES[s.role]?.admin
         ? withAudit(
-            { ...s, customers: s.customers.map(c => (c.name === name ? { ...c, ...patch } : c)) },
+            applyCustomerChange(s, name, patch),
             'Customer updated', name,
             [Object.entries(patch).map(([k, v]) => `${k} → ${v}`).join(', '), reason].filter(Boolean).join(' · '))
         : s))
@@ -1556,7 +1618,17 @@ export function StoreProvider({ children }) {
       })
     },
 
+    acceptUserRoster(users) {
+      if (!Array.isArray(users) || !datastore.dbEnabled()) return
+      datastore.invalidateLoadCache()
+      lastSavedRef.current = { ...lastSavedRef.current, users }
+      setState(s => applyAuthoritativeProfile({ ...s, users }, users))
+    },
     updateUser(id, patch) {
+      const current = stateRef.current
+      if (datastore.dbEnabled()) throw new Error('Use server account management for shared accounts.')
+      const problem = accountChangeError(current.users, current.users.find(u => matchesAccount(u, current.auth?.user)), current.users.find(u => u.id === id), patch)
+      if (problem) throw new Error(problem)
       setState(s => {
         if (!isAdminRole(s.roles || s.role)) return s
         const users = s.users.map(u => (u.id === id ? { ...u, ...patch, roles: patch.roles ? userRoles({ ...u, ...patch }) : userRoles(u) } : u))
@@ -1585,19 +1657,28 @@ export function StoreProvider({ children }) {
       })
     },
 
-    // Only used to reject a pending registration — active accounts are
-    // suspended, never deleted.
+    removeUserAccount(id) {
+      const s = stateRef.current
+      if (datastore.dbEnabled()) throw new Error('Use server account management for shared accounts.')
+      const actor = s.users.find(u => matchesAccount(u, s.auth?.user))
+      const target = s.users.find(u => u.id === id)
+      const problem = accountChangeError(s.users, actor, target, {}, true)
+      if (problem) throw new Error(problem)
+      if (isDeletedUser(target)) return
+      setState(st => withAudit({ ...st, users: st.users.map(u => u.id === id ? deletedProfile(u, actor.id) : u) }, 'User deleted', id, 'Login removed; business history retained'))
+    },
     deleteUser(id) {
-      setState(s => withAudit({ ...s, users: s.users.filter(u => u.id !== id) }, 'User removed', id, 'Pending registration rejected'))
+      const target = stateRef.current.users.find(u => u.id === id)
+      if (target?.status !== 'Pending') throw new Error('Only pending registrations can be rejected.')
+      api.removeUserAccount(id)
     },
 
     // Approvers (LJS/AH) and admins set the FY numbers each owner is measured
     // against. Values are K₹, matching store.sales.targets.
     setSalesTarget(owner, { annual, q }) {
-      setState(s => withAudit({
-        ...s,
-        sales: { ...s.sales, targets: { ...(s.sales?.targets || {}), [owner]: { annual, q } } },
-      }, 'Sales target updated', owner, `annual ${annual}K · quarters ${q.join('/')}K`))
+      confirmSalesTarget(state, owner, { annual, q })
+      setState(s => withAudit(confirmSalesTarget(s, owner, { annual, q }),
+        'Sales target updated', owner, `annual ${annual}K · quarters ${q.join('/')}K`))
     },
 
     // ---- Lead inbox: "Show all" ------------------------------------------
@@ -1845,10 +1926,16 @@ export function StoreProvider({ children }) {
       })
     },
     kycOverride(oppId, reason) {
-      setState(s => withAudit({
-        ...s,
-        opportunities: s.opportunities.map(o => (o.id === oppId ? { ...o, kycOverride: { by: s.role, reason, ts: new Date().toISOString() } } : o)),
-      }, 'KYC overridden', oppId, reason))
+      setState(s => {
+        const opp = s.opportunities.find(o => o.id === oppId)
+        if (!opp) return s
+        const decision = createKycOverride(s, opp, s.config, reason)
+        if (!decision) return s
+        return withAudit({
+          ...s,
+          opportunities: s.opportunities.map(o => o.id === oppId ? { ...o, kycOverride: decision } : o),
+        }, 'KYC bypass authorized', oppId, decision.reason)
+      })
     },
 
     // ---- Clarifications ----------------------------------------------------
@@ -2295,14 +2382,9 @@ export function StoreProvider({ children }) {
     },
     acceptPO(oppId) {
       setState(s => {
-        const po = s.poCompare[oppId]
-        if (!po) return s
-        const acceptance = { ...po.acceptance, [s.role]: new Date().toISOString() }
-        const both = acceptance.LJS && acceptance.AH
-        let next = {
-          ...s,
-          poCompare: { ...s.poCompare, [oppId]: { ...po, acceptance, status: both ? 'Accepted' : po.status } },
-        }
+        let next = approvePurchaseOrder(s, oppId)
+        if (next === s) return s
+        const both = next.poCompare[oppId].status === 'Accepted'
         if (both) {
           next = {
             ...next,
@@ -2312,6 +2394,20 @@ export function StoreProvider({ children }) {
         }
         return withAudit(next, both ? 'PO jointly accepted' : 'PO accepted (one signature)', oppId, s.role)
       })
+    },
+    confirmOrderBooking(oppId, details) {
+      // Validate synchronously so the form can present actionable errors.
+      recordBooking(state, oppId, details)
+      setState(s => {
+        const next = recordBooking(s, oppId, details)
+        return next === s ? s : withAudit(next, 'Order booking confirmed', oppId,
+          `${details.po} · ${details.booked} · ${details.valueK} K₹`)
+      })
+    },
+    setPOBookingDetails(oppId, details) {
+      stagePODetails(state, oppId, details)
+      setState(s => withAudit(stagePODetails(s, oppId, details), 'Customer PO booking details verified', oppId,
+        `${details.po} · ${details.booked} · ${details.valueK} K₹; joint acceptance reset`))
     },
     hoToggleItem(oppId, gi, ii, done) {
       setState(s => {
@@ -2338,7 +2434,7 @@ export function StoreProvider({ children }) {
           ...s,
           handover: { ...s.handover, [oppId]: { ...s.handover[oppId], approved: true, approvedBy: s.role, approvedOn: today } },
           opportunities: s.opportunities.map(o => (o.id === oppId
-            ? { ...o, stage: 'Won', status: 'Closed', milestone: 'Handover', orderDate: o.orderDate || today, lastUpdated: today,
+            ? { ...o, stage: 'Won', status: 'Closed', milestone: 'Handover', orderDate: o.orderDate || today, lastUpdated: today, bookingRequiresPO: true,
                 workflowTransition: workflowTransition(o.milestone, 'Handover', 'Handover approved') }
             : o)),
         }, 'Handover approved', oppId, s.role)
@@ -2369,8 +2465,21 @@ export function StoreProvider({ children }) {
     },
 
     // ---- Admin config ------------------------------------------------------
+    updateWorkbookPolicy(patch, reason) {
+      const current = stateRef.current
+      if (Object.keys(patch || {}).some(key => ['accessPolicy', 'opportunityNumbering'].includes(key))) return { error: 'Use Save access rules to change protected settings.' }
+      if (!isAdminRole(current.roles || current.role)) return { error: 'Only administrators can change the workbook policy.' }
+      if (!reason?.trim()) return { error: 'A reason is required.' }
+      const errors = validateWorkbookConfig({ ...current.config, ...patch })
+      if (errors.length) return { error: errors.join('; ') }
+      setState(s => withAudit({ ...s, config: { ...s.config, ...patch } }, 'Workbook policy updated', 'admin',
+        JSON.stringify({ reason, before: Object.fromEntries(Object.keys(patch).map(key => [key, s.config[key]])), after: patch })))
+      return { ok: true }
+    },
     updateConfig(patch) {
+      if (Object.keys(patch || {}).some(key => ['accessPolicy', 'opportunityNumbering'].includes(key))) return { error: 'Use Save access rules to change protected settings.' }
       setState(s => {
+        if (!isAdminRole(s.roles || s.role)) return s
         const nextConfig = { ...s.config, ...patch }
         return withAudit({ ...s, config: nextConfig }, 'Config updated', 'admin',
           JSON.stringify({ fields: Object.keys(patch), before: Object.fromEntries(Object.keys(patch).map(k => [k, s.config?.[k]])), after: patch }))
@@ -2635,7 +2744,7 @@ export function StoreProvider({ children }) {
       const u = s.users.find(x => x.email.toLowerCase() === email.trim().toLowerCase())
       if (!u) return { ok: false, err: 'No account with that email.' }
       if (u.status === 'Pending') return { ok: false, err: 'Account awaiting super-admin approval.' }
-      if (u.status === 'Suspended') return { ok: false, err: 'Account suspended — contact the administrator.' }
+      if (!isActiveUser(u)) return { ok: false, err: 'Account suspended — contact the administrator.' }
       // The portal is parked (seed.js PORTAL_ENABLED). A customer account has
       // nowhere to land while it is off, so refuse the sign-in rather than
       // dropping them into an app with no pages.
@@ -2657,6 +2766,7 @@ export function StoreProvider({ children }) {
       authInvalidRef.current = false
       datastore.setLocalDemoMode(false)
       const local = stateRef.current.users.find(item => item.email.toLowerCase() === user.email.toLowerCase())
+      if (local && !isActiveUser(local)) return { ok: false, err: 'Account access is disabled. Contact an administrator.' }
       const role = local?.role || user.user_metadata?.role || fallbackRole
       const roles = userRoles(local || { role, roles: user.user_metadata?.roles })
       setState(st => ({
@@ -2679,6 +2789,7 @@ export function StoreProvider({ children }) {
       setState(st => ({ ...withAudit(st, 'Signed out', st.auth?.user?.email || ''), auth: { user: null } }))
     },
     registerUser({ name, email, pw, role }) {
+      if (datastore.dbEnabled()) return { ok: false, err: 'Ask your workspace administrator to create your shared account.' }
       const s = stateRef.current
       if (s.users.some(u => u.email.toLowerCase() === email.trim().toLowerCase())) {
         return { ok: false, err: 'An account with that email already exists.' }
@@ -2695,12 +2806,13 @@ export function StoreProvider({ children }) {
       return { ok: true }
     },
     signInAs(userId) {
+      if (datastore.dbEnabled() || !isAdminRole(stateRef.current.roles || stateRef.current.role)) return
       setState(st => {
         const u = st.users.find(x => x.id === userId)
         if (!u || u.status !== 'Active') return st
         return {
           ...withAudit(st, 'Signed in as', u.email, `by ${st.role}`),
-          auth: { user: { id: u.id, name: u.name, email: u.email, role: u.role, roles: userRoles(u) } },
+          auth: { source: st.auth?.source, user: { id: u.id, name: u.name, email: u.email, role: u.role, roles: userRoles(u) } },
           roles: userRoles(u),
           role: ROLES[u.role] ? u.role : st.role,
         }
@@ -2711,6 +2823,7 @@ export function StoreProvider({ children }) {
     // seedState(), which carries demoData: true, so this doubles as "bring the
     // demo data back" once clearDemo has removed it.
     async restoreDemo() {
+      if (datastore.dbEnabled()) throw new Error('Demo restore is available only in a local demo. Use the reviewed workbook import for shared data.')
       const next = withAudit({ ...seedState(), audit: stateRef.current.audit || [] }, 'Demo data restored', 'demo', 'Seed business records restored; audit history retained')
       if (datastore.dbEnabled()) {
         try { await datastore.resetAll(syncedOf(next)) }
@@ -2732,6 +2845,7 @@ export function StoreProvider({ children }) {
 
     // Empty the app: every business record goes, logins and configuration stay.
     async clearDemo() {
+      if (datastore.dbEnabled()) throw new Error('Use the administrator workspace purge for shared data.')
       // Preserve the audit history and append the cleanup action itself. The
       // audit trail is never part of demo data and is never cleared here.
       const next = withAudit(emptyState(stateRef.current), 'Demo data cleared', 'demo', 'Business records removed; audit history retained')
@@ -2770,6 +2884,27 @@ export function StoreProvider({ children }) {
         throw error
       }
     },
+  }
+
+  // Enforce configurable action grants at the mutation boundary as well as in
+  // navigation. Existing ownership, approval and transition checks still run.
+  const guardedActions = {
+    'opportunities.create': ['addOpportunity'],
+    'opportunities.edit': ['updateOpportunity', 'closeLost', 'markWon', 'setMilestone', 'assignBStep', 'signBStep', 'unsignBStep', 'requestSurvey', 'updateSurvey', 'addCompetitor', 'removeCompetitor', 'updateServiceFlow', 'receivePO', 'resolvePoLine', 'setPOBookingDetails', 'hoToggleItem'],
+    'leads.create': ['addLead'],
+    'leads.edit': ['updateLead', 'updateLeadDraft', 'updateLeads', 'revertLead', 'cancelLeadKyc', 'reopenLeadKyc', 'skipLeadKyc', 'clearLeadKycItem', 'reviewLeadKycItem'],
+    'records.delete': ['deleteOpportunity', 'deleteLead', 'clearSimulatedLeads', 'deleteFile', 'deleteSubfolder'],
+    'proposals.price': ['saveProposal', 'updateProposalCosting', 'reviseProposal', 'applyVendorQuoteToLine', 'updateSparesLines', 'updateSparesLine', 'addSparesLine', 'addSparesLinesFromLead', 'removeSparesLine', 'refreshPrice', 'sendLinesToProposal', 'updateSvcEstimate'],
+    'priceLists.manage': ['replacePriceList', 'savePriceListVersion', 'restorePriceListVersion', 'updateCurrencyRate', 'updateRateSheets'],
+    'approvals.request': ['requestApproval', 'cancelApproval'],
+    'approvals.decide': ['decideApproval', 'recordDecision'],
+    'proposals.send': ['markProposalSent'],
+  }
+  for (const [action, methods] of Object.entries(guardedActions)) for (const method of methods) {
+    const mutate = api[method]
+    api[method] = (...args) => api.canPerform(action)
+      ? mutate(...args)
+      : method === 'recordDecision' ? false : { ok: false, error: 'Your role does not permit this action.', code: 'ACCESS_DENIED' }
   }
 
   // Supabase persists its browser session independently from the app store.
@@ -2850,29 +2985,12 @@ export function StoreProvider({ children }) {
 
 export const useStore = () => useContext(StoreCtx)
 
-// Opp ID = YYMM + 3-digit monthly sequence (e.g. 2609012).
-export function nextOppId(opportunities, owner) {
-  const now = new Date()
-  const yymm = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, '0')
-  const seqs = opportunities
-    .filter(o => String(o.id).startsWith(yymm))
-    .map(o => parseInt(String(o.id).slice(4, 7), 10))
-    .filter(n => !isNaN(n))
-  const next = (seqs.length ? Math.max(...seqs) : 0) + 1
-  return `${yymm}${String(next).padStart(3, '0')}`
+// Preview IDs are provisional; connected creation reserves the complete server ID.
+export function nextOppId(opportunities, owner, numbering) {
+  return previewOpportunityNumber(opportunities, numbering)
 }
 
-export async function reserveOppId(opportunities, owner, roleNames = {}) {
-  const now = new Date()
-  const yymm = String(now.getFullYear()).slice(2) + String(now.getMonth() + 1).padStart(2, '0')
-  const canonicalOwner = ownerIdFor(owner, roleNames)
-  if (datastore.dbEnabled()) {
-    try {
-      const sequence = await datastore.reserveOpportunitySequence(yymm)
-      return `${yymm}${String(sequence).padStart(3, '0')}`
-    } catch (error) {
-      console.warn('Central opportunity sequence unavailable — using local fallback:', error?.message || error)
-    }
-  }
-  return nextOppId(opportunities, canonicalOwner)
+export async function reserveOppId(opportunities, owner, roleNames = {}, numbering) {
+  if (datastore.dbEnabled()) return datastore.reserveOpportunityNumber()
+  return nextOppId(opportunities, owner, numbering)
 }

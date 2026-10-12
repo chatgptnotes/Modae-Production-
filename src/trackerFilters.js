@@ -46,7 +46,7 @@ export const COL_TYPES = {
   lastUpdated: 'date',
   forecast: 'bool',
   remarks: 'longtext',
-  nextActionOwner: 'enum',
+  fqFy: 'enum',
 }
 
 export const colType = key => COL_TYPES[key] || 'text'
@@ -247,10 +247,24 @@ export function compareVals(va, vb, dir) {
 }
 
 /** Sort menu labels read differently per type; the mechanism is the same. */
-export function sortLabels(type) {
+export function sortLabels(type, key) {
+  if (key === 'prob') return { asc: 'Low to High', desc: 'High to Low' }
+  if (key === 'fqFy') return { asc: 'Oldest to Newest', desc: 'Newest to Oldest' }
   if (type === 'date') return { asc: 'Oldest to Newest', desc: 'Newest to Oldest' }
   if (type === 'currency' || type === 'percent' || type === 'number') {
     return { asc: 'Smallest to Largest', desc: 'Largest to Smallest' }
   }
   return { asc: 'A to Z', desc: 'Z to A' }
+}
+
+/** Raw, type-aware sort keys; never sort formatted percentages or fiscal labels. */
+export function columnSortValue(key, value) {
+  if (value == null || value === '' || value === '—') return null
+  if (['currency', 'percent', 'number'].includes(colType(key))) return numOf(value)
+  if (key === 'prob') return ({ Low: 1, Medium: 2, High: 3 })[value] ?? value
+  if (key === 'fqFy') {
+    const match = /^Q([1-4])-(\d{4})$/.exec(value)
+    return match ? Number(match[2]) * 4 + Number(match[1]) : null
+  }
+  return value
 }

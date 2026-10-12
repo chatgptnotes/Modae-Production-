@@ -1,3 +1,6 @@
+import { opportunitySearchPayload, opportunitySearchPrompt, opportunitySearchSchema } from './_opportunity-search.js'
+import { validateSearchResult, requiredSearchClarification } from '../src/opportunitySearch.js'
+import { activeProfile } from './_user-roster.js'
 import { getAdminSupabaseClient } from './_supabase-client.js'
 
 // Railway Gemini proxy for the browser AI contract.
@@ -53,7 +56,7 @@ async function authenticate(req) {
   if (!client) return { error: [503, 'AI_AUTH_UNAVAILABLE', 'AI authentication is not configured on the server.'] }
   try {
     const { data, error } = await client.auth.getUser(token)
-    if (error || !data?.user?.id) return { error: [401, 'AI_AUTH_INVALID', 'The application session is invalid or expired.'] }
+    if (error || !data?.user?.id || !await activeProfile(client, data.user)) return { error: [401, 'AI_AUTH_INVALID', 'The application session is invalid or expired.'] }
     return { user: data.user }
   } catch (error) {
     console.error('AI session verification failed', error?.message || error)
@@ -892,11 +895,16 @@ export default async function handler(req, res) {
   try { input = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}) }
   catch { return fail(res, 400, 'AI_BAD_REQUEST', 'Malformed request body') }
   const task = String(input.task || '')
-  const payload = input.payload || {}
+  let payload = input.payload || {}
+  if (task === 'opportunity.search') {
+    try { payload = opportunitySearchPayload(payload) } catch (error) { return fail(res, 400, 'AI_BAD_REQUEST', error.message) }
+    const clarification = requiredSearchClarification(payload)
+    if (clarification) return send(res, 200, { ok: true, data: clarification })
+  }
   if (JSON.stringify(input).length > MAX_REQUEST_CHARS) {
     return fail(res, 413, 'AI_PAYLOAD_TOO_LARGE', 'The document or request is too large for AI processing.')
   }
-  const structuredTasks = new Set(['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review'])
+  const structuredTasks = new Set(['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'])
   const requestedModel = String(input.model || '')
   const requested = /^gemini-[\w.-]+$/.test(requestedModel)
     ? (MODEL_ALIASES[requestedModel] || requestedModel)
@@ -904,11 +912,11 @@ export default async function handler(req, res) {
   // All AI tasks use the same stable multimodal model. Health checks may still
   // request a specific model so Admin can verify a configured endpoint.
   const model = task === 'health' ? requested : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
-  const prompt = task === 'health' ? 'Reply with the single word: ok'
+  const prompt = task === 'opportunity.search' ? opportunitySearchPrompt(payload) : task === 'health' ? 'Reply with the single word: ok'
     : task === 'lead.fill' ? fillPrompt(payload)
       : task === 'vendor.quote' ? vendorQuotePrompt(payload)
           : task === 'email.proposal' ? proposalEmailPrompt(payload)
@@ -932,11 +940,11 @@ export default async function handler(req, res) {
                   : leadPrompt(payload)
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'tender.extract', 'clarification.answer', 'approval.condition-evidence', 'kyc.extract'].includes(task) ? inlineParts(payload) : [])] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'].includes(task)
       ? {
           maxOutputTokens: task === 'health' ? 8 : 2048,
           responseMimeType: 'application/json',
-          responseSchema: task === 'lead.fill' ? fillSchema
+          responseSchema: task === 'opportunity.search' ? opportunitySearchSchema : task === 'lead.fill' ? fillSchema
             : task === 'vendor.quote' ? vendorQuoteSchema
               : task === 'email.proposal' ? emailProposalSchema
                 : task === 'email.proofread' ? emailProofreadSchema
@@ -991,6 +999,10 @@ export default async function handler(req, res) {
     const text = out?.candidates?.[0]?.content?.parts?.map(p => p?.text || '').join('') || ''
     if (!text) return fail(res, 502, 'AI_EMPTY_RESPONSE', 'Gemini returned no usable output')
     if (task === 'health' || !structuredTasks.has(task)) return send(res, 200, { ok: true, model, text })
+    if (task === 'opportunity.search') {
+      try { return send(res, 200, { ok: true, model, data: validateSearchResult(JSON.parse(text)) }) }
+      catch { return fail(res, 502, 'AI_SEARCH_INVALID', 'AI could not produce a valid search. Please rephrase and try again.') }
+    }
     return send(res, 200, { ok: true, model, data: JSON.parse(text) })
   } catch (error) {
     console.error('Railway Gemini proxy failed', error?.message || error)

@@ -1,7 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import nodemailer from 'nodemailer'
-import handler from '../api/send-proposal-email.js'
+import { createSendProposalEmailHandler, authorizeProposalSend } from '../api/send-proposal-email.js'
+import { defaultAccessPolicy } from '../src/accessPolicy.js'
+const handler = createSendProposalEmailHandler({ authorize: async () => ({}) })
 
 const response = () => {
   const out = {}
@@ -138,4 +140,38 @@ test('mail endpoint surfaces the real error when Gmail rejects the message', wit
   } finally {
     restore()
   }
+}))
+
+const validMail = { oppId:'OP1', to:'buyer@example.com', subject:'Proposal', body:'Attached', attachments:[{filename:'proposal.pdf',mimeType:'application/pdf',contentBase64:'cA=='}] }
+function authorizationDeps({ status='Active', denyAction=false, denyPage=false, opportunity={}, config={}, approvals=[] }={}) {
+  const policy=defaultAccessPolicy()
+  if(denyAction) policy.roles.STANDARD_USER.actions=policy.roles.STANDARD_USER.actions.filter(a=>a!=='proposals.send')
+  if(denyPage) policy.roles.STANDARD_USER.pages=policy.roles.STANDARD_USER.pages.filter(a=>a!=='proposal')
+  const client={auth:{getUser:async()=>({data:{user:{id:'auth-1',email:'seller@example.com'}}})},from(){const q={select(){return q},eq(){return q},is(){return q},async maybeSingle(){return {data:{data:[{id:'U1',authId:'auth-1',email:'seller@example.com',role:'STANDARD_USER',status}]}}}};return q}}
+  return {getClient:()=>client,getReader:()=>async()=>({config:{requireFinalQuoteApproval:false,accessPolicy:policy,...config},opportunities:[{id:'OP1',customerStatus:'Green',route:'Project',...opportunity}],proposals:{OP1:{revision:0,bom:[{qty:1,quoted:100,listPrice:100}]}},approvals})}
+}
+
+test('default mail authorization rejects missing bearer before SMTP', withMailEnv(async()=>{
+ let sent=0
+ const protectedHandler=createSendProposalEmailHandler({transportFactory:()=>({sendMail:async()=>{sent++}})})
+ const res=response();await protectedHandler({method:'POST',body:validMail},res)
+ assert.equal(res.out.status,401);assert.equal(sent,0)
+}))
+
+test('authoritative permissions, roster status, readiness and release gate all block SMTP', withMailEnv(async()=>{
+ for(const [options,code] of [[{status:'Suspended'},403],[{denyAction:true},403],[{denyPage:true},403],[{opportunity:{customerStatus:'Blue'}},409],[{config:{requireFinalQuoteApproval:true}},409]]) {
+  let sent=0
+  const protectedHandler=createSendProposalEmailHandler({authorize:(req,input)=>authorizeProposalSend(req,input,authorizationDeps(options)),transportFactory:()=>({sendMail:async()=>{sent++}})})
+  const res=response();await protectedHandler({method:'POST',headers:{authorization:'Bearer token'},body:{...validMail,approvals:[{status:'Approved'}],ready:true}},res)
+  assert.equal(res.out.status,code,JSON.stringify(options));assert.equal(sent,0)
+ }
+}))
+
+test('authorized ready saved proposal sends once; missing opportunity ID cannot send', withMailEnv(async()=>{
+ let sent=0
+ const protectedHandler=createSendProposalEmailHandler({authorize:(req,input)=>authorizeProposalSend(req,input,authorizationDeps()),transportFactory:()=>({sendMail:async()=>{sent++;return {messageId:'authorized'}}})})
+ for(const [body,code] of [[validMail,200],[{...validMail,oppId:''},400],[{...validMail,oppId:'missing'},404]]) {
+  const res=response();await protectedHandler({method:'POST',headers:{authorization:'Bearer token'},body},res);assert.equal(res.out.status,code,JSON.stringify(res.out.body))
+ }
+ assert.equal(sent,1)
 }))

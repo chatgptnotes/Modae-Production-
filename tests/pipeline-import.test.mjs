@@ -17,7 +17,7 @@ test('pipeline upload parses a workbook for preview without importing it', () =>
   assert.deepEqual(result.missing, [])
 })
 
-test('Betser workbook import keeps only open current rows and all old closed rows', () => {
+test('Betser workbook import keeps all current rows and all old closed rows', () => {
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
     ['', '', 'Sl.', 'Opp ID', 'Sell To Customer*', 'Category*', 'Location', 'Customer Status', 'EUC Name*', 'EUC Location', 'Oppurtunity Name/Description*', 'LJS', 'Opp Type*', 'BU*', 'Segment', 'Product*', 'Prob (%)*', 'Value (K₹)*', 'COGS (K₹)*', 'GM (K₹)', 'GM%', 'Create Date*', 'Proposal Date', 'Order Date*', 'FQ-FY', 'Invoice Date*', 'Status*', 'Stage*', 'Closed Reason*', 'Contact Person*', 'Contact Phone #*', 'Last Updated', 'Forecast', 'Update/Remarks'],
@@ -31,9 +31,30 @@ test('Betser workbook import keeps only open current rows and all old closed row
 
   const result = parseBetserWorkbook(XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }))
   assert.equal(result.error, '')
-  assert.equal(result.opportunities.length, 2)
-  assert.deepEqual(result.opportunities.map(row => row.id), ['2609012PP', '2501001RS'])
+  assert.equal(result.opportunities.length, 3)
+  assert.deepEqual(result.opportunities.map(row => row.id), ['2609012PP', '2609013PP', '2501001RS'])
   assert.equal(result.opportunities.filter(row => row.status === 'Open').length, 1)
-  assert.equal(result.opportunities.filter(row => row.status === 'Closed').length, 1)
-  assert.equal(result.customers.length, 2)
+  assert.equal(result.opportunities.filter(row => row.status === 'Closed').length, 2)
+  assert.equal(result.customers.length, 3)
+})
+
+test('Excel date cells keep their calendar day in UTC and India time, including quarter boundaries', () => {
+  const previousTZ = process.env.TZ
+  try {
+    for (const timezone of ['UTC', 'Asia/Kolkata', 'America/Los_Angeles']) {
+      process.env.TZ = timezone
+      const workbook = XLSX.utils.book_new()
+      const serial = (Date.UTC(2026, 3, 1) - Date.UTC(1899, 11, 30)) / 86400000
+      const sheet = XLSX.utils.aoa_to_sheet([['Opp ID', 'Sell To Customer', 'Order Date*', 'Status', 'Stage'], ['date-test', 'Customer', serial, 'Open', 'RFQ']])
+      sheet.C2.z = 'dd-mmm-yy'
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Current Opps')
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['New Opp ID']]), 'Old Closed Opps')
+      const parsed = parseBetserWorkbook(XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }))
+      assert.equal(parsed.opportunities[0].orderDate, '2026-04-01', timezone)
+      assert.equal(parsed.opportunities[0].fqFy, 'Q1-2027', timezone)
+    }
+  } finally {
+    if (previousTZ === undefined) delete process.env.TZ
+    else process.env.TZ = previousTZ
+  }
 })

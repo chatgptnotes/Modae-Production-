@@ -12,6 +12,7 @@ import './styles.css'
 import './ui/workspaceHeadings.css'
 import './tablet/phoneDarkTheme.css'
 import './tablet/phonePageConsistency.css'
+import './tablet/phoneReadability.css'
 
 async function boot() {
   if (deploymentNeedsReset()) {

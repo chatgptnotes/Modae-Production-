@@ -1,7 +1,10 @@
+import { registrationFields } from '../businessRules.js'
+import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, nextOppId, reserveOppId } from '../store.jsx'
-import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, SUBFOLDERS, routeForType, newProposal } from '../seed.js'
+import { displayOpportunityId, SUBFOLDERS, routeForType, newProposal } from '../seed.js'
+
 import { Icon } from '../icons.jsx'
 import { ErrBox } from '../ui.jsx'
 import { matchCustomer, customerStatusForLead } from './Inbox.jsx'
@@ -40,6 +43,8 @@ const identityValue = (lead, fields, key, pattern) =>
   String(lead?.[key] || fieldVal(fields, pattern) || lead?.parse?.[key] || '').trim()
 
 export default function Register() {
+  const { OPP_TYPES, OWNERS, PRODUCTS, BUS, SEGMENTS, labelFor } = useFieldLists()
+
   const store = useStore()
   const nav = useNavigate()
   const { leadId } = useParams()
@@ -106,7 +111,7 @@ export default function Register() {
         <h2><Icon name="clipboardCheck" size={18} /> Registration — {lead.subject}</h2>
         {uploadWarn && <ErrBox>{uploadWarn}</ErrBox>}
         <div className="okbox">
-          Already registered as <b>{lead.oppId}</b>.{' '}
+          Already registered as <b>{displayOpportunityId(lead.oppId)}</b>.{' '}
           <button className="primary" onClick={() => nav('/opp/' + lead.oppId)}>Open opportunity</button>
         </div>
       </div>
@@ -118,10 +123,10 @@ export default function Register() {
   // drop the `redFlag ? 'Red' : 'Blue'` fallback, so a red-flagged lead with no
   // master match silently registered as Blue.
   const leadCustomerStatus = customerStatusForLead(lead, store.customers)
-  const redApproval = redClearanceFor(store.approvals, lead.id, store.config)
-  const redCleared = isRedCleared(redApproval, store.config)
-  const pendingLow = fields.filter(f => f.state === 'pending' && f.conf < med && isRegistrationCriticalField(f.k))
-  const deferredLow = fields.filter(f => f.state === 'pending' && f.conf < med && !isRegistrationCriticalField(f.k))
+  const redApproval = redClearanceFor(store.approvals, lead.id, store.config, leadCustomerStatus)
+  const redCleared = isRedCleared(redApproval, store.config, leadCustomerStatus)
+  const pendingLow = fields.filter(f => f.state === 'pending' && f.conf < med && isRegistrationCriticalField(f.k, store.config))
+  const deferredLow = fields.filter(f => f.state === 'pending' && f.conf < med && !isRegistrationCriticalField(f.k, store.config))
   // Red clears on the joint approval now. The same blocker used to be raised
   // here *and* unconditionally inside leadVerificationBlockers; that second
   // copy read no approvals, so it could never clear and an approved Red lead
@@ -140,10 +145,8 @@ export default function Register() {
     ...(lead?.ai?.missing || []).filter(item => !/opportunity\s+scope/i.test(String(item))),
     ...deferredLow.map(field => `Confirm ${field.k}`),
   ]
-  const missingIdentity = [
-    ['sellTo', 'Sell To Customer'], ['sellToCustomerLocation', 'Sell To Customer Location'], ['eucName', 'EUC Name'], ['eucLocation', 'EUC Location'],
-    ['contactPerson', 'Contact Person'], ['contactPhone', 'Contact Phone'],
-  ].filter(([key]) => !String(identityDraft[key] || '').trim()).map(([, label]) => label)
+  const registrationRequired = new Set(registrationFields(store.config).map(([key]) => key))
+  const missingIdentity = registrationFields(store.config).filter(([key]) => !String(identityDraft[key] || '').trim()).map(([, label]) => label)
 
   const blockers = []
   if (lead.status !== 'Qualified') blockers.push('Lead is not Qualified yet — qualify it in the inbox first')
@@ -159,7 +162,7 @@ export default function Register() {
   const creationRegionalOwner = routeOwnerForLocation(creationRoutingRegion, store.config, '')
   const creationOverride = creationRegionalOwner && owner !== creationRegionalOwner
   const creationOwner = creationOverride ? owner : (creationRegionalOwner || owner)
-  const previewId = nextOppId(store.opportunities, creationOwner)
+  const previewId = nextOppId(store.opportunities, creationOwner, store.config?.opportunityNumbering)
   const backend = activeBackend()
   const today = new Date().toISOString().slice(0, 10)
 
@@ -176,7 +179,7 @@ export default function Register() {
   }
 
   const create = async () => {
-    if (blocked || missingIdentity.length || creating) return
+    if (blocked || missingIdentity.length || creating || store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false) return
     const isOverride = creationOverride
     if (isOverride && !['LJS', 'AH'].includes(store.role)) return
     if (isOverride && !ownerOverrideReason.trim()) return
@@ -201,7 +204,9 @@ export default function Register() {
     const { extracted } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
     const leadVerification = verificationSnapshot({ ...lead, existingCustomerKyc }, leadCustomerStatus, { approval: redApproval, config: store.config })
     const finalOwner = isOverride ? owner : creationOwner
-    const id = await reserveOppId(store.opportunities, creationOwner, store.config?.roleNames)
+    let id
+    try { id = await reserveOppId(store.opportunities, creationOwner, store.config?.roleNames, store.config?.opportunityNumbering) }
+    catch (error) { setCreating(false); window.alert(error.message); return }
     const opp = {
       id,
       sourceLeadId: lead.id,
@@ -233,10 +238,10 @@ export default function Register() {
       contactEmail: isInternalSender(lead.from, store.config) ? '' : (lead.from || ''),
       lastUpdated: today, forecast: false,
       remarks: 'Registered from lead ' + lead.id,
-      route: routeForType(oppType),
+      route: routeForType(oppType, store.config),
     }
     store.addOpportunity(opp)
-    if (routeForType(oppType) !== 'Service') {
+    if (routeForType(oppType, store.config) !== 'Service') {
       const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
       store.addSparesLinesFromLead(opp.id, workbenchRows)
       const proposal = newProposal(opp.id, opp, { validityDays: store.config?.proposalValidityDays })
@@ -281,7 +286,7 @@ export default function Register() {
     }
     setCreating(false)
     if (failed.length) {
-      setUploadWarn(`Cloud upload failed for ${failed.join(', ')} — recorded locally only. Opportunity ${opp.id} was created.`)
+      setUploadWarn(`Cloud upload failed for ${failed.join(', ')} — recorded locally only. Opportunity ${displayOpportunityId(opp.id)} was created.`)
       return
     }
     nav('/opp/' + opp.id)
@@ -304,7 +309,7 @@ export default function Register() {
           <div className="section-title">Identity &amp; ownership</div>
           <p style={{ margin: '6px 0 2px' }}>Generated ID (preview):{' '}
             <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: 0.5 }}>
-              {blocked ? '— withheld —' : previewId}
+              {blocked ? '— withheld —' : `${previewId} (provisional)`}
             </span>
           </p>
           <p className="hint">
@@ -313,36 +318,36 @@ export default function Register() {
           </p>
 
           <div className="section-title" style={{ marginTop: 12 }}>Mandatory identity details</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
-            <label className="afield">Sell To Customer <span className="required-mark">*</span>
+          <div className="registration-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
+            <label className="afield">Sell To Customer {registrationRequired.has('sellTo') && <span className="required-mark">*</span>}
               <CustomerPicker customers={store.customers} value={identityDraft.sellTo} onChange={value => updateIdentity('sellTo', value)} allowCreate={false} label="" />
             </label>
-            <label className="afield">Sell To Customer Location <span className="required-mark">*</span>
+            <label className="afield">Sell To Customer Location {registrationRequired.has('sellToCustomerLocation') && <span className="required-mark">*</span>}
               <input value={identityDraft.sellToCustomerLocation || ''} onChange={e => updateIdentity('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" />
             </label>
-            <label className="afield">EUC Name <span className="required-mark">*</span>
+            <label className="afield">EUC Name {registrationRequired.has('eucName') && <span className="required-mark">*</span>}
               <CustomerPicker customers={store.customers} value={identityDraft.eucName} onChange={value => updateIdentity('eucName', value)} allowCreate={false} label="" />
             </label>
-            <label className="afield">EUC Location <span className="required-mark">*</span>
+            <label className="afield">EUC Location {registrationRequired.has('eucLocation') && <span className="required-mark">*</span>}
               <input value={identityDraft.eucLocation} onChange={e => updateIdentity('eucLocation', e.target.value)} placeholder="Enter end user location" />
             </label>
-            <label className="afield">Contact Person <span className="required-mark">*</span>
+            <label className="afield">Contact Person {registrationRequired.has('contactPerson') && <span className="required-mark">*</span>}
               <input value={identityDraft.contactPerson} onChange={e => updateIdentity('contactPerson', e.target.value)} placeholder="Enter contact person" />
             </label>
-            <label className="afield">Contact Phone <span className="required-mark">*</span>
+            <label className="afield">Contact Phone {registrationRequired.has('contactPhone') && <span className="required-mark">*</span>}
               <input type="tel" value={identityDraft.contactPhone} onChange={e => updateIdentity('contactPhone', e.target.value)} placeholder="Enter contact phone" />
             </label>
           </div>
           {missingIdentity.length > 0 && <div className="warnbox" style={{ marginTop: 8 }}>Complete: {missingIdentity.join(', ')}.</div>}
           <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
-            <button type="button" onClick={saveIdentity} disabled={identitySaved}>Save details</button>
+            <button type="button" onClick={saveIdentity} disabled={identitySaved || store.canPerform?.('leads.edit') === false}>Save details</button>
             {identitySaved && <span className="lead-decision-saved">Saved just now</span>}
           </div>
 
           <label className="afield" style={{ display: 'block', marginTop: 10 }}>
             Owner
             <select value={owner} onChange={e => setOwner(e.target.value)} style={{ display: 'block', marginTop: 2 }}>
-              {OWNERS.map(o => <option key={o}>{o}</option>)}
+              {OWNERS.map(o => <option key={o} value={o}>{labelFor('owner', o)}</option>)}
             </select>
           </label>
           <p className="hint">
@@ -357,20 +362,20 @@ export default function Register() {
           )}
 
           <div className="section-title" style={{ marginTop: 12 }}>Pipeline metadata</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
+          <div className="registration-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
             <label className="afield">Opportunity type
               <select value={oppType} onChange={e => setOppType(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
-                {OPP_TYPES.map(t => <option key={t}>{t}</option>)}
+                {OPP_TYPES.map(t => <option key={t} value={t}>{labelFor('oppType', t)}</option>)}
               </select>
             </label>
             <label className="afield">Business unit
               <select value={bu} onChange={e => setBu(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
-                {BUS.map(b => <option key={b}>{b}</option>)}
+                {BUS.map(b => <option key={b} value={b}>{labelFor('bu', b)}</option>)}
               </select>
             </label>
             <label className="afield">Segment
               <select value={segment} onChange={e => setSegment(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
-                {SEGMENTS.map(s => <option key={s}>{s}</option>)}
+                {SEGMENTS.map(s => <option key={s} value={s}>{labelFor('segment', s)}</option>)}
               </select>
             </label>
             <label className="afield">Equipment / Product Family
@@ -380,7 +385,7 @@ export default function Register() {
             </label>
           </div>
           <p className="hint" style={{ marginTop: 6 }}>
-            Proposal route: <b>{routeForType(oppType)}</b> — set from the opportunity type.
+            Proposal route: <b>{routeForType(oppType, store.config)}</b> — set from the opportunity type.
           </p>
 
           {missingInfo.length > 0 && (
@@ -407,7 +412,7 @@ export default function Register() {
             </div>
           )}
           <div className="toolbar" style={{ marginTop: 12, marginBottom: 0 }}>
-            <button className="primary" disabled={blocked || creating}
+            <button className="primary" disabled={blocked || creating || store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false}
               title={blocked ? 'Blocked — resolve the items above' : undefined}
               onClick={create}>
               <Icon name="check" size={13} /> {creating ? 'Creating…' : 'Create opportunity'}

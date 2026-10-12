@@ -248,7 +248,7 @@ export default function Folders() {
             <tbody>
               {subfolder === 'Proposal' && !(files.Proposal || []).some(fl => fl.name.endsWith('.xlsx')) && (
                 <tr onClick={() => nav(`/proposal/${opp.id}`)} style={{ cursor: 'pointer' }} title="Open the proposal workbook">
-                  <td><Icon name="fileSheet" size={13} /> <b>{opp.id} Proposal Workbook.xlsx</b> <span className="hint">Cover Letter · Signal List · Rack Layout · Priced BoQ</span></td>
+                  <td><Icon name="fileSheet" size={13} /> <b>{displayOpportunityId(opp.id)} Proposal Workbook.xlsx</b> <span className="hint">Cover Letter · Signal List · Rack Layout · Priced BoQ</span></td>
                   <td>{opp.lastUpdated}</td><td>247 KB</td><td></td>
                 </tr>
               )}

@@ -1,14 +1,13 @@
 import React, { Suspense, useEffect, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
-import { PORTAL_ENABLED, selectableRoles, ROLES } from './seed.js'
+import { displayOpportunityId, PORTAL_ENABLED, selectableRoles, ROLES } from './seed.js'
 import { isSalesOwner, canSeePage, dashboardDefaultScope, displayRole, isApprover, isAdminRole, canManagePriceLists } from './utils.js'
 import { DrawerHost } from './drawer.jsx'
 import { Icon, ModaeImageLogo, ModaeLogo } from './icons.jsx'
 import { counts } from './kpi.js'
 import BrandWatermark from './branding/BrandWatermark.jsx'
 import { startAutoTitle } from './autoTitle.js'
-import { testConnection } from './ai.js'
 import { WorkspaceViewProvider, useWorkspaceView } from './ui/WorkspaceViewContext.jsx'
 import WorkspaceViewToggle from './ui/WorkspaceViewToggle.jsx'
 import { ThemeProvider, useWorkspaceTheme, WorkspaceThemeButton } from './ui/WorkspaceThemeContext.jsx'
@@ -56,7 +55,7 @@ const LoadingScreen = ({ label = 'Loading workspace…' }) => (
 
 function PageGate({ page, children }) {
   const store = useStore()
-  if (!canSeePage(store.roles || store.role, page)) return <Navigate to="/opportunities" replace />
+  if (!canSeePage(store.roles || store.role, page)) return <section className="page" aria-labelledby="page-access-denied"><h2 id="page-access-denied">Page access restricted</h2><p>Your role does not have access to this page. Choose an available page from the navigation or contact an administrator.</p><button type="button" onClick={() => store.logout()}>Sign out</button></section>
   return children
 }
 
@@ -125,6 +124,48 @@ function WorkspaceTopbar({ store, role, location, nav }) {
   const [lastSync, setLastSync] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
+  const topbarRef = useRef(null)
+  const searchRef = useRef(null)
+  const searchInputRef = useRef(null)
+  const searchToggleRef = useRef(null)
+  const moreRef = useRef(null)
+  const [headerWidth, setHeaderWidth] = useState(1200)
+  const [searchExpanded, setSearchExpanded] = useState(false)
+  const compactHeader = headerWidth < 1100
+  const narrowHeader = headerWidth < 560
+  useEffect(() => {
+    const header = topbarRef.current
+    const measure = () => setHeaderWidth(header.clientWidth)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(header)
+    return () => observer.disconnect()
+  }, [])
+  useEffect(() => {
+    if (searchExpanded) searchInputRef.current?.focus()
+  }, [searchExpanded])
+  useEffect(() => {
+    setSearchExpanded(false)
+    setOpen(false)
+    setGuideOpen(false)
+    if (moreRef.current) moreRef.current.open = false
+  }, [location.pathname, compactHeader])
+  useEffect(() => {
+    const dismiss = event => {
+      if (!searchRef.current?.contains(event.target)) { setSearchExpanded(false); setOpen(false) }
+      if (!moreRef.current?.contains(event.target) && moreRef.current) { moreRef.current.open = false; setGuideOpen(false) }
+    }
+    const escape = event => {
+      if (event.key !== 'Escape') return
+      if (moreRef.current?.open) { moreRef.current.open = false; moreRef.current.querySelector('summary')?.focus() }
+      if (searchExpanded) { setSearchExpanded(false); searchToggleRef.current?.focus() }
+      setGuideOpen(false)
+      setOpen(false)
+    }
+    document.addEventListener('pointerdown', dismiss)
+    document.addEventListener('keydown', escape)
+    return () => { document.removeEventListener('pointerdown', dismiss); document.removeEventListener('keydown', escape) }
+  }, [searchExpanded])
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30000)
     return () => window.clearInterval(timer)
@@ -154,7 +195,7 @@ function WorkspaceTopbar({ store, role, location, nav }) {
       .map(item => ({ type: 'Lead', title: item.subject || 'Untitled enquiry', detail: `${item.id} · ${item.sender || item.from || 'Sender not recorded'}`, path: `/inbox/${item.id}` })),
     ...(canSearchOpps ? (store.opportunities || []).filter(item => workspaceView.scope !== 'my' || item.owner === role)
       .filter(item => `${item.id} ${item.oppName || ''} ${item.sellTo || ''}`.toLowerCase().includes(term))
-      .map(item => ({ type: 'Opportunity', title: item.oppName || 'Untitled opportunity', detail: `${item.id} · ${item.sellTo || 'Customer not recorded'}`, path: `/opp/${item.id}` })) : []),
+      .map(item => ({ type: 'Opportunity', title: item.oppName || 'Untitled opportunity', detail: `${displayOpportunityId(item.id)} · ${item.sellTo || 'Customer not recorded'}`, path: `/opp/${item.id}` })) : []),
     ...(canSearchCustomers ? (store.customers || []).filter(item => (workspaceView.scope !== 'my' || myCustomerNames.has(item.name || item.customerName))
       && `${item.name || item.customerName || ''} ${item.id || ''}`.toLowerCase().includes(term))
       .map(item => ({ type: 'Customer', title: item.name || item.customerName || 'Customer', detail: item.id || 'Customer master', path: '/customers' })) : []),
@@ -170,15 +211,22 @@ function WorkspaceTopbar({ store, role, location, nav }) {
   const clock = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).format(now)
   const synced = lastSync ? new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).format(lastSync) : '—'
   const dashboardOwners = [...new Set([...(store.opportunities || []).map(item => item.owner), ...Object.keys(store.sales?.targets || {})])].filter(Boolean).sort()
-  return <header className={`workspace-topbar${hasLocalSearch ? ' has-local-search' : ''}${topbarTitle ? ' has-page-title' : ''}`}>
+  const secondaryUtilities = <>
+      <span className={`workspace-live ${store.liveSyncStatus === 'live' ? 'is-live' : ''}`}><i />LIVE · IST <b>{clock}</b></span>
+      <div className="workspace-guide">
+        <button type="button" className="workspace-guide-button" onClick={() => setGuideOpen(value => !value)} aria-expanded={guideOpen}>Guide</button>
+        {guideOpen && <div className="workspace-guide-popover" role="status">Search records from any screen, select My or Global view, then refresh when you need the latest shared data.</div>}
+      </div>
+  </>
+  return <header className={`workspace-topbar${hasLocalSearch ? ' has-local-search' : ''}${topbarTitle ? ' has-page-title' : ''}`} ref={topbarRef} data-compact={compactHeader} data-narrow={narrowHeader}>
     {topbarTitle && <h1 className="workspace-topbar-title"><Icon name={topbarTitle.icon} size={16} /> {topbarTitle.label}</h1>}
-    {!hasLocalSearch && <div className="workspace-topbar-search">
-      <Icon name="search" size={15} />
-      <input aria-label="Search leads, opportunities and customers" placeholder="Search leads, opportunities, customers…" value={query}
+    {!hasLocalSearch && <div className="workspace-topbar-search" ref={searchRef} data-expanded={searchExpanded}>
+      {compactHeader ? <button ref={searchToggleRef} type="button" className="workspace-search-toggle" aria-label="Open workspace search" aria-expanded={searchExpanded} aria-controls="workspace-header-search" onClick={() => setSearchExpanded(value => !value)}><Icon name="search" size={15} /></button> : <Icon name="search" size={15} />}
+      <input id="workspace-header-search" ref={searchInputRef} aria-label="Search leads, opportunities and customers" placeholder="Search leads, opportunities, customers…" value={query}
         onFocus={() => setOpen(true)} onBlur={() => setOpen(false)} onChange={event => { setQuery(event.target.value); setOpen(true) }}
         onKeyDown={event => { if (event.key === 'Escape') { setOpen(false); setQuery('') } if (event.key === 'Enter' && searchResults[0]) { nav(searchResults[0].path); setOpen(false); setQuery('') } }} />
       {open && term && <div className="workspace-search-results" role="listbox" aria-label="Search results">
-        {searchResults.map((result, index) => <button key={`${result.type}-${result.path}-${index}`} type="button" role="option" onMouseDown={event => event.preventDefault()} onClick={() => { nav(result.path); setQuery(''); setOpen(false) }}>
+        {searchResults.map((result, index) => <button key={`${result.type}-${result.path}-${index}`} type="button" role="option" onMouseDown={event => event.preventDefault()} onClick={() => { nav(result.path); setQuery(''); setOpen(false); setSearchExpanded(false) }}>
           <span className="workspace-search-type">{result.type}</span><span><b>{result.title}</b><small>{result.detail}</small></span>
         </button>)}
         {!searchResults.length && <p>No matching records you can access.</p>}
@@ -187,17 +235,20 @@ function WorkspaceTopbar({ store, role, location, nav }) {
     <div className="workspace-topbar__controls">
       {!isDashboardRoute && <span className="workspace-role-access" title={roleLine}>{roleLine}</span>}
     {isDashboardRoute && canManageDashboardScope && workspaceView.scope === 'global' && <label className="workspace-company-selector"><span className="visually-hidden">Dashboard company view</span><select aria-label="Dashboard company view" value={workspaceView.owner} onChange={event => workspaceView.setOwner(event.target.value)}><option value="all">Global · Company</option>{dashboardOwners.map(owner => <option key={owner} value={owner}>{displayRole(owner)}</option>)}</select></label>}
-      <button type="button" className="workspace-mobile-mode" onClick={() => store.setViewMode('tablet')} aria-label="Switch to Phone mode"><Icon name="tablet" size={14} /> Phone mode</button>
+      {!compactHeader && <button type="button" className="workspace-mobile-mode" onClick={() => store.setViewMode('tablet')} aria-label="Switch to Phone mode"><Icon name="tablet" size={14} /> Phone mode</button>}
       <WorkspaceViewToggle />
     </div>
     <div className="workspace-topbar__utilities">
-      <button type="button" className="workspace-refresh" onClick={refresh} disabled={refreshing} title="Refresh shared workspace data"><Icon name="refresh" size={14} />{refreshing ? 'Refreshing…' : `Synced ${synced}`}</button>
-      <span className={`workspace-live ${store.liveSyncStatus === 'live' ? 'is-live' : ''}`}><i />LIVE · IST <b>{clock}</b></span>
-      <div className="workspace-guide">
-        <button type="button" className="workspace-guide-button" onClick={() => setGuideOpen(value => !value)} aria-expanded={guideOpen}>Guide</button>
-        {guideOpen && <div className="workspace-guide-popover" role="status">Search records from any screen, select My or Global view, then refresh when you need the latest shared data.</div>}
-      </div>
-      <WorkspaceThemeButton className="workspace-theme-toggle" />
+      <button type="button" className="workspace-refresh" onClick={refresh} disabled={refreshing} aria-label={refreshing ? 'Refreshing workspace' : `Refresh shared workspace data; synced ${synced}`} title="Refresh shared workspace data"><Icon name="refresh" size={14} />{!compactHeader && (refreshing ? 'Refreshing…' : `Synced ${synced}`)}</button>
+      {compactHeader ? <details className="workspace-topbar-more" ref={moreRef}>
+        <summary aria-label="More navigation controls" title="More navigation controls">•••</summary>
+        <div className="workspace-topbar-more-panel">
+          {secondaryUtilities}
+          <button type="button" onClick={() => store.setViewMode('tablet')}>Phone mode</button>
+          {narrowHeader && <WorkspaceThemeButton className="workspace-theme-toggle" />}
+        </div>
+      </details> : secondaryUtilities}
+      {!narrowHeader && <WorkspaceThemeButton className="workspace-theme-toggle" />}
     </div>
   </header>
 }
@@ -211,8 +262,6 @@ function AppShell() {
     try { return window.localStorage.getItem('modae_sidebar_compact') === '1' } catch { return false }
   })
   const { theme } = useWorkspaceTheme()
-  const [lastSync, setLastSync] = useState(null)
-  const [aiHealth, setAiHealth] = useState(null)
   const tablet = store.viewMode === 'tablet'
   const custAccount = store.auth?.user?.role === 'CUST'
   const role = store.role
@@ -230,20 +279,6 @@ function AppShell() {
   const withConnectivity = content => content
 
   useEffect(() => startAutoTitle(mainRef.current), [])
-
-  useEffect(() => {
-    if (store.liveSyncStatus === 'live') setLastSync(new Date())
-  }, [store.liveSyncStatus])
-
-  useEffect(() => {
-    let active = true
-    void testConnection(store.config?.aiModel).then(result => {
-      if (active) setAiHealth({ ok: result.ok })
-    }).catch(() => {
-      if (active) setAiHealth({ ok: false })
-    })
-    return () => { active = false }
-  }, [store.config?.aiModel])
 
   // Follow the viewport until the user picks a mode themselves — a tablet turned
   // to landscape, or a browser window dragged wider, should land in the right
@@ -358,10 +393,6 @@ function AppShell() {
           })}
         </nav>
         <div className="side-foot">
-          <div className="workspace-system-status">
-            {aiHealth && <span className={`workspace-ai-health ${aiHealth.ok ? 'is-online' : 'is-unreachable'}`}><i />AI extraction · {aiHealth.ok ? 'online' : 'unreachable'}</span>}
-            <span>Last sync {lastSync ? new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', hour12: false }).format(lastSync) : '—'}</span>
-          </div>
           {signedInName && <div className="side-user-chip"><span className="side-user-avatar">{userInitials}</span><span className="side-label"><b>{signedInName}</b><small>{displayRole(role)}</small></span></div>}
           <button className="reset sidebar-mode-switch" onClick={() => { store.setViewMode('tablet') }}>
             <Icon name="tablet" size={14} /> <span className="side-label">Phone mode</span>

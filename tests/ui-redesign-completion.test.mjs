@@ -32,15 +32,15 @@ test('tablet utilities keep refresh within reach', () => {
   assert.match(tablet, /title="Refresh workspace data"/)
 })
 
-test('the global shell provides the requested guide, theme, and system-status controls', () => {
+test('the global shell keeps guide and theme controls without sidebar system status', () => {
   const app = read('src/App.jsx')
   const css = read('src/styles.css')
 
   assert.match(app, /Guide/)
   assert.match(app, /workspace-theme-toggle/)
-  assert.match(app, /workspace-system-status/)
-  assert.match(app, /AI extraction/)
-  assert.match(app, /Last sync/)
+  assert.doesNotMatch(app, /workspace-system-status/)
+  assert.doesNotMatch(app, /AI extraction/)
+  assert.doesNotMatch(app, /Last sync/)
   assert.match(app, /ThemeProvider/)
   assert.match(css, /\.workspace-topbar\s*\{[\s\S]*?position:\s*sticky/)
   assert.match(css, /\[data-theme="dark"\]/)
@@ -76,7 +76,7 @@ test('requester approval cards expose a decision timeline', () => {
 test('opportunities shows real funnel counts and proposal sent has real-data signals', () => {
   const opps = read('src/pages/Opportunities.jsx')
   assert.match(opps, /insightModel\.funnel\.map/)
-  assert.match(opps, /setParams\(\{ stage: stage\.stages\.join\(','\) \}\)/)
+  assert.match(opps, /onStage\(stage.stages, stage.key/)
   assert.match(read('src/pages/Tracker.jsx'), /\}, \[params\]\)/)
   assert.match(read('src/pages/ProposalSent.jsx'), /WorkspaceInsights signals=\{proposalSignals\}/)
 })
@@ -122,7 +122,7 @@ test('the global search yields to pages with their own targeted search', () => {
   const app = read('src/App.jsx')
 
   assert.match(app, /hasLocalSearch/)
-  assert.match(app, /!hasLocalSearch && <div className="workspace-topbar-search">/)
+  assert.match(app, /!hasLocalSearch && <div className="workspace-topbar-search"/)
   for (const path of ['/inbox', '/opportunities', '/approvals', '/proposal-sent', '/audit', '/pricelists']) {
     assert.match(app, new RegExp(`['\"]${path}['\"]`))
   }

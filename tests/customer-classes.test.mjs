@@ -89,11 +89,11 @@ test('checklistFor resolves the lead list, and kycItems aliases the master list'
   assert.deepEqual(checklistFor(config, 'Blue'), master)
 })
 
-test('every class carries the payment terms proposalDoc used to hardcode', () => {
-  assert.equal(classRule(null, 'Green').paymentTerms, '30 days credit from invoice')
-  assert.equal(classRule(null, 'Blue').paymentTerms, '50% advance, balance on delivery')
-  assert.equal(classRule(null, 'Amber').paymentTerms, '100% advance before dispatch')
-  assert.equal(classRule(null, 'Red').paymentTerms, '100% prepayment only')
+test('every class carries Excel payment guidance without inventing Blue terms', () => {
+  assert.equal(classRule(null, 'Green').paymentTerms, '30–45 days')
+  assert.equal(classRule(null, 'Blue').paymentTerms, '')
+  assert.equal(classRule(null, 'Amber').paymentTerms, '30 days')
+  assert.equal(classRule(null, 'Red').paymentTerms, 'Advance')
 })
 
 // Blue and Amber blockers carry `approver` but no `needed`; only Red has both.
@@ -128,7 +128,7 @@ test('migrate adopts a legacy amberFee.days edit onto the Amber class', () => {
 test('migrate adopts legacy classRules text as per-class payment terms', () => {
   const s = migrate(stateWithConfig({ classRules: { Green: 'Net 45 bespoke' } }))
   assert.equal(s.config.customerClasses.Green.paymentTerms, 'Net 45 bespoke')
-  assert.equal(s.config.customerClasses.Red.paymentTerms, '100% prepayment only')
+  assert.equal(s.config.customerClasses.Red.paymentTerms, 'Advance')
 })
 
 test('migrate keeps an edited class and still backfills the others', () => {
@@ -149,4 +149,15 @@ test('migrate on a fresh state reproduces the seeded defaults exactly', () => {
     assert.deepEqual(s.config.customerClasses[cls], DEFAULT_CUSTOMER_CLASSES[cls], cls)
   }
   assert.deepEqual(noExceptionKeys(s.config), noExceptionKeys())
+})
+
+test('Excel policy defaults apply only to untouched defaults and retain custom settings', async () => {
+  const { upgradeCustomerRules } = await import('../src/customerClasses.js')
+  const config = { customerClasses: { Amber: { paymentTerms: '100% advance before dispatch' }, Green: { paymentTerms: 'Custom agreement' } }, classRules: { Amber: '100% advance before dispatch' } }
+  const next = upgradeCustomerRules(config)
+  assert.equal(next.customerClasses.Amber.paymentTerms, '30 days')
+  assert.equal(next.customerClasses.Green.paymentTerms, 'Custom agreement')
+  assert.equal(DEFAULT_CUSTOMER_CLASSES.Blue.paymentTerms, '')
+  assert.equal(DEFAULT_CUSTOMER_CLASSES.Red.defaultAction, 'No Bid')
+  assert.equal(next.classRules.Amber, '30 days')
 })

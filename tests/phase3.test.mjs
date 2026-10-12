@@ -93,9 +93,11 @@ test('dashboard and Phase 1 UI wiring are present', () => {
   assert.match(intake, /'checkbox' : 'radio'/)
   assert.match(inbox, /Revert to Lead/)
   assert.match(inbox, /Reassign/)
-  assert.match(tracker, /Expected Order Date/)
-  assert.match(tracker, /Expected Ship Date/)
-  assert.match(tracker, /Next Action/)
+  const columns = read('src/excelLogic.js')
+  assert.match(columns, /Order Date\*/)
+  assert.match(columns, /Invoice Date\*/)
+  assert.match(columns, /FQ-FY/)
+  assert.doesNotMatch(tracker, /Expected Ship Date/)
 })
 
 test('PWA metadata and service worker registration are configured', () => {

@@ -13,7 +13,7 @@ application and its same-origin `/api/*` endpoints.
    - Health check: `/healthz`
    - Restart policy: `ALWAYS`
 4. Generate a Railway domain for staging.
-5. Keep the service at one replica. The live-event hub is intentionally in memory.
+5. Keep the service at one replica; workspace caches are held in memory.
 
 Use separate Railway staging and production environments, each with its own
 Supabase project. They must not share a Supabase project: staging work must
@@ -90,9 +90,8 @@ Take a production backup before preparing the clone. Treat the export as sensiti
 until sanitization is complete, and verify the staging project URL before any
 import or destructive cleanup.
 
-Keep this service at **one replica**. Its live-event hub is deliberately in
-memory. If the service is later scaled to multiple replicas, add shared pub/sub
-before increasing replicas so every browser receives every notification.
+Keep this service at **one replica**. Before scaling out, coordinate workspace
+cache invalidation across replicas. Browser synchronization is pull-based.
 
 ## Staging acceptance checks
 
@@ -101,11 +100,11 @@ before increasing replicas so every browser receives every notification.
 - Test login, AI extraction, location search, proposal email, user management,
   workspace purge, and a refreshed deep link.
 - In two signed-in browsers, create an approval, lead, and opportunity in one;
-  the relevant list should update in the other without reloading the page.
+  focus the other browser or press Refresh and verify the relevant list updates.
 - Confirm a new deployment signs an active browser session out and clears its
   local working cache as intended.
-- With two signed-in browsers, confirm the admin dashboard shows both users
-  online and removes a user after the two-minute heartbeat window expires.
+- Leave Approvals and Workbench idle for two minutes; confirm they do not issue
+  periodic workspace reads, presence requests, or live-event reconnects.
 
 Before production promotion, repeat the checks against the production Railway
 environment with its separate Supabase project and credentials.

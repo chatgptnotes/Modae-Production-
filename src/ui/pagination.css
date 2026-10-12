@@ -1,0 +1,50 @@
+.phone-page-picker { display: none; }
+
+@media screen and (max-width: 600px) {
+  html[data-workspace-theme] .shell.tablet-mode :is(.list-pagination, .tracker-pagination) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 20px 0;
+    margin-top: 12px;
+    background: transparent;
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.list-pagination-range, .tracker-pagination-range) {
+    text-align: center;
+    font: inherit;
+    font-size: 13px;
+    color: var(--text-secondary);
+    white-space: normal;
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.list-pagination-controls, .tracker-pagination-controls) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) minmax(0, 1fr);
+    align-items: stretch;
+    width: 100%;
+    gap: 8px;
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.list-pagination-controls, .tracker-pagination-controls) > :is([aria-label="First page"], [aria-label="Last page"], span) { display: none; }
+  html[data-workspace-theme] .shell.tablet-mode .phone-page-picker { display: block; min-width: 0; margin: 0; }
+  html[data-workspace-theme] .shell.tablet-mode :is(.list-pagination-controls, .tracker-pagination-controls) :is(button, select) {
+    width: 100%;
+    min-width: 0;
+    min-height: 48px;
+    height: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 10px 8px;
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    background: var(--surface-default);
+    color: var(--text-primary);
+    box-shadow: none;
+    font-size: 14px;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .phone-page-picker select { font-size: 16px; font-weight: 400; }
+  html[data-workspace-theme] .shell.tablet-mode :is(.list-pagination-controls, .tracker-pagination-controls) button:disabled { opacity: .4; cursor: default; }
+  html[data-workspace-theme] .shell.tablet-mode :is(.list-pagination-controls, .tracker-pagination-controls) :is(button, select):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+}

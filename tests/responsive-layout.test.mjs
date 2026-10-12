@@ -190,7 +190,7 @@ test('workspace-width container queries reflow controls at browser zoom', () => 
 
 test('Opportunities density scales the table before browser zoom causes clipping', () => {
   assert.match(css, /\.opportunities-page \.tracker-grid-shell\s*\{[\s\S]*--opp-density:\s*1;/)
-  assert.match(tracker, /--tracker-column-min:\s*\$\{px\(c\)\}px; min-width: max\(56px, calc\(var\(--tracker-column-min\) \* var\(--opp-density, 1\)\)\)/)
+  assert.match(tracker, /max\(120px, calc\(\$\{px\}px \* var\(--opp-density, 1\)\)\)/)
   assert.match(css, /\.opportunities-page \.tracker-grid-shell > \.sheet-wrap\.fill table\.sheet:not\(\.cols-key\) th,[\s\S]*?min-width: max\(56px, calc\(var\(--tracker-column-min, 78px\) \* var\(--opp-density\)\)\) !important;/)
   assert.match(css, /@container workspace \(max-width: 90rem\) \{[\s\S]*?\.opportunities-page \.tracker-grid-shell \{ --opp-density: \.92; \}/)
   assert.match(css, /@container workspace \(max-width: 60rem\) \{[\s\S]*?\.opportunities-page \.tracker-grid-shell \{ --opp-density: \.76; \}/)

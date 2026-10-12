@@ -1,9 +1,11 @@
+import { assertReservedOpportunityIds } from '../../api/_opportunity-reservations.js'
+import { assertWorkspaceRowWrite, projectWorkspace } from '../workspaceAccess.js'
 import { createServiceClient } from './supabase.js'
 import { mergeConcurrentOpportunityRows as mergeOpportunityRows } from '../workflowTransitions.js'
 
 export type WorkspaceSlices = Record<string, unknown>
 export type WorkspaceReader = () => Promise<WorkspaceSlices>
-export type WorkspaceWriter = (dirty: WorkspaceSlices) => Promise<void>
+export type WorkspaceWriter = (dirty: WorkspaceSlices, actor?: Record<string, any>) => Promise<void>
 export type WorkspaceGenerationReader = () => Promise<number>
 
 type ApprovalDecision = { d?: unknown; when?: unknown; [key: string]: unknown }
@@ -156,7 +158,7 @@ export function createWorkspaceReader(): WorkspaceReader | null {
       service.from('spares_lines').select('id, data').is('deleted_at', null),
       service.from('clarifications').select('id, data').is('deleted_at', null),
       service.from('audit').select('id, data').is('deleted_at', null),
-      service.from('settings').select('id, data').is('deleted_at', null),
+      service.from('settings').select('id, data').eq('id', 'config').is('deleted_at', null),
     ])
     const recordRows = rows(records) as Array<{ entity: string, id: string, data: unknown }>
     const state = Object.fromEntries(recordRows.filter(row => row.entity === 'state').map(row => [row.id, row.data]))
@@ -198,19 +200,38 @@ export function createWorkspaceWriter(): WorkspaceWriter | null {
   const serviceRoleKey = configuredValue('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !serviceRoleKey) return null
   const service = createServiceClient(url, serviceRoleKey) as any
-  return async dirty => {
-    const entities = Object.keys(dirty)
+  return async (dirty, actor) => {
+    if (!actor) throw Object.assign(new Error('An active account is required.'), { status: 403 })
+    let state = await createWorkspaceReader()?.() || {}
+    const config = state.config || {}
+    const visible = projectWorkspace(state, actor) as Record<string, any>
+    const entities = Object.keys(dirty).sort((a, b) => ['approvals','leads','opportunities'].indexOf(a) - ['approvals','leads','opportunities'].indexOf(b))
     if (!entities.length || entities.some(entity => !collaborativeEntities.includes(entity as CollaborativeEntity))) {
       throw new Error('Only lead, opportunity, and approval saves are supported by the server workspace gateway.')
     }
     for (const entity of entities as CollaborativeEntity[]) {
+      state = await createWorkspaceReader()?.() || state
       const desired = dirty[entity]
       if (!Array.isArray(desired) || desired.some(row => !row || typeof row !== 'object' || !('id' in row))) {
         throw new Error(`Invalid ${entity} workspace payload.`)
       }
       let current: any = await service.from(entity).select('id, data, rev').is('deleted_at', null)
       if (current.error) throw current.error
-      const desiredRows = desired as ApprovalRow[]
+      const visibleIds = new Set((visible[entity] || []).map((row: any) => row.id))
+      const existingRows = new Map<string, any>((current.data || []).map((row: any) => [row.id, row.data]))
+      const desiredRows = (desired as ApprovalRow[]).map(row => {
+        const before = existingRows.get(row.id)
+        const after = before ? { ...before, ...row, ...(before.booking && row.booking ? { booking: { ...before.booking, ...row.booking } } : {}) } : row
+        if (JSON.stringify(before) !== JSON.stringify(after)) assertWorkspaceRowWrite(actor, entity, before, after, config, state)
+        return after
+      })
+      if (entity === 'opportunities') await assertReservedOpportunityIds(service, desiredRows.filter(row => !existingRows.has(row.id)).map(row => row.id), actor.authId || actor.id)
+      const requestedIds = new Set(desiredRows.map(row => row.id))
+      for (const [id, before] of existingRows) {
+        if (requestedIds.has(id)) continue
+        if (!visibleIds.has(id)) desiredRows.push(before)
+        else if (entity !== 'approvals') assertWorkspaceRowWrite(actor, entity, before, before, config, state, id, true)
+      }
       let wanted = new Map((entity === 'approvals'
         ? mergeConcurrentApprovalRows((current.data || []).map((row: any) => row.data), desiredRows)
         : entity === 'opportunities'
@@ -218,6 +239,10 @@ export function createWorkspaceWriter(): WorkspaceWriter | null {
           : desiredRows
       ).map(row => [String(row.id), row]))
       for (let attempt = 0; attempt < 4; attempt += 1) {
+        const latest = await createWorkspaceReader()?.() || state
+        const latestUsers = Array.isArray(latest.users) ? latest.users as Record<string, any>[] : []
+        const latestActor = latestUsers.find(user => user.id === actor.id)
+        if (!latestActor || latestActor.status !== 'Active' || latestActor.deletedAt || latestActor.deletionPendingAt || latestActor.accessPending) throw Object.assign(new Error('This account no longer has workspace access.'), { status: 403 })
         const existing = new Map<string, any>((current.data || []).map((row: any) => [row.id, row]))
         const payload = [
           ...[...wanted.entries()].flatMap(([id, data]) => {
@@ -231,6 +256,7 @@ export function createWorkspaceWriter(): WorkspaceWriter | null {
               .map((row: any) => ({ id: row.id, data: row.data, rev: Number(row.rev) || 0, deleted: true }))),
         ]
         if (!payload.length) break
+        for (const row of payload) assertWorkspaceRowWrite(latestActor, entity, existing.get(row.id)?.data, row.data, latest.config || {}, latest, row.id, 'deleted' in row && row.deleted === true)
         const result = await service.rpc('save_rows', { p_entity: entity, p_rows: payload })
         if (result.error) throw result.error
         const conflicts = Array.isArray(result.data?.conflicts) ? result.data.conflicts : []

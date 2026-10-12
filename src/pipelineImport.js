@@ -1,4 +1,5 @@
 import XLSX from 'xlsx-js-style'
+import { fiscalQuarter, financials, customersFromOpportunities, classificationGuidance } from './excelLogic.js'
 
 const canon = value => String(value ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 
@@ -6,10 +7,10 @@ const HEADER_ALIASES = {
   id: ['opp id', 'opportunity id', 'id'],
   sellTo: ['sell to customer', 'customer', 'customer name'],
   oppName: ['opportunity name description', 'oppurtunity name description', 'opportunity name', 'description'],
-  owner: ['owner', 'sales owner'],
+  owner: ['owner', 'sales owner', 'ljs'],
   stage: ['stage', 'funnel stage'],
-  valueK: ['value', 'value inr', 'value rs', 'opportunity value'],
-  orderDate: ['expected order date', 'expected close date', 'close date'],
+  valueK: ['value', 'value inr', 'value rs', 'value k', 'opportunity value'],
+  orderDate: ['order date', 'expected order date', 'expected close date', 'close date'],
   status: ['status'],
 }
 
@@ -48,8 +49,16 @@ const milestoneFor = (status, stage) => {
   return ({ RFQ: 'Sourcing', RFI: 'Clarification' }[stage] || 'Proposal')
 }
 
-const workbookRows = worksheet => {
-  const matrix = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null, raw: true })
+const workbookRows = (worksheet, date1904 = false) => {
+  // Excel dates are calendar serials, not instants. Older SheetJS Date
+  // conversion can shift midnight across a day boundary in non-UTC zones.
+  const calendarSheet = { ...worksheet }
+  for (const [address, cell] of Object.entries(worksheet)) {
+    if (address.startsWith('!') || cell.t !== 'n' || !cell.z || !XLSX.SSF.is_date(cell.z)) continue
+    const date = XLSX.SSF.parse_date_code(cell.v, { date1904 })
+    if (date) calendarSheet[address] = { ...cell, t: 's', v: `${date.y}-${String(date.m).padStart(2, '0')}-${String(date.d).padStart(2, '0')}` }
+  }
+  const matrix = XLSX.utils.sheet_to_json(calendarSheet, { header: 1, defval: null, raw: true })
   const headers = (matrix[0] || []).map(value => String(value ?? ''))
   return matrix.slice(1).map(values => Object.fromEntries(headers.map((header, index) => [header, values[index]])))
 }
@@ -59,16 +68,14 @@ const rowValue = (row, ...names) => valueFor(row, names)
 function currentOpportunity(row) {
   const id = textOf(rowValue(row, 'Opp ID'))
   const status = textOf(rowValue(row, 'Status*', 'Status'))
-  if (!id || status !== 'Open') return null
+  if (!id) return null
   const oppType = textOf(rowValue(row, 'Opp Type*', 'Opp Type')) || 'Project'
   const stage = textOf(rowValue(row, 'Stage*', 'Stage')) || 'Lead'
   const valueK = numberOf(rowValue(row, 'Value (K₹)*', 'Value (K₹)'))
   const cogsK = numberOf(rowValue(row, 'COGS (K₹)*', 'COGS (K₹)'))
-  const gmK = numberOf(rowValue(row, 'GM (K₹)'))
-  const gmPct = numberOf(rowValue(row, 'GM%')) ?? (valueK ? (valueK - cogsK) / valueK : null)
   const remarks = textOf(rowValue(row, 'Update/Remarks', 'Remarks'))
   return {
-    id,
+    id, sl: numberOf(rowValue(row, 'Sl.')),
     oppName: textOf(rowValue(row, 'Oppurtunity Name/Description*', 'Opportunity Name/Description')) || textOf(rowValue(row, 'Sell To Customer*', 'Sell To Customer')) || id,
     sellTo: textOf(rowValue(row, 'Sell To Customer*', 'Sell To Customer')),
     category: textOf(rowValue(row, 'Category*', 'Category')),
@@ -82,11 +89,11 @@ function currentOpportunity(row) {
     segment: textOf(rowValue(row, 'Segment')),
     product: textOf(rowValue(row, 'Product*', 'Product')),
     prob: textOf(rowValue(row, 'Prob (%)*', 'Prob (%)')),
-    valueK, cogsK, gmK, gmPct,
+    valueK, cogsK, ...financials({ valueK, cogsK }),
     createDate: textOf(rowValue(row, 'Create Date*', 'Offer Date')),
     proposalDate: textOf(rowValue(row, 'Proposal Date')),
     orderDate: textOf(rowValue(row, 'Order Date*', 'EDD/ADD')),
-    fqFy: textOf(rowValue(row, 'FQ-FY')),
+    fqFy: fiscalQuarter(textOf(rowValue(row, 'Order Date*'))),
     invoiceDate: textOf(rowValue(row, 'Invoice Date*', 'Invoice Date')),
     status, stage,
     closedReason: textOf(rowValue(row, 'Closed Reason*', 'Closed Reason')),
@@ -108,19 +115,18 @@ function oldOpportunity(row) {
   const stage = textOf(rowValue(row, 'Stage')) || 'Lost'
   const valueK = numberOf(rowValue(row, 'Value (K₹)'))
   const cogsK = numberOf(rowValue(row, 'COGS (K₹)'))
-  const gmK = numberOf(rowValue(row, 'GM (K₹)'))
-  const gmPct = numberOf(rowValue(row, 'GM%')) ?? (valueK ? (valueK - cogsK) / valueK : null)
   const sellTo = textOf(rowValue(row, 'Sell To Customer'))
   const remarks = textOf(rowValue(row, 'Update/Remarks'))
   return {
-    id,
+    id, sl: numberOf(rowValue(row, 'Sl.')),
     oppName: textOf(rowValue(row, 'Oppurtunity/Project Name & Description')) || sellTo || id,
     sellTo, category: textOf(rowValue(row, 'Category')), location: textOf(rowValue(row, 'Location')),
     customerStatus: null, eucName: textOf(rowValue(row, 'End User Customer')), eucLocation: textOf(rowValue(row, 'EU Location')),
     owner: textOf(rowValue(row, 'Owner')), oppType, bu: null, segment: null, product: textOf(rowValue(row, 'Product')),
-    prob: textOf(rowValue(row, 'Prob (%)')), valueK, cogsK, gmK, gmPct,
-    createDate: textOf(rowValue(row, 'Offer Date')), proposalDate: null, orderDate: textOf(rowValue(row, 'EDD/ADD')),
-    fqFy: null, invoiceDate: null, status, stage, closedReason: textOf(rowValue(row, 'Closed Reason')),
+    prob: textOf(rowValue(row, 'Prob (%)')), valueK, cogsK, ...financials({ valueK, cogsK }),
+    createDate: null, offerDate: textOf(rowValue(row, 'Offer Date')), proposalDate: null,
+    orderDate: textOf(rowValue(row, 'EOD')), expectedOrderDate: textOf(rowValue(row, 'EOD')), deliveryDate: textOf(rowValue(row, 'EDD/ADD')),
+    fqFy: fiscalQuarter(textOf(rowValue(row, 'EOD'))), invoiceDate: null, status, stage, closedReason: textOf(rowValue(row, 'Closed Reason')),
     contactPerson: textOf(rowValue(row, 'Contact Person')), contactPhone: textOf(rowValue(row, 'Contact Phone #')),
     lastUpdated: textOf(rowValue(row, 'Updated On')), forecast: booleanOf(rowValue(row, 'Forecast')),
     remarks, updateRemarks: remarks,
@@ -130,30 +136,24 @@ function oldOpportunity(row) {
 }
 
 export function parseBetserWorkbook(buffer) {
-  const workbook = XLSX.read(buffer, { type: 'array', cellDates: true })
+  const workbook = XLSX.read(buffer, { type: 'array', cellDates: false, cellNF: true })
   const currentSheet = workbook.Sheets['Current Opps']
   const oldSheet = workbook.Sheets['Old Closed Opps']
   if (!currentSheet || !oldSheet) return { opportunities: [], customers: [], error: 'Expected Current Opps and Old Closed Opps sheets were not found.' }
   const opportunities = [
-    ...workbookRows(currentSheet).map(currentOpportunity).filter(Boolean),
-    ...workbookRows(oldSheet).map(oldOpportunity).filter(Boolean),
+    ...workbookRows(currentSheet, !!workbook.Workbook?.WBProps?.date1904).map(currentOpportunity).filter(Boolean),
+    ...workbookRows(oldSheet, !!workbook.Workbook?.WBProps?.date1904).map(oldOpportunity).filter(Boolean),
   ]
   const ids = new Set()
-  if (opportunities.some(row => ids.has(row.id))) return { opportunities: [], customers: [], error: 'The workbook contains duplicate opportunity IDs.' }
-  opportunities.forEach(row => ids.add(row.id))
-  const customers = [...new Map(opportunities.filter(row => row.sellTo).map(row => {
-    const key = row.sellTo.toLowerCase()
-    return [key, {
-      name: row.sellTo,
-      category: row.category || '—',
-      status: row.customerStatus || 'Blue',
-      kyc: row.customerStatus === 'Green' ? 'Valid' : 'Pending',
-      payment: '—',
-      email: `purchase@${row.sellTo.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 48)}.example.in`,
-      source: 'Excel workbook',
-    }]
-  })).values()]
-  return { opportunities, customers, error: '' }
+  for (const row of opportunities) {
+    if (ids.has(row.id)) return { opportunities: [], customers: [], error: 'The workbook contains duplicate opportunity IDs.' }
+    ids.add(row.id)
+  }
+  const customers = customersFromOpportunities(opportunities)
+  const guidance = workbook.Sheets.Customers
+    ? classificationGuidance(XLSX.utils.sheet_to_json(workbook.Sheets.Customers, { header: 1, defval: '' })) : []
+  return { opportunities, customers, customerClassificationGuidance: guidance, error: '' }
+
 }
 
 export function parsePipelineFile(buffer) {

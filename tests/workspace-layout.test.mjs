@@ -40,12 +40,9 @@ test('dark opportunity classes retain semantic background tints', () => {
   }
 })
 
-test('pipeline keeps centered tapered data-driven bands and truthful empty totals', () => {
-  assert.match(workspace, /clip-path:\s*polygon\(0 0,\s*100% 0,\s*92% 100%,\s*8% 100%\)/)
-  assert.match(workspace, /justify-content:\s*center/)
-  assert.ok(dashboard.includes('metric(row) / maximum'))
-  assert.ok(dashboard.includes('!row.count ? 1 : useValue ? segment.valueK : segment.count'))
-  assert.match(dashboard, /row\.count\s*\?\s*['"]['"]\s*:\s*['"] is-empty['"]/)
+test('pipeline uses the shared curved renderer for both views', () => {
+  assert.match(dashboard, /<NormalFunnel view=\{view\} rows=\{model.funnel\}/)
+  assert.doesNotMatch(dashboard, /FunnelOutline|funnelBarStyle/)
 })
 
 test('explanations dismiss on scrolling instead of remaining over table content', () => {

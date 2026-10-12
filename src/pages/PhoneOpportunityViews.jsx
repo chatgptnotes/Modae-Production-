@@ -2,7 +2,7 @@ import React from 'react'
 import { Link } from 'react-router-dom'
 import { Icon } from '../icons.jsx'
 import { displayOpportunityId } from '../seed.js'
-import { displayRole, fmtRupeesFromK } from '../utils.js'
+import { fmtRupeesFromK } from '../utils.js'
 
 export function PhoneOpportunityRow({ opportunity: opp, canSeeValue, due }) {
   const overdue = due && !['Won', 'Lost', 'Closed'].includes(opp.stage) && new Date(`${due}T23:59:59`) < new Date()
@@ -10,7 +10,7 @@ export function PhoneOpportunityRow({ opportunity: opp, canSeeValue, due }) {
     <Link className="phone-record" to={`/opp/${opp.id}`}>
       <strong>{opp.sellTo || opp.oppName || 'Untitled opportunity'}</strong>
       <span className="phone-opportunity-name">{opp.oppName || 'Untitled opportunity'}</span>
-      <small>{displayOpportunityId(opp.id)} · {displayRole(opp.owner) || 'Unassigned'}</small>
+      <small>{displayOpportunityId(opp.id)}</small>
       <div className="phone-opportunity-meta"><span className="phone-opportunity-stage">{opp.milestone || opp.stage || 'No stage'}</span>{overdue && <span className="phone-opportunity-overdue">Overdue</span>}{canSeeValue && <b>{fmtRupeesFromK(opp.valueK) || '—'}</b>}</div>
       <Icon name="chevronRight" size={18} />
     </Link>

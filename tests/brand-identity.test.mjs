@@ -148,9 +148,9 @@ test('nothing renders a hardcoded sky hex any more', () => {
   }
 })
 
-test('the funnel uses the approved emerald and forest green stage ramp', () => {
+test('the legacy ramp remains available while Analytics shares the dashboard funnel', () => {
   assert.deepEqual(MODAE_COLORS.ramp, ['#064E3B', '#047857', '#059669', '#10B981', '#6EE7B7'])
-  assert.match(read('src/pages/Analytics.jsx'), /const FUNNEL_RAMP = MODAE_COLORS\.ramp/)
+  assert.match(read('src/pages/Analytics.jsx'), /import \{ Funnel \} from '\.\/myDashboard\/WorkspaceDashboard\.jsx'/)
 })
 
 test('the application defaults to light and persists an explicit dark preference', () => {

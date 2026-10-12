@@ -5,32 +5,33 @@
 
 import { ageDays } from './utils.js'
 import { classRule } from './customerClasses.js'
+import { healthScoreRules } from './businessRules.js'
 
 // ---------------------------------------------------------- customer health
 // A relationship read from what the app already knows: how the account is
 // classed, whether its KYC stands up, how it pays, and how its opportunities
 // have actually closed. Returns a 0-100 score with the reasons that moved it,
 // so the sales team can argue with it rather than just accept a number.
-const CLASS_BASE = { Green: 82, Blue: 60, Amber: 48, Red: 22 }
 
-export function customerHealth(customer, opportunities = []) {
+export function customerHealth(customer, opportunities = [], config = null) {
   if (!customer) return null
   const reasons = []
-  let score = CLASS_BASE[customer.status] ?? 50
+  const rules = healthScoreRules(config)
+  let score = rules.classBase[customer.status] ?? 50
   reasons.push({ delta: 0, why: `${customer.status} account` })
 
   const kyc = String(customer.kyc || '')
-  if (/valid/i.test(kyc)) { score += 6; reasons.push({ delta: +6, why: 'KYC valid' }) }
-  else if (/renewal/i.test(kyc)) { score -= 6; reasons.push({ delta: -6, why: 'KYC renewal due' }) }
-  else if (/pending|missing/i.test(kyc)) { score -= 12; reasons.push({ delta: -12, why: 'KYC not on file' }) }
+  if (/valid/i.test(kyc)) { score += rules.kycValid; reasons.push({ delta: rules.kycValid, why: 'KYC valid' }) }
+  else if (/renewal/i.test(kyc)) { score += rules.kycRenewal; reasons.push({ delta: rules.kycRenewal, why: 'KYC renewal due' }) }
+  else if (/pending|missing/i.test(kyc)) { score += rules.kycMissing; reasons.push({ delta: rules.kycMissing, why: 'KYC not on file' }) }
 
   const pay = String(customer.payment || '')
   const overdue = /overdue/i.test(pay)
   const avgDays = parseInt((pay.match(/(\d{2,3})\s*days/) || [])[1] || '', 10)
-  if (overdue) { score -= 22; reasons.push({ delta: -22, why: `Payment ${pay.toLowerCase()}` }) }
-  else if (/on time/i.test(pay)) { score += 8; reasons.push({ delta: +8, why: 'Pays on time' }) }
-  else if (avgDays >= 90) { score -= 10; reasons.push({ delta: -10, why: `Pays in ~${avgDays} days` }) }
-  else if (avgDays >= 60) { score -= 4; reasons.push({ delta: -4, why: `Pays in ~${avgDays} days` }) }
+  if (overdue) { score += rules.paymentOverdue; reasons.push({ delta: rules.paymentOverdue, why: `Payment ${pay.toLowerCase()}` }) }
+  else if (/on time/i.test(pay)) { score += rules.paymentOnTime; reasons.push({ delta: rules.paymentOnTime, why: 'Pays on time' }) }
+  else if (avgDays >= 90) { score += rules.payment90; reasons.push({ delta: rules.payment90, why: `Pays in ~${avgDays} days` }) }
+  else if (avgDays >= 60) { score += rules.payment60; reasons.push({ delta: rules.payment60, why: `Pays in ~${avgDays} days` }) }
 
   const theirs = opportunities.filter(o => o.sellTo === customer.name)
   const won = theirs.filter(o => o.stage === 'Won').length
@@ -38,16 +39,16 @@ export function customerHealth(customer, opportunities = []) {
   const open = theirs.filter(o => o.status === 'Open').length
   if (won + lost >= 2) {
     const rate = won / (won + lost)
-    const delta = Math.round((rate - 0.4) * 20)
+    const delta = Math.round((rate - 0.4) * rules.closedWeight)
     if (delta) { score += delta; reasons.push({ delta, why: `${won} won / ${lost} lost with us` }) }
   }
   if (open === 0 && theirs.length > 0) {
-    score -= 8
-    reasons.push({ delta: -8, why: 'No open opportunity right now' })
+    score += rules.idlePenalty
+    reasons.push({ delta: rules.idlePenalty, why: 'No open opportunity right now' })
   }
 
   score = Math.max(0, Math.min(100, Math.round(score)))
-  const band = score >= 70 ? 'Healthy' : score >= 45 ? 'Watch' : 'At risk'
+  const band = score >= rules.healthyAt ? 'Healthy' : score >= rules.watchAt ? 'Watch' : 'At risk'
   return { score, band, reasons, open, won, lost }
 }
 

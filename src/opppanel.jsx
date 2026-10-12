@@ -1,14 +1,14 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import {
-  SUBFOLDERS,
+  displayOpportunityId, SUBFOLDERS,
 } from './seed.js'
-import { fmt, fmtRupeesFromK, ddMmmYY, ddMMyyyy, canViewCommercial, canPriceProposal, productList, solutionLabel } from './utils.js'
+import { isAdminRole, fmt, fmtRupeesFromK, ddMmmYY, ddMMyyyy, canViewCommercial, canPriceProposal, productList, solutionLabel } from './utils.js'
 import { nextActionWith } from './gates.js'
 import { Icon } from './icons.jsx'
 import { Chip, ClassChip } from './ui.jsx'
-import { OpportunityDetailsView } from './OpportunityDetailsEditor.jsx'
+import OpportunityDetailsEditor from './OpportunityDetailsEditor.jsx'
 import DetailTabs from './DetailTabs.jsx'
 
 // The record form is a tab of its own rather than a footer under every folder:
@@ -30,9 +30,11 @@ const SyncPill = ({ sync }) => {
   return <span className={`chip ${tone}`} title={title}>SP</span>
 }
 
-export default function OppPanel({ oppId }) {
+export default function OppPanel({ oppId, registerBeforeLeave }) {
   const store = useStore()
   const nav = useNavigate()
+  const editorRef = useRef(null)
+  useEffect(() => registerBeforeLeave?.(() => editorRef.current?.confirmDiscard() !== false), [registerBeforeLeave])
 
   const opp = store.opportunities.find(o => o.id === oppId)
   const files = store.files?.[oppId] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
@@ -65,6 +67,7 @@ export default function OppPanel({ oppId }) {
   // org-wide commercial reports remain protected by canViewCommercial.
   const comm = canViewCommercial(store.role) || canPriceProposal(store.role)
   const showValue = canPriceProposal(store.role)
+  const editable = store.canPerform?.('opportunities.edit') !== false && (opp.owner === store.role || isAdminRole(store.role))
   const na = nextActionWith(opp, store.getProposal(oppId), store)
   const gmK = (opp.valueK || 0) - (opp.cogsK || 0)
   const gmPct = opp.valueK ? Math.round((gmK / opp.valueK) * 100) + '%' : '—'
@@ -75,12 +78,12 @@ export default function OppPanel({ oppId }) {
 
   return (
     <div className="drawer-body">
-      <DetailTabs ariaLabel="Opportunity files" activeId={activeTab} items={tabItems} onChange={setTab} />
+      <DetailTabs ariaLabel="Opportunity files" activeId={activeTab} items={tabItems} onChange={next => { if (editorRef.current?.confirmDiscard() !== false) setTab(next) }} />
 
       {!isDetails && (
         <div className="drawer-files">
           <div className="drawer-files-bar">
-            <span className="hint">{oppId} › {activeTab}</span>
+            <span className="hint">{displayOpportunityId(oppId)} › {activeTab}</span>
             <SyncPill sync={(store.spSync || {})[oppId]} />
           </div>
           <table className="sheet">
@@ -88,7 +91,7 @@ export default function OppPanel({ oppId }) {
             <tbody>
               {activeTab === 'Proposal' && !tabFiles.some(fl => fl.name.endsWith('.xlsx')) && (
                 <tr className="rowclick" onClick={() => nav(`/proposal/${oppId}`)} title="Open the proposal workbook">
-                  <td><Icon name="fileSheet" size={13} /> <b>{oppId} Proposal Workbook.xlsx</b></td>
+                  <td><Icon name="fileSheet" size={13} /> <b>{displayOpportunityId(oppId)} Proposal Workbook.xlsx</b></td>
                   <td>{opp.lastUpdated}</td><td>247 KB</td>
                 </tr>
               )}
@@ -158,16 +161,16 @@ export default function OppPanel({ oppId }) {
 
       {isDetails && (
         <div className="drawer-form">
-          <OpportunityDetailsView opp={opp} />
+          <OpportunityDetailsEditor ref={editorRef} opp={opp} store={store} editable={editable} className="drawer-opportunity-editor" />
 
           <div className="fgroup">Commercial</div>
           {showValue ? (
             <div className="dgrid2">
-              <Field label="Value (₹)"><div className="ro">{opp.valueK ? fmtRupeesFromK(opp.valueK) : '—'}</div></Field>
-              {comm && <Field label="COGS (₹)"><div className="ro">{opp.cogsK ? fmtRupeesFromK(opp.cogsK) : '—'}</div></Field>}
+              {!editable && <Field label="Value (₹)"><div className="ro">{opp.valueK ? fmtRupeesFromK(opp.valueK) : '—'}</div></Field>}
+              {!editable && comm && <Field label="COGS (₹)"><div className="ro">{opp.cogsK ? fmtRupeesFromK(opp.cogsK) : '—'}</div></Field>}
               {comm && <Field label="GM (₹)"><div className="ro">{opp.valueK ? fmtRupeesFromK(gmK) : '-'}</div></Field>}
               {comm && <Field label="GM%"><div className="ro">{gmPct}</div></Field>}
-              <Field label="Forecast"><div className="ro">{opp.forecast ? 'Included for roll-up' : 'Not included'}</div></Field>
+              {!editable && <Field label="Forecast"><div className="ro">{opp.forecast ? 'Included for roll-up' : 'Not included'}</div></Field>}
               {!comm && <div style={{ gridColumn: '1 / -1' }} className="restricted"><Icon name="lock" size={13} /> Cost and margin — approvers/admin only</div>}
             </div>
           ) : (
@@ -178,21 +181,23 @@ export default function OppPanel({ oppId }) {
           <div className="dgrid2">
             <Field label="Create Date"><div className="ro">{ddMMyyyy(opp.createDate)}</div></Field>
             <Field label="Proposal Send Date"><div className="ro">{ddMMyyyy(opp.proposalDate) || '—'}</div></Field>
-            <Field label="Expected Order Date *"><div className="ro">{ddMMyyyy(opp.orderDate) || '—'}</div></Field>
-            <Field label="Expected Ship Date *"><div className="ro">{ddMMyyyy(opp.invoiceDate) || '—'}</div></Field>
+            {!editable && <Field label="Expected Order Date *"><div className="ro">{ddMMyyyy(opp.orderDate) || '—'}</div></Field>}
+            {!editable && <Field label="Expected Ship Date *"><div className="ro">{ddMMyyyy(opp.invoiceDate) || '—'}</div></Field>}
             <Field label="Next Action Pending"><div className="ro">{opp.nextActionOwner || na.owner || '— none —'}</div></Field>
             <Field label="Last Updated"><div className="ro">{ddMmmYY(opp.lastUpdated)}</div></Field>
           </div>
 
           <div className="fgroup">Status &amp; Stage</div>
+          <p className="hint">System dates and calculated totals are read-only. Update workflow status and stage in the opportunity workspace.</p>
+          <button type="button" onClick={() => { if (editorRef.current?.confirmDiscard() !== false) nav(`/opp/${opp.id}`) }}>Open opportunity workspace</button>
           <div className="dgrid2">
             <Field label="Status"><div className="ro">{opp.status || '—'}</div></Field>
             <Field label="Stage"><div className="ro">{opp.stage || '—'}</div></Field>
             <Field label="Closed Reason"><div className="ro">{opp.closedReason || '—'}</div></Field>
           </div>
 
-          <div className="fgroup">Remarks</div>
-          <div className="ro drawer-read-only-remarks">{opp.remarks || '—'}</div>
+          {!editable && <><div className="fgroup">Remarks</div>
+          <div className="ro drawer-read-only-remarks">{opp.remarks || '—'}</div></>}
 
         </div>
       )}

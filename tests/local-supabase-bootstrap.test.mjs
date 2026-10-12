@@ -8,7 +8,7 @@ test('local Supabase seed writes customers into the consolidated state slice', (
     { id: 'OPP-2', sellTo: 'Beta Pumps', category: 'OEM', customerStatus: null, status: 'Closed' },
   ])
 
-  assert.match(sql, /values \('state', 'customers',/)
+  assert.match(sql, /public\.save_rows\('state'/)
   assert.doesNotMatch(sql, /select 'customers', 'customer:' \|\| md5/) 
-  assert.match(sql, /insert into public\.customers/)
+  assert.doesNotMatch(sql, /public\.customers/)
 })

@@ -1,5 +1,6 @@
+import { registrationFields } from './businessRules.js'
 import { classRule, classDeadlineDays } from './customerClasses.js'
-import { LEAD_LABELS, cleanExtractedValue, extractLabeledValue } from './leadLabels.js'
+import { LEAD_LABELS, EUC_LOCATION_LABELS, cleanExtractedValue, extractLabeledValue } from './leadLabels.js'
 import { indiaRegionForLocation } from './indiaLocations.js'
 
 export const DEFAULT_LEAD_DEADLINES = {
@@ -15,7 +16,15 @@ export const DEFAULT_FAST_TRACK = {
 
 // Only identity fields are required to mint an opportunity. Technical,
 // commercial and sourcing fields remain follow-up work after registration.
-export const isRegistrationCriticalField = key => /^(sell[-\s]?to customer|customer name|euc(?: name| location)?|end user(?: name| location)?|contact person|contact phone|phone)$/i.test(String(key || '').trim())
+export const isRegistrationCriticalField = (key, config) => {
+  const label = String(key || '').trim()
+  const aliases = { sellTo: /^(sell[-\s]?to customer|customer name)$/i,
+    sellToCustomerLocation: /^sell[-\s]?to customer location$/i,
+    eucName: /^(euc(?: name)?|end user(?: name)?)$/i,
+    eucLocation: /^(euc|end user) location$/i,
+    contactPerson: /^contact person$/i, contactPhone: /^(contact phone|phone)$/i }
+  return registrationFields(config).some(([id]) => aliases[id].test(label))
+}
 
 const emailAddress = value => String(value || '').trim().toLowerCase()
 const emailDomain = value => emailAddress(value).split('@')[1] || ''
@@ -70,7 +79,7 @@ const sourceFieldMatches = (field, canonical) => {
     'Contact email': /^(?:contact email|email|e mail)$/,
     'Contact phone': /^(?:contact phone|contact number|phone|mobile|telephone)$/,
     'EUC Name': /^(?:euc|euc name|eun|eun name|end user|end user name|ultimate customer|beneficiary)$/,
-    'EUC Location': /^(?:euc location|eun location|end user location|location|region|city|state|country)$/,
+    'EUC Location': /^(?:euc|eun|end user)(?: site)? (?:location|address)$/,
     'Opportunity name': /^(?:opportunity name|opp name)$/,
     'Opportunity type': /^(?:opportunity type|opp type)$/,
     'Opportunity scope': /^(?:opportunity scope|scope|requested scope|requirement)$/,
@@ -90,7 +99,9 @@ const sourceFieldMatches = (field, canonical) => {
 export const sourceFieldFacts = (text = '') => {
   const source = String(text || '')
   return SOURCE_FIELD_SPECS.flatMap(([k, group, labels]) => {
-    const value = extractLabeledValue(source, labels)
+    const value = k === 'EUC Location'
+      ? EUC_LOCATION_LABELS.map(pattern => extractLabeledValue(source, pattern)).find(Boolean)
+      : extractLabeledValue(source, labels)
     return value ? [{ group, k, v: value, conf: 98, ev: `Explicit ${k.toLowerCase()} label in enquiry`, source: 'deterministic' }] : []
   })
 }

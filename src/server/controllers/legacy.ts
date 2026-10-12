@@ -1,4 +1,5 @@
 import type { RequestHandler } from 'express'
+import workbookImportHandler from '../../../api/workbook-import.js'
 import aiHandler from '../../../api/ai.js'
 import adminUsersHandler from '../../../api/admin-users.js'
 import appVersionHandler from '../../../api/app-version.js'
@@ -29,3 +30,5 @@ export const locations = controller(locationsHandler)
 export const purgeWorkspace = controller(purgeWorkspaceHandler)
 export const sendProposalEmail = controller(sendProposalEmailHandler)
 export const presence = controller(presenceHandler)
+
+export const workbookImport = controller(workbookImportHandler)

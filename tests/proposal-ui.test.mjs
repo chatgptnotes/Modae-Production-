@@ -110,7 +110,7 @@ test('customer preview is clearly separated from the legacy workbook draft', () 
 test('PDF preview renders the customer document separately from the Excel workbook', () => {
   const proposal = read('src/pages/Proposal.jsx')
   assert.match(proposal, /onPreviewProposal=\{\(\) => setPdfPreviewTarget\(/)
-  assert.match(proposal, /<Modal title=\{`PDF preview — \$\{oppId\}`\}/)
+  assert.match(proposal, /<Modal title=\{`PDF preview — \$\{displayOpportunityId\(oppId\)\}`\}/)
   assert.match(proposal, /<PrintDoc p=\{pdfPreviewModel\.p\} opp=\{opp\}/)
   assert.match(proposal, /Print \/ Save PDF/)
   assert.match(proposal, /<WorkbookPreview workbook=\{previewWorkbook\}/)

@@ -3,6 +3,7 @@ import { useStore } from '../store.jsx'
 import { isApprover, displayRole } from '../utils.js'
 import { Chip, Phase2Badge } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
+import BookingReview from '../BookingReview.jsx'
 
 const stateTone = s =>
   s === 'Match' ? 'state-Accepted' : s === 'Blocking deviation' ? 'state-Blocks' : 'state-Review'
@@ -106,8 +107,11 @@ export default function PoHandover({ opp }) {
         </table>
       </div>
 
+      <BookingReview store={store} opp={opp} mode="po" />
+
       <div className="form-card" style={{ marginTop: 12 }}>
         <div className="section-title">Joint acceptance (LJS + AH)</div>
+        {pc.bookingDetails && <p className="hint">Customer PO {pc.bookingDetails.po} · Booking date {pc.bookingDetails.booked} · Accepted net value {pc.bookingDetails.valueK} K₹ · Evidence: {pc.bookingDetails.evidence}</p>}
         {!allResolved && <p className="hint">Resolve every review / blocking line before acceptance.</p>}
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <AcceptBtn r="LJS" />

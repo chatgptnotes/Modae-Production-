@@ -1,9 +1,12 @@
+import { createWorkspaceReader } from './workspace.js'
+import { projectWorkspace } from '../workspaceAccess.js'
+import { activeProfile } from '../../api/_user-roster.js'
 import { createClient } from '@supabase/supabase-js'
 import type { Request } from 'express'
 import { createServiceClient } from './supabase.js'
 import type { Database } from './database.types.js'
 
-export type ApprovalUser = { id: string }
+export type ApprovalUser = { id: string; profile?: Record<string, any>; config?: Record<string, any> }
 export const liveEntities = ['approvals', 'leads', 'opportunities'] as const
 export type LiveEntity = typeof liveEntities[number]
 export type LiveData = Partial<Record<LiveEntity, unknown[]>>
@@ -51,32 +54,25 @@ export function createApprovalGateway(events = new ApprovalEventHub()): Approval
   return {
     async authenticate(token) {
       const { data, error } = await service.auth.getUser(token)
-      return error || !data.user?.id ? null : { id: data.user.id }
+      if (error || !data.user?.id) return null
+      const profile = await activeProfile(service, data.user)
+      if (!profile) return null
+      const settings = await service.from('settings').select('data').eq('id', 'config').is('deleted_at', null).maybeSingle()
+      if (settings.error) throw settings.error
+      return { id: data.user.id, profile: { ...profile, authId: data.user.id }, config: (settings.data?.data || {}) as Record<string, any> }
     },
     async read(token) {
-      // Use the caller's token, not the service role, so Supabase RLS continues
-      // to decide exactly which approval rows this browser may receive.
-      const client = createClient<Database>(url, anonKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-        global: { headers: { Authorization: `Bearer ${token}` } },
-      })
-      const { data, error } = await client.from('approvals').select('data').is('deleted_at', null)
-      if (error) throw error
-      return (data || []).map(row => row.data)
+      const user = await this.authenticate(token)
+      if (!user?.profile) throw new Error('An active account is required.')
+      const workspace = await createWorkspaceReader()?.()
+      return projectWorkspace(workspace || {}, user.profile).approvals || []
     },
     async readLive(token, _userId, entities) {
-      // Reads always use the visitor's bearer token. The service role is used
-      // only to validate that token, never to bypass row-level security.
-      const client = createClient<Database>(url, anonKey, {
-        auth: { persistSession: false, autoRefreshToken: false },
-        global: { headers: { Authorization: `Bearer ${token}` } },
-      })
-      const rows = await Promise.all(entities.map(async entity => {
-        const { data, error } = await client.from(entity).select('data').is('deleted_at', null)
-        if (error) throw error
-        return [entity, (data || []).map(row => row.data)] as const
-      }))
-      return Object.fromEntries(rows) as LiveData
+      const user = await this.authenticate(token)
+      if (!user?.profile) throw new Error('An active account is required.')
+      const workspace = await createWorkspaceReader()?.()
+      const projected = projectWorkspace(workspace || {}, user.profile) as Record<string, any>
+      return Object.fromEntries(entities.map(entity => [entity, projected[entity] || []])) as LiveData
     },
     publish: (entities = ['approvals']) => events.publish(entities),
     subscribe: listener => events.subscribe(listener),

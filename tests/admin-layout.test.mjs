@@ -34,7 +34,8 @@ test('Admin workflow exposes nested category navigation', () => {
 test('Admin workflow includes region filtering and visual owner/risk badges', () => {
   assert.match(admin, /type="search" value=\{regionSearch\}/)
   assert.match(admin, /admin-owner-badge/)
-  assert.match(admin, /risk-badge/)
+  assert.match(admin, /WorkbookGovernanceEditor/ )
+  assert.match(fs.readFileSync('src/admin/WorkbookGovernanceEditor.jsx', 'utf8'), /CustomerRulesMatrix/)
 })
 
 test('Admin access controls keep users and regional ownership in one panel', () => {

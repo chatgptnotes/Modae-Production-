@@ -20,7 +20,7 @@ import { routeOwner } from '../src/leadRules.js'
 const FIELD_LIST = {
   Owner: ['LJS', 'PP', 'RS', 'SS', 'PJS', 'RJS', 'SR'],
   'Opp Type': ['Project', 'Upgrade', 'Retrofit', 'Service', 'Spares', 'Flow'],
-  BU: ['Aero', 'Energy', 'Services'],
+  BU: ['Aero', 'Energy', 'Service'],
   Segment: ['Thermal', 'Nuclear', 'Hydro', 'Industrial', 'O&G-US', 'O&G-MS',
     'O&G-DS', 'Petrochem', 'Test Bed', 'Others', ...FLEX_SLOTS],
   Solution: ['Automation', 'SSS', 'VMS/CMS', ...FLEX_SLOTS],
@@ -28,7 +28,7 @@ const FIELD_LIST = {
     'Monitran', 'Shinkawa', 'Sensonics', 'Senstec', 'Wilcoxon', 'Others', 'ABB', 'BHEL',
     'Emerson', 'Honeywell', 'Hima', 'Rockwell', 'Siemens', 'Yokogawa', 'Valmat', 'Various',
     ...FLEX_SLOTS],
-  Stage: ['Lead', 'RFI', 'Budgetary', 'RFQ', 'Firm Bid', 'Negotiate', 'Won', 'Lost'],
+  Stage: ['Lead', 'RFI', 'Budgetary', 'RFQ', 'Firm Bid', 'Negotiate', 'Won', 'Lost', 'Abandoned', 'No Bid', 'On Hold', 'Validate'],
   'Prob (%)': ['Low', 'Medium', 'High'],
   'Customer Category': ['EUC', 'OEM', 'EPC', 'MAC', 'SI', 'ACP', 'RE/TR', ...FLEX_SLOTS],
   'Customer Status': ['Red', 'Amber', 'Green', 'Blue'],
@@ -71,8 +71,8 @@ test('the reserved Fx slots reach every field the client puts them on', () => {
 
 // The client's sheet spells two close reasons wrong. We keep the corrected
 // spelling on screen, so an import has to accept theirs.
-test('close reasons use the Level 2 loss categories', () => {
-  assert.deepEqual(CLOSE_REASONS, ['Technical capability/depth', 'Pricing', 'Competitor', 'Customer decision', 'Scope', 'Commercial terms', 'Other'])
+test('close reasons include Excel and retained historical application values', () => {
+  for (const reason of ['Relationship', 'Best Price', 'Trade Compliance', 'Abandoned/Delayed', 'Validity Expired', 'Other']) assert.ok(CLOSE_REASONS.includes(reason), reason)
 })
 
 // ---------------------------------------------------------------------------

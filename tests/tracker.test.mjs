@@ -4,6 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { PIPELINE_COLUMNS, financials, fiscalQuarter } from '../src/excelLogic.js'
 import { nextActionWith } from '../src/gates.js'
 import { seedOpportunities, seedApprovals, seedKyc, seedSparesLines, seedSvcEstimates, newProposal, routeForType } from '../src/seed.js'
 import { opportunityDateRange } from '../src/utils.js'
@@ -25,17 +26,12 @@ const proposalFor = o => newProposal(o.id, o)
 // Opportunity Name, Stage, Probability… I need value, value and expected order
 // date… and I should know where is the next action pending." Opportunity Owner
 // and Updated were explicitly not required.
-test('the key-column set includes dates but leaves Closed Reason to the full sheet', () => {
-  const m = tracker.match(/const KEY_COLS = \[([^\]]*)\]/)
-  assert.ok(m, 'KEY_COLS must exist')
-  const keys = m[1].split(',').map(s => s.trim().replace(/'/g, '')).filter(Boolean)
-  assert.deepEqual(keys, ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'orderDate', 'nextActionOwner'])
-  assert.match(tracker, /label: 'Proposal Send Date'/)
-  assert.match(tracker, /label: 'Expected Order Date'/)
-  assert.match(tracker, /\{ key: 'closedReason', letter: 'AA', label: 'Closed Reason\*'/)
-  assert.doesNotMatch(m[1], /closedReason/)
-  assert.ok(!keys.includes('owner'), 'Owner is not required for a sales owner')
-  assert.ok(!keys.includes('lastUpdated'), 'Updated is not required for a sales owner')
+test('key columns use Excel fields while the full sheet keeps closure reasons', () => {
+  const keys = tracker.match(/const KEY_COLS = \[([^\]]*)\]/)[1].split(',').map(s => s.trim().replace(/'/g, ''))
+  assert.deepEqual(keys, ['id', 'sellTo', 'oppName', 'stage', 'oppType', 'prob', 'valueK', 'proposalDate', 'orderDate', 'fqFy'])
+  assert.equal(PIPELINE_COLUMNS.find(c => c.key === 'closedReason').label, 'Closed Reason*')
+  assert.equal(PIPELINE_COLUMNS.find(c => c.key === 'proposalDate').label, 'Proposal Date')
+  assert.equal(PIPELINE_COLUMNS.find(c => c.key === 'invoiceDate').label, 'Invoice Date*')
 })
 
 test('opportunity proposal lookups tolerate incomplete hydration state', () => {
@@ -54,22 +50,20 @@ test('status filter is removed from the Opportunities toolbar and More menu', ()
   assert.doesNotMatch(tracker, /statusFilter/)
 })
 
-test('Excel export includes every tracker column for every role', () => {
-  assert.match(tracker, /const exportCols = COLS/)
-  assert.doesNotMatch(tracker, /COMMERCIAL_COLS/)
-  assert.match(tracker, /\['Sl', \.\.\.exportCols\.map\(col => col\.label\)\]/)
-  assert.match(tracker, /rows\.map\(\(o, index\) => \[index \+ 1, \.\.\.exportCols\.map\(col => \{/)
+test('Excel export uses workbook columns and K₹ for every role', () => {
+  assert.match(tracker, /const exportCols = PIPELINE_COLUMNS/)
+  assert.match(tracker, /\['Sl\.', \.\.\.exportCols\.map\(col => col\.label\)\]/)
+  assert.match(tracker, /case 'valueK': return o\.valueK \?\? ''/)
   assert.match(tracker, /case 'gmK': return gmK\(o\)/)
-  assert.match(tracker, /case 'gmPct': return gmPct\(o\) \|\| ''/)
-  assert.match(tracker, /nextActionWith\(o, store\.getProposal\(o\.id\), store\)\.owner \|\| ''/)
+  assert.match(tracker, /case 'fqFy': return fiscalQuarter\(o\.orderDate\)/)
+  assert.ok(!PIPELINE_COLUMNS.some(c => c.key === 'nextActionOwner'))
 })
 
-test('Value and COGS are editable for every tracker user while GM stays derived', () => {
-  assert.match(tracker, /value=\{o\.valueK \? o\.valueK \* 1000 : ''\} onChange=\{upd\(o\.id, 'valueK'\)\}/)
-  assert.match(tracker, /value=\{o\.cogsK \? o\.cogsK \* 1000 : ''\} onChange=\{upd\(o\.id, 'cogsK'\)\}/)
-  assert.match(tracker, />\{o\.valueK \? fmtRupeesFromK\(gmK\(o\)\) : '-'\}<\/td>/)
-  assert.doesNotMatch(tracker, /className="num locked"/)
-  assert.doesNotMatch(tracker, /name="lock"/)
+test('Value and COGS use stored K₹ directly while GM stays derived', () => {
+  assert.match(tracker, /value=\{o\.valueK \?\? ''\}.*?onChange=\{upd\(o\.id, 'valueK'\)\}/)
+  assert.match(tracker, /value=\{o\.cogsK \?\? ''\}.*?onChange=\{upd\(o\.id, 'cogsK'\)\}/)
+  assert.match(tracker, /\{fmt\(gmK\(o\), 3\)\}/)
+  assert.deepEqual(financials({ valueK: 100, cogsK: 25 }), { gmK: 75, gmPct: 0.75 })
 })
 
 test('customer and opportunity detail editing is available in the workspace', () => {
@@ -82,31 +76,29 @@ test('the opportunities table does not directly edit workflow stages', () => {
   assert.doesNotMatch(tracker, /store\.setMilestone\(o\.id, e\.target\.value/)
 })
 
-test('forecast dates retain inline editing while Expected Order Date has usable table width', () => {
+test('order and invoice dates have independent readable date editors', () => {
   assert.match(tracker, /orderDate: 12,/)
-  assert.match(tracker, /nextActionOwner: 7,/)
-  assert.match(tracker, /wAll: 7/)
-  assert.match(tracker, /<input type="date" value=\{o\.orderDate\} max=\{o\.invoiceDate/)
-  assert.match(tracker, /<input type="date" value=\{o\.invoiceDate\} min=\{o\.orderDate/)
-  assert.doesNotMatch(tracker, /ForecastDateInput/)
+  assert.match(tracker, /fqFy: 7,/)
+  assert.match(tracker, /<TrackerDateCell value=\{o\.orderDate \|\| ''\} onChange=/)
+  assert.match(tracker, /<TrackerDateCell value=\{o\.invoiceDate \|\| ''\} onChange=/)
+  assert.doesNotMatch(tracker, /value=\{o\.invoiceDate\} min=/)
 })
 
-test('key date and Next Action cells contain their editors', () => {
+test('key date cells contain their editors', () => {
   assert.match(styles, /table\.sheet\.cols-key td:nth-child\(22\) input\[type="date"\][\s\S]*width: 100%;[\s\S]*min-width: 11ch;[\s\S]*max-width: 100%;/)
-  assert.match(styles, /table\.sheet\.cols-key td:nth-child\(32\) select\s*\{[\s\S]*width: 100%;[\s\S]*overflow: hidden;[\s\S]*text-overflow: ellipsis;/)
   assert.match(styles, /tracker-toolbar-actions > \.tracker-more-menu\s*\{[\s\S]*flex: 0 0 124px;/)
   assert.match(styles, /tracker-toolbar-actions > \.tracker-create-logo\s*\{[\s\S]*flex: 0 1 240px;/)
 })
 
 test('closed opportunities expose the shared mark-won control', () => {
   assert.match(tracker, /MarkWonControl/)
-  assert.match(tracker, /o\.status === 'Closed' && o\.stage !== 'Lost' && <MarkWonControl opp=\{o\} store=\{store\} \/>/)
+  assert.match(tracker, /o\.status === 'Closed' && !\['Won', 'Lost'\]\.includes\(o\.stage\) && <MarkWonControl opp=\{o\} store=\{store\} \/>/)
 })
 
 test('closed terminal outcomes are explicit in the tracker stage cell', () => {
   assert.match(tracker, /tracker-terminal-stage \$\{o\.stage\.toLowerCase\(\)\}/)
   assert.match(tracker, /<span className="tracker-outcome-label">\{o\.stage\}<\/span>/)
-  assert.match(tracker, /<span className="tracker-stage-context">\{workflowStageLabelFor\(o\)\}<\/span>/)
+  assert.doesNotMatch(tracker, /workflowStageLabelFor/)
   assert.match(styles, /\.tracker-terminal-stage\.lost \.tracker-outcome-label \{ color: var\(--lost-text\); \}/)
 })
 
@@ -117,15 +109,16 @@ test('tracker column text wraps at word boundaries without arbitrary word splitt
   assert.match(styles, /\.tracker-page \.sheet:not\(\.cols-key\) thead tr > :nth-child\(2\)[\s\S]*white-space: nowrap;/)
 })
 
-test('key columns use a complete percentage budget rather than pixel floors', () => {
+test('key columns share proportional tracks without fixed identity widths', () => {
   const widths = tracker.match(/const KEY_COL_WIDTHS = \{([^}]+)\}/)?.[1]
   assert.ok(widths)
   const values = [...widths.matchAll(/\w+: (\d+),?/g)].map(([, value]) => Number(value))
   assert.equal(values.length, 10)
   assert.equal(values.reduce((sum, value) => sum + value, 0), 97)
-  assert.match(tracker, /const ROWHEAD_PCT = 3/)
-  assert.match(tracker, /width: \$\{KEY_COL_WIDTHS\[c\.key\]\}%; min-width: 0;/)
-  assert.doesNotMatch(tracker, /KEY_TABLE_MIN_WIDTH|--tracker-key-min-width/)
+  assert.match(tracker, /if \(!all\) return.*KEY_COL_WIDTHS/)
+  assert.doesNotMatch(tracker, /100% - var\(--tracker-frozen-width\)/)
+  assert.match(tracker, /<colgroup>/)
+  assert.match(tracker, /max\(100%, 1200px\)/)
 })
 
 test('key view reserves a usable share for expected order dates', () => {
@@ -141,7 +134,7 @@ test('numeric Value column stays compact while description keeps the recovered w
   assert.match(widths, /valueK: 7/)
   assert.match(widths, /sellTo: 12/)
   assert.match(widths, /oppName: 23/)
-  assert.match(tracker, /label: 'Value \(₹\)\*', num: true, w: 7/)
+  assert.equal(PIPELINE_COLUMNS.find(c => c.key === 'valueK').label, 'Value (K₹)*')
   assert.match(styles, /table\.sheet\.cols-key td\.num,[\s\S]*white-space: nowrap;/)
 })
 
@@ -169,14 +162,18 @@ test('Opportunities headers use plain table labels without boxed controls', () =
   assert.match(styles, /\.opportunities-page \.tracker-page table\.sheet thead th\s*\{[\s\S]*?position: sticky;[\s\S]*?background: #FFFFFF !important;/)
 })
 
-test('key view does not pin the ID over the row number when columns narrow', () => {
-  assert.match(styles, /\.tracker-page table\.sheet\.cols-key tbody :is\(td\.rowhead, td\.oppid\) \{\s*position: static;\s*left: auto;/)
-  assert.match(styles, /\.tracker-page table\.sheet\.cols-key thead :is\(th\.rowhead, th:nth-child\(2\)\) \{\s*left: auto;/)
+test('both views freeze the same identity columns with matching offsets', () => {
+  assert.match(styles, /--tracker-sl-width: 40px;/)
+  assert.match(styles, /--tracker-id-width: 144px;/)
+  assert.match(styles, /--tracker-customer-width: 240px;/)
+  assert.match(styles, /left: var\(--tracker-frozen-left\);/)
+  assert.match(styles, /thead tr > :nth-child\(-n\+3\) \{ z-index: 5;/)
+  assert.doesNotMatch(styles, /cols-key tbody :is\(td\.rowhead, td\.oppid\) \{\s*position: static;/)
 })
 
 test('key Stage cell keeps the Mark Won control inside its narrow column', () => {
   assert.match(styles, /\.tracker-page \.sheet\.cols-key \.tracker-stage-cell \{[^}]*flex-wrap: wrap;/)
-  assert.match(styles, /\.tracker-page \.sheet\.cols-key \.mark-won-control \{[^}]*flex: 0 1 auto;[^}]*white-space: normal;/)
+  assert.match(styles, /\.tracker-page \.sheet\.cols-key \.mark-won-control \{[^}]*flex: 0 0 auto;[^}]*white-space: nowrap;[^}]*overflow-wrap: normal;/)
   assert.match(styles, /\.tracker-page \.sheet\.cols-key \.mark-won-control input \{[^}]*width: 13px;[^}]*min-width: 13px;/)
 })
 
@@ -195,28 +192,25 @@ test('tracker has no trailing proposal action column', () => {
 
 test('closing from the Status column requires outcome then reason', () => {
   assert.match(tracker, /field === 'status' && value === 'Closed'/)
-  assert.match(tracker, /Choose Won or Lost first, then select the reason/)
+  assert.match(tracker, /Choose the outcome, then select the reason/)
   assert.match(tracker, /tracker-close-outcome-options/)
   assert.match(tracker, /closePending\.stage === outcome/)
   assert.match(tracker, /closePending\.stage === 'Won' \? WON_REASONS : CLOSE_REASONS/)
-  assert.match(tracker, /store\.closeLost\(closePending\.id, closeReason, null, requiresNote \? note : ''\)/)
+  assert.match(tracker, /store\.closeLost\(closePending\.id, closeReason, null, requiresNote \? note : '', closePending\.stage\)/)
   assert.match(tracker, /store\.markWon\(closePending\.id, closeReason, requiresNote \? note : ''\)/)
 })
 
 test('Won and Lost closure paths keep terminal milestones and reason notes aligned', () => {
-  assert.match(read('src/store.jsx'), /stage: 'Lost', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' \? reasonNote : '', milestone: 'Follow-up'/)
+  assert.match(read('src/store.jsx'), /stage: outcome, status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' \? reasonNote : '', milestone: 'Follow-up'/)
   assert.match(read('src/store.jsx'), /stage: 'Won', status: 'Closed', closedReason: reason, closedReasonNote: reason === 'Other' \? reasonNote : '', milestone: 'Handover'/)
   assert.match(tracker, /o\.stage === 'Won' \? WON_REASONS : CLOSE_REASONS/)
   assert.match(tracker, /closeReason === 'Other'/)
 })
 
 test('tracker owner filtering follows the top-bar scope', () => {
-  assert.match(tracker, /const owners = \['All', \.\.\.new Set\(all\.map\(o => o\.owner\)\)\]/)
-  assert.match(tracker, /scope !== 'my' \? ownerFilter === 'All' \|\| o\.owner === ownerFilter : o\.owner === store\.role/)
-  assert.match(tracker, /scope === 'global' && <select id="opportunities-owner-filter"/)
-  assert.doesNotMatch(tracker, /My Opportunities/)
-  assert.match(tracker, /All Opportunities/)
-  assert.match(tracker, /sortVal = \(o, key\) => \(DATE_KEYS\.includes\(key\) \? \(o\[key\] \|\| ''\)/)
+  assert.match(tracker, /scopedOpportunityRows\(aiRows, scope, store\.role, sheet\)/)
+  assert.match(tracker, /normalizeOpportunityFilters\(savedFilters, ownerFilter\)/)
+  assert.match(read('src/pages/OpportunityFilters.jsx'), /scope === 'global' \|\| key !== 'owner'/)
 })
 
 test('My and Global scope comes from the shared top-bar switch', () => {
@@ -288,7 +282,7 @@ test('tracker keeps its title uncluttered and makes empty-view causes explicit',
 
 test('tracker column controls compose filters and support select-all toggling', () => {
   assert.match(tracker, /matchesFilters = \(o, activeFilters = filters, except = null\)/)
-  assert.match(tracker, /dateFilteredBase\.filter\(o => matchesFilters\(o\)\)/)
+  assert.match(tracker, /filterOpportunityRows\(aiRows, criteria, filterContext\)/)
   assert.match(tracker, /toggleSubsetIn\(current\[col\.key\], values, visibleValues\)/)
   assert.match(tracker, /key=\{filterValueKey\(v\)\}/)
   assert.match(tracker, /matchesFilterQuery\(v, query\)/)
@@ -298,25 +292,23 @@ test('tracker column controls compose filters and support select-all toggling', 
 
 test('clicking a column name opens its menu without a separate arrow control', () => {
   assert.match(tracker, /<button type="button" className="tracker-th-control"[\s\S]*onClick=\{e => openColumnMenu\(col, e\)\}/)
-  assert.match(tracker, /<span className="tracker-th-label">\{col\.label\}<\/span>/)
+  assert.match(tracker, /<span className="tracker-th-label">.*Opportunity description.*col\.label.*<\/span>/)
   assert.doesNotMatch(tracker, /tracker-th-indicator/)
   assert.match(tracker, /aria-sort=\{sort\?\.key === col\.key/)
 })
 
 test('key fields retain a filter menu when their header moves into row labels', () => {
-  assert.match(tracker, /aria-label="Sort and filter key opportunity field"/)
-  assert.match(tracker, /KEY_COLS\.map\(key =>/)
-  assert.match(tracker, /openColumnMenu\(COLS\.find\(col => col\.key === e\.currentTarget\.value\), e\)/)
-  assert.match(styles, /\.tracker-secondary-filter \{ display: none; \}/)
-  for (const index of [1, 7, 9, 13, 14, 19, 20, 23, 24, 30]) {
-    assert.match(tracker, new RegExp(`<span className="tracker-cell-label">\\{COLS\\[${index}\\]\\.label\\}<\\/span>`))
-  }
+  assert.match(tracker, /className="tracker-th-control"[\s\S]*openColumnMenu\(col, e\)/)
+  assert.match(tracker, /<OpportunityFilters criteria=\{criteria\}/)
+  assert.doesNotMatch(tracker, /Sort and filter key opportunity field/)
 })
 
 test('editable key fields keep accessible names when their headers are hidden', () => {
-  assert.match(tracker, /function WrapInput\(\{ value, onChange, title, label \}\)/)
+  assert.match(tracker, /function WrapInput\(\{ value, onChange, title, label, disabled = false, onBlur, onFocus, onKeyDown \}\)/)
+  assert.match(tracker, /<textarea disabled=\{disabled\}/)
   assert.match(tracker, /<textarea[^>]*aria-label=\{label\}/)
-  for (const index of [9, 13, 14, 20, 24, 30]) {
+  assert.match(tracker, /label=\{COLS\[20\]\.label\}/)
+  for (const index of [9, 13, 14, 25]) {
     assert.match(tracker, new RegExp(`aria-label=\\{COLS\\[${index}\\]\\.label\\}`))
   }
 })
@@ -325,26 +317,19 @@ test('tracker provides dual-layer global and quick filtering with removable chip
   assert.match(tracker, /matchesGlobalSearch\(o, searchTerm, COLS, cellVal\)/)
   assert.match(tracker, /className="tracker-filter-chips flex flex-wrap items-center gap-1"/)
   assert.match(tracker, /No opportunities match these filters\./)
-  assert.match(tracker, /placeholder="Search all opportunities…"/)
+  assert.match(read('src/ui/OpportunityAiSearch.jsx'), /placeholder="Search opportunities or ask AI…"/)
 })
 
 test('opportunities search is a separate bordered field beside owner scope', () => {
-  assert.match(tracker, /className="tracker-toolbar-filters"[\s\S]*className="tracker-search-group"[\s\S]*className="tracker-toolbar-actions"[\s\S]*className="tracker-more-menu"[\s\S]*className="tracker-owner-filter"[^>]*aria-label="Opportunity owner"/)
-  assert.match(tracker, /className="tracker-search" aria-label="Search all opportunities"/)
-  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-group \.tracker-search \{[\s\S]*?border: 1px solid var\(--border-color\) !important;[\s\S]*?border-radius: 8px !important;/)
-  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-group \.tracker-search:focus-within \{[\s\S]*?box-shadow: 0 0 0 2px var\(--primary-soft\) !important;/)
-  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-toolbar-filters[\s\S]*?\.tracker-search-group/)
+  assert.match(read('src/ui/OpportunityAiSearch.jsx'), /className="tracker-search" aria-label="Search all opportunities"/)
+  assert.match(tracker, /className="tracker-toolbar-actions"/)
+  assert.doesNotMatch(tracker, /id="opportunities-owner-filter"/)
 })
 
 test('date filter is available inside the Opportunities search surface', () => {
-  assert.doesNotMatch(tracker, /className=\{`tracker-date-filter-button\$\{dateFilterActive/)
-  assert.match(tracker, /className=\{`tracker-search-filter\$\{dateFilterActive/)
-  assert.match(tracker, /<Icon name="filter" size=\{16\} \/>\{dateFilterActive && <span className="tracker-search-filter-active"/)
-  assert.match(tracker, /: dateFilterActive \? `Filter opportunities by date:/)
-  assert.match(tracker, /aria-haspopup="dialog" aria-expanded=\{phone \? phoneFiltersOpen : dateFilterOpen\}/)
-  assert.match(tracker, /phone && <button[^\n]+role="menuitem"[^\n]+openDateFilterMenu\(event\)/)
-  assert.match(styles, /\.opportunities-page > \.tracker-page > \.toolbar \.tracker-search-group \{[\s\S]*?border: 1px solid var\(--border-color\);[\s\S]*?border-radius: 8px;/)
-  assert.match(styles, /\.tracker-search-filter-active \{[\s\S]*?text-transform: uppercase;/)
+  assert.match(tracker, /aria-haspopup="dialog" aria-expanded=\{filtersOpen\}/)
+  assert.match(tracker, /<span>Filters\{activeFilterCount/)
+  assert.doesNotMatch(tracker, /openDateFilterMenu|phoneFiltersOpen/)
 })
 
 test('Opportunities toolbar keeps groups spaced and the filter control icon-only', () => {
@@ -356,17 +341,13 @@ test('Opportunities toolbar keeps groups spaced and the filter control icon-only
 })
 
 test('Opportunities toolbar reads search, filter, More, owner, columns, create', () => {
-  const search = tracker.indexOf('className="tracker-search-group"')
+  const search = tracker.indexOf('className="tracker-search"')
   const filter = tracker.indexOf('className={`tracker-search-filter')
   const more = tracker.indexOf('className="tracker-more-menu"')
-  const owner = tracker.indexOf('className="tracker-owner-filter"')
   const columns = tracker.indexOf('className="tracker-columns-toggle"')
   const create = tracker.indexOf('className="tracker-create-logo"')
-  assert.ok(search >= 0 && search < filter, 'search must precede the filter control')
-  assert.ok(filter < more, 'filter must precede More')
-  assert.ok(more < owner, 'More must precede owner scope')
-  assert.ok(owner < columns, 'owner scope must precede the column toggle')
-  assert.ok(columns < create, 'the column toggle must precede Create opportunity')
+  assert.ok(search < filter && filter < more && more < columns && columns < create)
+  assert.doesNotMatch(tracker, /className="tracker-owner-filter"/)
 })
 
 test('all Opportunities toolbar controls share the neutral treatment', () => {
@@ -397,12 +378,11 @@ test('tracker custom date range validates ordering and allows open bounds', () =
 })
 
 test('tracker renders selectable date fields and period controls', () => {
-  assert.match(tracker, /Custom date filter/)
-  assert.match(tracker, /aria-label="Custom filter date field"/)
-  assert.match(tracker, /aria-label="Custom filter period"/)
-  assert.match(tracker, /OPPORTUNITY_DATE_FIELDS/)
-  assert.match(tracker, /OPPORTUNITY_PERIODS/)
-  assert.match(tracker, /matchesDateFilter\(o\)/)
+  const popup = read('src/pages/OpportunityFilters.jsx')
+  assert.match(popup, /OPPORTUNITY_DATE_FIELDS\.map/)
+  assert.match(popup, /OPPORTUNITY_PERIODS\.map/)
+  assert.match(popup, /opportunityFilterDateState\(draft.date\)/)
+  assert.match(tracker, /matchesOpportunityDate\(o, dateFilter\)/)
 })
 
 test('My Opportunities shows the same working columns', () => {
@@ -412,9 +392,9 @@ test('My Opportunities shows the same working columns', () => {
 })
 
 test('closed opportunities are labelled My Orders', () => {
-  const tracker = read('src/pages/Tracker.jsx')
-  assert.match(tracker, /\['Opportunities', 'My Orders', 'My Pipeline'\]/)
-  assert.match(tracker, /sheet === 'My Orders' \? \(o\.status === 'Closed' && o\.stage === 'Won'\)/)
+  assert.match(tracker, /const sheet = savedSheet === 'My Orders' \? 'My Orders' : 'Opportunities'/)
+  assert.match(tracker, /aria-label="Opportunity list view"/)
+  assert.match(read('src/opportunityFilters.js'), /row.status === 'Closed' && row.stage === 'Won'/)
   assert.doesNotMatch(tracker, /Old Closed Opps/)
 })
 
@@ -425,7 +405,7 @@ test('My Orders contains Won opportunities only', () => {
 })
 
 test('opportunity IDs open the full opportunity workspace', () => {
-  assert.match(tracker, /<Link to=\{`\/opp\/\$\{o\.id\}`\} title="Open opportunity workspace">\{displayOpportunityId\(o\.id, store\.config\?\.roleNames\)\}<\/Link>/)
+  assert.match(tracker, /<Link to=\{`\/opp\/\$\{o\.id\}`\} title="Open opportunity workspace">\{displayOpportunityId\(o\.id\)\}<\/Link>/)
   assert.doesNotMatch(tracker, /<Link to=\{`\/folders\/\$\{o\.id\}`\}>\{o\.id\}<\/Link>/)
 })
 
@@ -468,18 +448,19 @@ test('a KYC block sits with the commercial approver', () => {
   assert.match(na.text, /KYC/)
 })
 
-test('the derivation is wired into the sheet, the list and the drawer', () => {
-  assert.match(tracker, /nextActionWith\(o, store\.getProposal\(o\.id\), store\)/)
+test('Next Action remains in the list and drawer after removal from the Excel sheet', () => {
+  assert.doesNotMatch(tracker, /nextActionWith/)
   assert.match(myOpps, /nextActionWith\(o, store\.getProposal\(o\.id\), store\)/)
   assert.match(read('src/opppanel.jsx'), /nextActionWith\(opp, store\.getProposal\(oppId\), store\)/)
 })
 
-test('opportunity sheets paginate sorted, filtered rows in groups of ten', () => {
-  assert.match(tracker, /const pageSize = 10/)
-  assert.match(tracker, /const pageRows = rows\.slice\(\(currentPage - 1\) \* pageSize, currentPage \* pageSize\)/)
+test('opportunity sheets paginate sorted, filtered rows to fit the viewport', () => {
+  assert.match(tracker, /useViewportPageSize\(rows\.length, \{ enabled: !phone, rootRef: gridRef \}\)/)
+  assert.match(tracker, /const visiblePageSize = phone \? 10 : pageSize/)
+  assert.match(tracker, /const pageRows = rows\.slice\(\(currentPage - 1\) \* visiblePageSize, currentPage \* visiblePageSize\)/)
   assert.match(tracker, /const totals = rows\.reduce/)
   assert.match(tracker, /pageRows\.map\(\(o, index\)/)
-  assert.match(tracker, /\[sheet, ownerFilter, searchTerm, filters, sort, dateFilter\]/)
+  assert.match(tracker, /\[sheet, ownerFilter, searchTerm, savedFilters, conditions, sort, dateFilter, activeAi\]/)
   assert.match(tracker, /setPage\(current => Math\.min\(current, pageCount\)\)/)
   assert.match(tracker, /aria-label="First page"/)
   assert.match(tracker, /aria-label="Previous page"/)
@@ -505,21 +486,16 @@ test('system-stamped dates are read-only on the sheet', () => {
   assert.match(tracker, /Auto-stamped — read only/)
 })
 
-test('expected order and ship dates are flagged when missing', () => {
+test('order date is flagged while invoice date remains independent', () => {
   assert.match(tracker, /o\.status === 'Open' && !o\.orderDate \? 'need' : ''/)
-  assert.match(tracker, /o\.status === 'Open' && !o\.invoiceDate \? 'need' : ''/)
-  assert.match(tracker, /Expected order date is required on an open opportunity/)
+  assert.doesNotMatch(tracker, /o\.status === 'Open' && !o\.invoiceDate \? 'need' : ''/)
+  assert.equal(fiscalQuarter('2026-04-01'), 'Q1-2027')
 })
 
 // The rename landed on the tracker only; the drawer, Analytics and the forecast
 // dashboard still said Order Date / Invoice Date.
-test('no surface still says Order Date or Invoice Date', () => {
-  for (const file of [
-    'src/pages/Tracker.jsx', 'src/pages/MyOpps.jsx', 'src/opppanel.jsx',
-    'src/pages/Analytics.jsx', 'src/pages/Dashboard.jsx',
-  ]) {
-    const text = read(file)
-    const stale = text.match(/(?<!Expected )(Order|Invoice) [Dd]ate/g) || []
-    assert.deepEqual(stale, [], `${file} still carries: ${stale.join(', ')}`)
-  }
+test('Excel table uses original date labels', () => {
+  assert.equal(PIPELINE_COLUMNS.find(c => c.key === 'orderDate').label, 'Order Date*')
+  assert.equal(PIPELINE_COLUMNS.find(c => c.key === 'invoiceDate').label, 'Invoice Date*')
+  assert.equal(PIPELINE_COLUMNS.findIndex(c => c.key === 'fqFy') + 1, PIPELINE_COLUMNS.findIndex(c => c.key === 'invoiceDate'))
 })

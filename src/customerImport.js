@@ -36,9 +36,8 @@ export function normalizeStatus(value) {
   for (const [word, status] of Object.entries(STATUS_WORDS)) {
     if (c === word || c.startsWith(word + ' ') || c.endsWith(' ' + word)) return status
   }
-  // These are the client's existing verified accounts — the whole point of the
-  // import — so an unrecognised or missing class reads Green, not Blue.
-  return 'Green'
+  // Missing or unrecognised classes require review; never assume verified Green.
+  return 'Blue'
 }
 
 // One raw sheet row (keyed by original headers) → a customer-master record,
@@ -57,7 +56,7 @@ export function normalizeCustomerRow(raw) {
     name: record.name,
     category: record.category || '—',
     status,
-    kyc: record.kyc || (status === 'Green' ? 'Valid' : 'Pending'),
+    kyc: record.kyc || 'Pending',
     payment: record.payment || '—',
     ...(record.location ? { location: record.location } : {}),
   }

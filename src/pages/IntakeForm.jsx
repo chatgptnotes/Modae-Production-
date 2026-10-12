@@ -1,7 +1,9 @@
+import { useFieldLists } from '../useFieldLists.js'
 import React, { useState, useMemo, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useStore, reserveOppId } from '../store.jsx'
-import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, ROLES } from '../seed.js'
+import { ROLES } from '../seed.js'
+
 import { runJson } from '../ai.js'
 import { aiAttachmentPayload, supportsVisualAi } from '../aiAttachments.js'
 import { extractPdfText, parseTender, buildOpportunityDraft } from '../tenderParse.js'
@@ -36,17 +38,17 @@ const fieldClass = (validation, field, aiMissing) => {
 
 // Compact dropdown for all select fields
 function Select({ field, options, placeholder }) {
-  const { f, set, validation, aiMissing } = React.useContext(FormCtx)
+  const { f, set, validation, aiMissing, labelFor } = React.useContext(FormCtx)
   return (
     <select value={f[field]} onChange={set(field)} className={fieldClass(validation, field, aiMissing)}>
       <option value="">{placeholder}</option>
-      {options.map(o => <option key={o}>{o}</option>)}
+      {options.map(o => <option key={o} value={o}>{labelFor(field, o)}</option>)}
     </select>
   )
 }
 
 function ProductDropdown({ options }) {
-  const { selectedProducts, setF, aiMissing } = React.useContext(FormCtx)
+  const { selectedProducts, setF, aiMissing, labelFor } = React.useContext(FormCtx)
   const selectedLabel = selectedProducts.length === 0
     ? 'Select equipment / product family'
     : selectedProducts.length === 1
@@ -70,7 +72,7 @@ function ProductDropdown({ options }) {
                     : selectedProducts.filter(product => product !== option),
                 }))}
               />
-              <span>{option === 'Various' ? 'Multiple equipment items' : option}</span>
+              <span>{option === 'Various' ? 'Multiple equipment items' : labelFor('product', option)}</span>
             </label>
           )
         })}
@@ -84,7 +86,7 @@ function ProductDropdown({ options }) {
 // single-select, per the 13 Aug review.
 // The control policy is: product 'checkbox' : 'radio' for the other pills.
 function Pills({ field, options }) {
-  const { f, set, aiMissing } = React.useContext(FormCtx)
+  const { f, set, aiMissing, labelFor } = React.useContext(FormCtx)
   if (field === 'product') return <ProductDropdown options={options} />
   return (
     <div className={'pill-group' + (aiMissing?.has(field) ? ' not-extracted' : '')}>
@@ -93,7 +95,7 @@ function Pills({ field, options }) {
         return (
           <label key={o} className={`pill-opt ${on ? 'on' : ''}`}>
             <input type="radio" name={field} value={o} checked={on} onChange={set(field)} />
-            {o}
+            {labelFor(field, o)}
           </label>
         )
       })}
@@ -102,7 +104,7 @@ function Pills({ field, options }) {
 }
 
 function Input({ field, type = 'text', placeholder, list }) {
-  const { f, set, validation, aiMissing } = React.useContext(FormCtx)
+  const { f, set, validation, aiMissing, labelFor } = React.useContext(FormCtx)
   return (
     <input type={type} placeholder={placeholder} value={f[field]} onChange={set(field)}
       list={list} className={fieldClass(validation, field, aiMissing)}
@@ -111,6 +113,8 @@ function Input({ field, type = 'text', placeholder, list }) {
 }
 
 export default function IntakeForm({ destinationPicker = null }) {
+  const { OWNERS, PRODUCTS, CATEGORIES, OPP_TYPES, BUS, SEGMENTS, labelFor } = useFieldLists()
+
   const store = useStore()
   const nav = useNavigate()
   const fileInputRef = useRef(null)
@@ -179,7 +183,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
   const submit = async e => {
     e.preventDefault()
-    if (!validation.isComplete) return
+    if (!validation.isComplete || store.canPerform?.('opportunities.create') === false) return
     const today = new Date().toISOString().slice(0, 10)
     // The permanent ID must use the same Admin city/state routing used by the
     // lead inbox. Keep a manually selected owner only when no location exists.
@@ -188,7 +192,9 @@ export default function IntakeForm({ destinationPicker = null }) {
       config: store.config,
       fallback: f.owner || store.role || 'LJS',
     })
-    const id = await reserveOppId(store.opportunities, owner, store.config?.roleNames)
+    let id
+    try { id = await reserveOppId(store.opportunities, owner, store.config?.roleNames, store.config?.opportunityNumbering) }
+    catch (error) { window.alert(error.message); return }
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
     const extractedFields = [...aiFilledFields]
       .filter(key => f[key] !== undefined && f[key] !== '')
@@ -429,7 +435,7 @@ export default function IntakeForm({ destinationPicker = null }) {
   }
 
   return (
-    <FormCtx.Provider value={{ f, setF, set, validation, selectedProducts, aiMissing: aiMissingFields }}>
+    <FormCtx.Provider value={{ f, setF, set, validation, selectedProducts, aiMissing: aiMissingFields, labelFor }}>
     <div className="forms-bg">
       <form className="forms-card wide opportunity-intake-form" onSubmit={submit}>
         <div className="forms-head">
@@ -694,7 +700,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
         <div className="forms-actions">
           <button type="button" onClick={resetForm} className="secondary">Clear Form</button>
-          <button type="submit" className="submit" disabled={!validation.isComplete} style={{ marginLeft: '8px' }}
+          <button type="submit" className="submit" disabled={!validation.isComplete || store.canPerform?.('opportunities.create') === false} style={{ marginLeft: '8px' }}
             title={validation.isComplete ? 'Create Opportunity' : `Missing: ${validation.missing.join(', ')}`}>
             Create Opportunity
           </button>

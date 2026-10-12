@@ -1,0 +1,188 @@
+/* Phone-only reading and editing geometry. The Vite phone-workspace plugin
+   also applies these rules to the explicitly selected 440px workspace.
+   Keep table internals and printable proposal documents out of text resets. */
+@media screen and (max-width: 600px) {
+  html[data-workspace-theme] .shell.tablet-mode .mobile-content {
+    min-width: 0;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-content .page {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-content :is(.panel, .card, .form-card, .admin-card, .toolbar, .forms-actions, .phone-record) {
+    min-width: 0;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-content :is(button, .btn, summary):not(table *) {
+    min-height: 44px;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    line-height: 1.45;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-content :is(button, a, summary) > svg { flex-shrink: 0; }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-content :is(input:not([type=checkbox]):not([type=radio]):not([type=range]), select, textarea):not(table *) {
+    min-width: 0;
+    max-width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+    box-sizing: border-box;
+    scroll-margin-block: 140px 180px;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-content :is(label, .hint, .err-text, .warnbox, .errbox):not(table *) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.forms-actions, .phone-filter-actions, .phone-list-actions, .proposal-sent-head, .admin-page-head) {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .forms-actions > button { flex: 1 1 180px; }
+  html[data-workspace-theme] .shell.tablet-mode :is(.form-grid, .dgrid2, .service-form-grid, .opportunity-details-grid, .customer-commercial-grid) {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 18px;
+  }
+  html[data-workspace-theme] .shell.tablet-mode :is(.form-grid, .dgrid2) > * { min-width: 0; grid-column: auto !important; }
+  html[data-workspace-theme] .shell.tablet-mode :is(.sheet-wrap, .dashboard-table-scroll, .reference-table-wrap, .proposal-sent-table-wrap, .analysis-table-wrap) {
+    min-width: 0;
+    max-width: 100%;
+    overflow: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  /* Read full identities and subjects without opening each record. */
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page :is(.phone-lead-name, .phone-clamp-two),
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-lead-sender b, .phone-record strong, .phone-opportunity-name) {
+    display: block;
+    height: auto;
+    max-height: none;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+    -webkit-line-clamp: unset;
+    overflow-wrap: anywhere;
+    word-break: normal;
+    line-height: 1.5;
+  }
+  /* Email preview remains a preview; the full message is in lead detail. */
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-clamp-one {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-lead-copy { gap: 8px; }
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-lead-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+    padding-block: 20px;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-lead-row:has(.phone-select) { grid-template-columns: 44px minmax(0, 1fr); }
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-lead-side {
+    grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding-left: 52px;
+    box-sizing: border-box;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-inbox-views,
+  html[data-workspace-theme] .shell.tablet-mode .wintrack-mobile-dashboard .mobile-filter-row {
+    flex-wrap: wrap;
+    overflow: visible;
+    gap: 8px;
+    padding-block: 16px;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-inbox-views button,
+  html[data-workspace-theme] .shell.tablet-mode .wintrack-mobile-dashboard .mobile-filter-chip { flex: 1 1 120px; justify-content: center; white-space: normal; }
+  html[data-workspace-theme] .shell.tablet-mode .phone-record { gap: 8px; padding-block: 20px; font-size: 15px; }
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-record small, .phone-lead-detail small, .mobile-destination-group small) { line-height: 1.5; }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-destination-group a { min-height: 56px; padding-block: 14px; }
+  html[data-workspace-theme] .shell.tablet-mode .mobile-destination-group a > span { min-width: 0; white-space: normal; }
+  html[data-workspace-theme] .shell.tablet-mode .phone-opportunity-meta { flex-wrap: wrap; gap: 8px 12px; }
+  html[data-workspace-theme] .shell.tablet-mode .phone-opportunity-meta b { flex-basis: 100%; margin-left: 0; text-align: left; }
+  html[data-workspace-theme] .shell.tablet-mode .opportunity-workbench-page .opp-summary-grid.clean-summary-grid,
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-costing-basis .sourcing-costing-controls, .phone-sourcing-line-actions, .phone-part-details dl) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+  html[data-workspace-theme] .shell.tablet-mode .phone-part-main { flex-wrap: wrap; gap: 12px; }
+  html[data-workspace-theme] .shell.tablet-mode .phone-part-identity { flex-basis: calc(100% - 56px); }
+  html[data-workspace-theme] .shell.tablet-mode :is(.phone-part-values, .phone-part-input) { flex: 1 1 100%; text-align: left; }
+  html[data-workspace-theme] .shell.tablet-mode .phone-part-input input { text-align: left; }
+  html[data-workspace-theme] .shell.tablet-mode .phone-lead-summary dl > div { grid-template-columns: minmax(0, 1fr); gap: 4px; padding-block: 14px; }
+  html[data-workspace-theme] .shell.tablet-mode .approval-summary-three { flex-wrap: wrap; gap: 8px; }
+  html[data-workspace-theme] .shell.tablet-mode .approval-summary-three > button { flex: 1 1 120px; padding: 12px; }
+  html[data-workspace-theme] .shell.tablet-mode .admin-page .admin-card .arow { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  html[data-workspace-theme] .shell.tablet-mode .page > .legend { display: flex; flex-wrap: wrap; gap: 12px; }
+  html[data-workspace-theme] .shell.tablet-mode .page > .legend > span { min-width: 0; max-width: 100%; white-space: normal; }
+  html[data-workspace-theme] .shell.tablet-mode .registration-fields { grid-template-columns: minmax(0, 1fr) !important; gap: 18px !important; }
+  html[data-workspace-theme] .shell.tablet-mode .registration-fields .afield { min-width: 0; }
+  html[data-workspace-theme] .shell.tablet-mode :is(.admin-tabs, .users-tabs) { display: flex; flex-wrap: wrap; gap: 8px; overflow: visible; }
+  html[data-workspace-theme] .shell.tablet-mode :is(.admin-tabs, .users-tabs) > button { flex: 1 1 140px; min-width: 0; white-space: normal; }
+  html[data-workspace-theme] .shell.tablet-mode .analytics-funnel .reference-funnel-list { min-width: 0; }
+  html[data-workspace-theme] .shell.tablet-mode .analytics-funnel .reference-funnel-head { display: none; }
+  html[data-workspace-theme] .shell.tablet-mode .analytics-funnel .reference-funnel-row { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 16px 0; border-bottom: 1px solid var(--border-subtle); }
+  html[data-workspace-theme] .shell.tablet-mode .analytics-funnel .reference-funnel-row > strong { white-space: normal; overflow-wrap: anywhere; }
+  html[data-workspace-theme] .shell.tablet-mode .analytics-funnel .reference-funnel-total { text-align: left; }
+  html[data-workspace-theme] .shell.tablet-mode .analytics-funnel .reference-funnel-total::before { content: attr(data-phone-label); font-weight: 400; color: var(--text-secondary); }
+
+  /* Override compact dashboard rules together, including the 380px action
+     placement that otherwise creates an implicit, cramped second column. */
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard[data-dashboard-depth] { padding-inline: 16px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-kpi-grid { gap: 12px; margin-bottom: 20px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-kpi { padding: 16px 12px; border-radius: 8px !important; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-kpi > span { font-size: 14px; line-height: 1.5; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-kpi small { display: block; font-size: 13px; line-height: 1.5; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-dashboard-section > summary { min-height: 72px; padding-block: 16px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-section-content { padding-block: 16px 24px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-opportunity-card { grid-template-columns: minmax(0, 1fr); gap: 12px; padding-block: 20px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-priority-action { grid-template-columns: 34px minmax(0, 1fr); gap: 12px; padding-block: 20px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard :is(.mobile-opportunity-card, .mobile-priority-action) > .mobile-card-action {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    width: 100%;
+    max-width: none;
+    justify-self: stretch;
+    padding: 12px;
+    font-size: 15px;
+  }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-opportunity-facts { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard :is(.mobile-customer-name h3, .mobile-priority-action h3) { font-size: 16px; line-height: 1.5; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard :is(.mobile-priority-action p, .mobile-blocker-note, .mobile-stage-badge, .mobile-opportunity-facts span) { font-size: 14px; line-height: 1.5; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard :is(.mobile-opportunity-facts small, .mobile-priority-action small) { font-size: 13px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-period-label { display: grid; justify-content: stretch; gap: 8px; font-size: 14px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-period-label select { width: 100%; font-size: 16px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-report-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-funnel-label { display: grid; gap: 4px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-funnel-legend { gap: 12px; }
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-dashboard-section { overflow: visible; }
+
+  /* Full-screen editors already track visualViewport. Respect their height
+     variables and allow ordinary dialogs to scroll without losing actions. */
+  :is(html[data-workspace-theme] .shell.tablet-mode, [data-modae-portal-root]) :is(.modal, .drawer, .approval-decision-drawer) {
+    box-sizing: border-box;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+  [data-modae-portal-root] .modal:not(.lead-paste-modal) { max-height: var(--phone-dialog-height, 100dvh); overflow-y: auto; }
+  :is(html[data-workspace-theme] .shell.tablet-mode, [data-modae-portal-root]) :is(.modal-header, .modal-footer, .drawer-actions) { gap: 12px; flex-wrap: wrap; }
+  [data-modae-portal-root] :is(button, input:not([type=checkbox]):not([type=radio]), select, textarea) { min-height: 44px; max-width: 100%; font-size: 16px; }
+  [data-modae-portal-root] button { white-space: normal; overflow-wrap: anywhere; }
+  html[data-workspace-theme] .shell.tablet-mode .tab-bottom a { white-space: normal; overflow-wrap: anywhere; line-height: 1.3; min-height: 64px; }
+}
+
+@media screen and (max-width: 360px) {
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard .mobile-kpi-grid { grid-template-columns: minmax(0, 1fr); }
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-lead-side { padding-left: 40px; }
+}

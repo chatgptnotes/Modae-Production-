@@ -1,24 +1,26 @@
-import React, { useRef, useState } from 'react'
+import React, { useLayoutEffect, useRef, useState } from 'react'
 import { useStore } from '../store.jsx'
 import { useDrawer } from '../drawer.jsx'
 import { isAdminRole } from '../utils.js'
 import { customerHealth } from '../insights.js'
+import { CUSTOMER_CRITERIA, classRule } from '../customerClasses.js'
+import { fieldValues, suggestCustomerClass } from '../workbookGovernance.js'
 import { parseCustomerFile } from '../customerImport.js'
 import { Icon } from '../icons.jsx'
 import { Modal, ErrBox } from '../ui.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { usePagedRows } from '../ui/Pagination.jsx'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
+import { customerPageSize } from './customerPageSize.js'
 
 // Customer master — status normally arrives with the accounting-system upload
 // (payment pattern / KYC). Admin / super admin can correct a record in place;
 // every other role raises a 'Customer master change' approval instead, which
 // writes the patch only once AH / BU head clears it.
-const CATEGORIES = ['OEM', 'EUC', 'EUC/OEM', 'ACP', 'SI', 'RE/TR', '—']
 const STATUSES = ['Green', 'Amber', 'Red', 'Blue']
 const KYC_STATES = ['Valid', 'Renewal due', 'Pending', '—']
 const FIELDS = [
-  ['category', 'Category', CATEGORIES],
+  ['category', 'Category', 'category'],
   ['status', 'Status', STATUSES],
   ['kyc', 'KYC', KYC_STATES],
   ['payment', 'Payment pattern', null],
@@ -30,18 +32,25 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
     category: customer.category, status: customer.status,
     kyc: customer.kyc, payment: customer.payment,
   })
+  const [criteria, setCriteria] = useState(customer.classificationCriteria || {})
+  const guidance = store.config?.customerClassificationGuidance || []
+  const criteriaRows = store.config.classificationCriteria?.length
+    ? store.config.classificationCriteria.filter(row => row.enabled !== false)
+    : (guidance.length ? guidance.filter(row => !['Proposed Opp/Lead Actions', 'Typical Accounts'].includes(row.label)).map(row => row.label) : CUSTOMER_CRITERIA).map(label => ({ id: label, label }))
   const [reason, setReason] = useState('')
   const [err, setErr] = useState('')
 
   const changed = FIELDS
     .filter(([k]) => form[k] !== customer[k])
     .map(([k, label]) => ({ k, label, from: customer[k], to: form[k] }))
+    .concat(JSON.stringify(criteria) !== JSON.stringify(customer.classificationCriteria || {}) ? [{ k: 'classificationCriteria', label: 'Classification criteria', from: customer.classificationCriteria || {}, to: criteria }] : [])
+    .concat(customer.classificationNeedsReview ? [{ k: 'classificationNeedsReview', label: 'Classification reviewed', from: true, to: false }] : [])
 
   const submit = e => {
     e.preventDefault()
     if (!changed.length) { setErr('Nothing changed.'); return }
     if (!reason.trim()) { setErr('A reason is required — it goes on the audit trail.'); return }
-    const patch = Object.fromEntries(changed.map(c => [c.k, c.to]))
+    const patch = { ...Object.fromEntries(changed.map(c => [c.k, c.to])), classificationReviewedAt: new Date().toISOString(), classificationReviewedBy: store.role, classificationPolicyRevision: store.config.workbookPolicyRevision || 0, classificationAssessment: suggestCustomerClass({ classificationCriteria: criteria }, store.config) }
     if (canEditDirect) {
       store.updateCustomer(customer.name, patch, reason.trim())
     } else {
@@ -51,7 +60,7 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
         approver: 'AH',
         customerName: customer.name,
         patch,
-        detail: `${customer.name} — ${changed.map(c => `${c.label} ${c.from} → ${c.to}`).join('; ')} · ${reason.trim()}`,
+        detail: `${customer.name} — ${changed.map(c => `${c.label} ${JSON.stringify(c.from)} → ${JSON.stringify(c.to)}`).join('; ')} · ${reason.trim()}`,
       })
     }
     onClose()
@@ -67,7 +76,7 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
               {opts
                 ? (
                   <select value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })}>
-                    {[...new Set([...opts, form[k]])].map(o => <option key={o} value={o}>{o}</option>)}
+                    {[...new Set([...(opts === 'category' ? fieldValues(store.config, 'category') : opts), form[k]])].map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 )
                 : (
@@ -78,6 +87,17 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
           ))}
         </div>
 
+        <details open={customer.classificationNeedsReview}>
+          <summary>Customer classification criteria</summary>
+          <p className="hint">Record the facts, then confirm the customer colour. Use Admin → Customer governance to review the configured criteria and confirm a suggested colour.</p>
+          <div className="dgrid2">
+            {criteriaRows.map(({ id, label }) => <div key={id}>
+              <label>{label}</label>
+              <input value={criteria[id] ?? criteria[label] ?? ''} onChange={e => setCriteria({ ...criteria, [id]: e.target.value })} />
+              {guidance.find(row => row.label === label)?.values?.[form.status] && <small className="hint">{form.status} guidance: {guidance.find(row => row.label === label).values[form.status]}</small>}
+            </div>)}
+          </div>
+        </details>
         <label style={{ marginTop: 8, display: 'block' }}>
           Reason {canEditDirect ? '(audit trail)' : '(shown to the approver)'}
         </label>
@@ -89,7 +109,7 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
 
         {changed.length > 0 && (
           <p className="hint" style={{ marginTop: 6 }}>
-            {changed.map(c => `${c.label}: ${c.from} → ${c.to}`).join(' · ')}
+            {changed.map(c => `${c.label}: ${String(c.from)} → ${c.to}`).join(' · ')}
           </p>
         )}
         {!canEditDirect && (
@@ -115,7 +135,7 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
 // as the file upload (store.importCustomers), just for a single row.
 function AddCustomer({ onClose }) {
   const store = useStore()
-  const [form, setForm] = useState({ name: '', category: 'EUC', status: 'Green', kyc: 'Valid', payment: '—' })
+  const [form, setForm] = useState({ name: '', category: 'EUC', status: 'Blue', kyc: 'Pending', payment: '—' })
   const [err, setErr] = useState('')
   const exists = form.name.trim()
     && store.customers.some(c => c.name.toLowerCase() === form.name.trim().toLowerCase())
@@ -141,7 +161,7 @@ function AddCustomer({ onClose }) {
               {opts
                 ? (
                   <select value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })}>
-                    {opts.map(o => <option key={o} value={o}>{o}</option>)}
+                    {(opts === 'category' ? fieldValues(store.config, 'category') : opts).map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 )
                 : (
@@ -219,12 +239,53 @@ export default function Customers() {
   const [preview, setPreview] = useState(null) // { rows, fileName }
   const [uploadErr, setUploadErr] = useState('')
   const fileRef = useRef(null)
+  const pageRef = useRef(null)
+  const tableRef = useRef(null)
+  const legendRef = useRef(null)
+  const [pageSize, setPageSize] = useState(10)
   const canEditDirect = isAdminRole(store.role)
   const scopedOpportunities = scope === 'my' ? store.opportunities.filter(opportunity => opportunity.owner === store.role) : store.opportunities
   const myCustomerNames = new Set(scopedOpportunities.map(opportunity => opportunity.sellTo).filter(Boolean))
   const visibleCustomers = scope === 'my' ? store.customers.filter(customer => myCustomerNames.has(customer.name)) : store.customers
-  const { pagedRows: pageCustomers, pagination } = usePagedRows(visibleCustomers, scope)
+  const { pagedRows: pageCustomers, pagination } = usePagedRows(visibleCustomers, scope, phone ? 10 : pageSize)
   const customer = store.customers.find(c => c.name === editing)
+
+  useLayoutEffect(() => {
+    if (phone) return
+    const page = pageRef.current
+    const table = tableRef.current
+    const legend = legendRef.current
+    const body = table?.tBodies[0]
+    if (!page || !body || !legend) return
+
+    const scrollArea = page.closest('.main-scroll')
+    const update = () => {
+      const firstRow = body.rows[0]
+      const rowHeight = firstRow?.getBoundingClientRect().height || 48
+      const viewportBottom = Math.min(window.innerHeight, scrollArea?.getBoundingClientRect().bottom ?? window.innerHeight)
+      const nextSize = customerPageSize({
+        bodyTop: body.getBoundingClientRect().top,
+        viewportBottom,
+        rowHeight,
+        paginationHeight: page.querySelector('.list-pagination')?.getBoundingClientRect().height || 44,
+        legendHeight: legend.getBoundingClientRect().height + parseFloat(getComputedStyle(legend).marginTop || 0),
+        bottomPadding: parseFloat(getComputedStyle(page).paddingBottom || 0),
+        totalRows: visibleCustomers.length,
+      })
+      setPageSize(current => current === nextSize ? current : nextSize)
+    }
+
+    update()
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update)
+    for (const element of [scrollArea, page.querySelector('.toolbar'), table.tHead, legend]) {
+      if (element) observer?.observe(element)
+    }
+    window.addEventListener('resize', update)
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener('resize', update)
+    }
+  }, [phone, scope, uploadErr, visibleCustomers.length])
 
   const onFile = async e => {
     const file = e.target.files?.[0]
@@ -244,11 +305,11 @@ export default function Customers() {
     a => a.status === 'Pending' && a.type === 'Customer master change' && a.customerName === name)
 
   return (
-    <div className="page">
+    <div className="page" ref={pageRef}>
       <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="users" size={18} /> Customer Master</h2>
       <div className="toolbar">
         <span className="hint">
-          Status comes from the periodic accounting-system upload (payment pattern, KYC).
+          Customer facts are saved in the workspace. Admins review the facts and confirm the customer colour.
           {canEditDirect
             ? ' As admin you can correct a record in place — every edit is audited.'
             : ' Sales is read-only: changes are requested here and applied once AH / BU head approves.'}
@@ -267,7 +328,7 @@ export default function Customers() {
       </div>
       {uploadErr && <ErrBox>{uploadErr}</ErrBox>}
       {phone ? <section aria-label="Customers">{pageCustomers.map(c => <article key={c.name} className="phone-customer-row"><button className="phone-record" onClick={() => drawer.open({ type: 'customer', id: c.name })}><strong>{c.name}</strong><span>{c.category} · {c.status}</span><small>KYC: {c.kyc} · {c.payment}</small></button>{pendingFor(c.name) ? <small>Change pending</small> : <button onClick={() => setEditing(c.name)}>{canEditDirect ? 'Edit customer' : 'Request change'}</button>}</article>)}{!pageCustomers.length && <p>No customers in this view.</p>}</section> : <div className="sheet-wrap sheet-wrap-fill">
-        <table className="sheet">
+        <table className="sheet" ref={tableRef}>
           <thead><tr><th>Customer</th><th>Category</th><th>Status</th><th>KYC</th><th>Payment Pattern</th><th>Health</th><th></th></tr></thead>
           <tbody>
             {pageCustomers.map(c => (
@@ -284,7 +345,7 @@ export default function Customers() {
                 {/* Derived from class, KYC, payment behaviour and win/loss history —
                     hover for the reasons that moved it. */}
                 <td>{(() => {
-                  const h = customerHealth(c, scopedOpportunities)
+                  const h = customerHealth(c, scopedOpportunities, store.config)
                   const driver = h.reasons
                     .filter(reason => reason.delta)
                     .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0]
@@ -320,11 +381,8 @@ export default function Customers() {
       </div>
       }
       {pagination}
-      <div className="legend" style={{ marginTop: 10 }}>
-        <span><span className="pill Green">Green</span> good standing</span>
-        <span><span className="pill Amber">Amber</span> watch — credit terms need approval</span>
-        <span><span className="pill Red">Red</span> hold — prepayment only</span>
-        <span><span className="pill Blue">Blue</span> new — pending verification</span>
+      <div className="legend" ref={legendRef} style={{ marginTop: 10 }}>
+        {STATUSES.map(colour => <span key={colour}><span className={`pill ${colour}`}>{colour}</span>{' '}{classRule(store.config, colour)?.defaultAction}</span>)}
       </div>
 
       {customer && (

@@ -14,8 +14,9 @@ import { DEFAULT_CLAUSES } from './clauses.js'
 import { modaeStandardCommercialTerms } from './commercialTerms.js'
 import { isLegacyAutoSparesSupportRow } from './proposal/sparesBoq.js'
 import { proposalApprovalSnapshot } from './approvalMemory.js'
+import { upgradeCustomerRules } from './customerClasses.js'
+import { upgradeWorkbookConfig } from './workbookGovernance.js'
 import { opportunityOwnerFor } from './leadRules.js'
-import { localWorkbookImport } from './localWorkbook.js'
 import {
   CIN_PATTERN,
   GSTIN_PATTERN,
@@ -195,7 +196,7 @@ export function migrate(s) {
   if (s.demoData === undefined) s.demoData = true
   const demo = s.demoData !== false
   if (!Array.isArray(s.users)) s.users = seedUsers
-  s.users = s.users.map(u => (u.pw ? u : { ...u, pw: 'Demo@1234' }))
+  s.users = s.users.map(u => (datastore.dbEnabled() || u.pw || u.deletedAt || u.status === 'Deleted' ? u : { ...u, pw: 'Demo@1234' }))
   // Backfill new seed accounts (TECH/CUST) by email; saved states may already
   // hold self-registered users on the same U-nnn ids, so reassign on collision.
   const nextUserId = () =>
@@ -536,8 +537,8 @@ export function migrate(s) {
       // stored by hand, so they are recomputed on every load rather than
       // trusted. That is what moves a saved Retrofit onto the Brownfield
       // workbench, and a saved Service into its own lane.
-      route: routeForType(oppType),
-      context: contextForType(oppType),
+      route: routeForType(oppType, s.config),
+      context: contextForType(oppType, s.config),
       owner,
       nextActionOwner: canonicalOwner(o.nextActionOwner || ''),
     }
@@ -623,6 +624,8 @@ export function migrate(s) {
       } : {}),
     }
   })
+  s.config = upgradeCustomerRules(s.config)
+  s.config = upgradeWorkbookConfig(s.config)
   return s
 }
 
@@ -681,26 +684,6 @@ export function emptyState(prev) {
       ? { ...prev.config, uploads: { ...uploads, priceLists: (uploads.priceLists || []).filter(p => !p.dummy) } }
       : prev.config,
   })
-}
-
-export const LOCAL_WORKBOOK_ID = 'betser-sales-pipeline-usage-v2'
-
-export function applyLocalWorkbook(state) {
-  if (state.importedWorkbook === LOCAL_WORKBOOK_ID) return state
-  const base = emptyState(state)
-  return {
-    ...base,
-    demoData: false,
-    opportunities: localWorkbookImport.opportunities,
-    customers: localWorkbookImport.customers,
-    files: Object.fromEntries(localWorkbookImport.opportunities.map(({ id }) => [id, {}])),
-    sales: { ...base.sales, targets: {}, orders: [] },
-    audit: [],
-    deletedLeadIds: [],
-    deletedOpportunityIds: [],
-    pendingOpportunitySyncIds: [],
-    importedWorkbook: LOCAL_WORKBOOK_ID,
-  }
 }
 
 export function seedState() {
@@ -829,7 +812,13 @@ export function mergeOpportunitySlice(local = [], server = [], baseline = [], de
     .map(row => row?.id)
     .filter(id => id && !serverIds.has(id) && !pending.has(id))
   const protectedBaseline = (baseline || []).filter(row => !pending.has(row?.id))
-  return mergeLeadSlice(local, server, protectedBaseline, [...new Set([...deleted, ...remotelyDeleted])])
+  const merged = mergeLeadSlice(local, server, protectedBaseline, [...new Set([...deleted, ...remotelyDeleted])])
+  const serverById = new Map((server || []).map(row => [row.id, row]))
+  return { ...merged, rows: merged.rows.map(row => {
+    const remote = serverById.get(row.id)
+    return { ...row, ...(remote?.booking ? { booking: remote.booking } : {}),
+      ...(remote?.bookingRequiresPO ? { bookingRequiresPO: true } : {}) }
+  }) }
 }
 
 // Sourcing rows are editable business data, but they can be created locally

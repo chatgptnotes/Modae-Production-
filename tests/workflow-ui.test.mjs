@@ -315,7 +315,7 @@ test('spares financial preview totals include priced rows before confirmation', 
 test('opening a Spares proposal repairs stale lead rows from confirmed sourcing data', () => {
   const proposal = read('src/pages/Proposal.jsx')
   assert.match(proposal, /import \{ useStore, sparesProposalBom, snapshotProposal \} from '\.\.\/store\.jsx'/)
-  assert.match(proposal, /routeForType\(opp\.oppType\) !== 'Spares'/)
+  assert.match(proposal, /routeForType\(opp\.oppType, store\.config\) !== 'Spares'/)
   assert.match(proposal, /store\.sendLinesToProposal\(oppId\)/)
   assert.match(proposal, /setP\(normalize\(next, opp\)\)/)
 })
@@ -359,7 +359,7 @@ test('the revision dialog keeps typed categories without sign-off routing', () =
   assert.match(builder, /REVISION_TYPES\.map/, 'the type must be chosen, not assumed')
   assert.ok(REVISION_TYPES.every(t => !t.step), 'revision categories must not route to sign-off steps')
   assert.match(store, /restoreSparesLinesFromProposal/, 'opening a Spares revision must restore the prior proposal into sourcing')
-  assert.match(store, /routeForType\(opp\?\.oppType\) === 'Spares'/, 'restoration must be scoped to the Spares sourcing workflow')
+  assert.match(store, /routeForType\(opp\?\.oppType, stateRef\.current\.config\) === 'Spares'/, 'restoration must be scoped to the Spares sourcing workflow')
   assert.match(store, /sparesLines: restoredSparesLines/, 'restored sourcing rows must be persisted with the revision')
 })
 

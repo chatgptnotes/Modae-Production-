@@ -1,7 +1,9 @@
+import { useFieldLists } from '../useFieldLists.js'
 import React, { useLayoutEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { OWNERS, MILESTONES, seedConfig } from '../seed.js'
+import { MILESTONES, seedConfig } from '../seed.js'
+
 import { isAdminRole, canSeePage, displayRoleLabel, canManagePriceLists } from '../utils.js'
 import { Icon } from '../icons.jsx'
 import { Chip, Modal, DemoDataControls } from '../ui.jsx'
@@ -11,7 +13,9 @@ import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { parseProposalWorkbook, serializeProposalWorkbook, updateWorkbookCell } from '../proposal/workbook.js'
 import { analyzeProposalTemplate } from '../proposal/templateMapping.js'
 import { DEFAULT_COMMON_MAILBOX } from '../leadClarification.js'
-import { DEFAULT_CUSTOMER_CLASSES } from '../customerClasses.js'
+import BusinessRulesEditor from '../admin/BusinessRulesEditor.jsx'
+import AccessRulesEditor from '../admin/AccessRulesEditor.jsx'
+import WorkbookGovernanceEditor from '../admin/WorkbookGovernanceEditor.jsx'
 import { parsePriceListFile } from '../priceListImport.js'
 import { normalizedCurrencyRates } from '../currency.js'
 import { DEFAULT_KYC_VALIDATION, kycValidationConfig } from '../kycValidation.js'
@@ -23,7 +27,6 @@ import { runTaskResult } from '../ai.js'
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
 
-const CLASS_ORDER = ['Green', 'Blue', 'Amber', 'Red']
 const REGION_OPTIONS = ['North & West India', 'South & East India', 'Unclassified leads']
 const PRICING_APPROVER_OPTIONS = ['AH', 'LJS', 'AN']
 
@@ -36,13 +39,14 @@ const DEMO_CONTROLS_PASSWORD = '32605'
 const TEMPLATE_LANES = BUILT_IN_PROPOSAL_TEMPLATES
 const ADMIN_TABS = [
   { id: 'workflow', label: 'Workflow & governance', icon: 'shield' },
+  { id: 'fields', label: 'Field Lists', icon: 'list' },
   { id: 'documents', label: 'Documents & templates', icon: 'upload' },
 ]
 const WORKFLOW_SUB_TABS = [
   { id: 'access', label: 'Access & routing', description: 'Users, ownership rules, and region mappings', icon: 'target' },
   { id: 'clauses', label: 'T&C Clause Library', description: 'Proposal validity, payment terms, and guarantees', icon: 'fileText' },
   { id: 'commercial', label: 'Commercial & automation', description: 'Guided margins, lead controls, and mailbox', icon: 'gear' },
-  { id: 'customer', label: 'Customer governance', description: 'Customer class rules and KYC checklist', icon: 'flag' },
+  { id: 'customer', label: 'Customer governance', description: 'Editable customer status rules', icon: 'flag' },
 ]
 
 function NumField({ label, value, disabled, onChange }) {
@@ -123,133 +127,9 @@ function FileButton({ label, disabled, onFile, variant = 'secondary', accept }) 
   )
 }
 
-const REQUIRES_OPTIONS = [
-  ['none', 'Nothing — cleared on sight'],
-  ['documents', 'A document checklist'],
-  ['fee', 'A payment confirmation'],
-  ['jointApproval', 'An approval record'],
-]
-const SEVERITY_OPTIONS = ['block', 'wait', 'info']
-const CLASS_APPROVER_OPTIONS = ['AH', 'LJS', 'AN']
-
-// One collapsed row per class; expanding reveals just that class's rules, so
-// the resting card stays as short as the four-input version it replaced.
-function ClassRuleRow({ cls, rule, canEdit, open, onToggle, checklistNames, onPatch, onPatchVerification, onPatchGate }) {
-  const verification = rule?.verification || {}
-  const gate = rule?.gate || null
-  const requiresLabel = (REQUIRES_OPTIONS.find(([k]) => k === verification.requires) || [])[1] || 'Nothing'
-  const summary = [
-    requiresLabel,
-    verification.deadlineDays ? `${verification.deadlineDays} days` : null,
-    gate ? `${gate.severity}s at ${gate.milestone}` : 'no gate',
-    gate?.approvers?.length ? gate.approvers.join(' + ') : null,
-  ].filter(Boolean).join(' · ')
-
-  return (
-    <div className="class-rule">
-      <button type="button" className="class-rule-head" aria-expanded={open} onClick={onToggle}>
-        <span className={`pill risk-badge ${cls}`} aria-label={`${cls} customer risk level`}>{cls}</span>
-        <span className="class-rule-summary">{summary}</span>
-        <Icon name={open ? 'chevronUp' : 'chevronDown'} size={11} />
-      </button>
-      {open && (
-        <div className="class-rule-body">
-          <label className="check-row">
-            <input type="checkbox" checked={verification.required !== false} disabled={!canEdit}
-              onChange={e => onPatchVerification({ required: e.target.checked })} />
-            Requires verification before registration
-          </label>
-
-          {verification.required !== false && (
-            <>
-              <label className="afield">What must be provided
-                <select value={verification.requires || 'none'} disabled={!canEdit}
-                  onChange={e => onPatchVerification({ requires: e.target.value })}>
-                  {REQUIRES_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                </select>
-              </label>
-
-              {verification.requires === 'documents' && (
-                <label className="afield">Document checklist
-                  <select value={verification.checklist || ''} disabled={!canEdit}
-                    onChange={e => onPatchVerification({ checklist: e.target.value })}>
-                    {checklistNames.map(name => <option key={name} value={name}>{name}</option>)}
-                  </select>
-                </label>
-              )}
-
-              {verification.requires === 'jointApproval' && (
-                <label className="afield">Approval type
-                  <input type="text" value={verification.approvalType || ''} disabled={!canEdit}
-                    onChange={e => onPatchVerification({ approvalType: e.target.value })} />
-                </label>
-              )}
-
-              <NumField label="Deadline (days, 0 = none)" value={verification.deadlineDays ?? 0} disabled={!canEdit}
-                onChange={v => onPatchVerification({ deadlineDays: Math.max(0, v) })} />
-            </>
-          )}
-
-          {gate && (
-            <>
-              <div className="section-title" style={{ marginTop: 8 }}>Opportunity gate</div>
-              <label className="afield">Blocks from milestone
-                <select value={gate.milestone} disabled={!canEdit}
-                  onChange={e => onPatchGate({ milestone: e.target.value })}>
-                  {MILESTONES.map(m => <option key={m}>{m}</option>)}
-                </select>
-              </label>
-              <label className="afield">Severity
-                <select value={gate.severity} disabled={!canEdit}
-                  onChange={e => onPatchGate({ severity: e.target.value })}>
-                  {SEVERITY_OPTIONS.map(x => <option key={x}>{x}</option>)}
-                </select>
-              </label>
-              <div className="afield">Signed off by
-                <div className="admin-approver-options">
-                  {CLASS_APPROVER_OPTIONS.map(role => {
-                    const selected = (gate.approvers || []).includes(role)
-                    return <label key={role}>
-                      <input type="checkbox" checked={selected}
-                        disabled={!canEdit || (selected && (gate.approvers || []).length === 1)}
-                        onChange={e => {
-                          const current = gate.approvers || []
-                          const next = e.target.checked
-                            ? [...new Set([...current, role])]
-                            : current.filter(item => item !== role)
-                          if (next.length) onPatchGate({ approvers: next })
-                        }} />
-                      {displayRoleLabel(role)}
-                    </label>
-                  })}
-                </div>
-              </div>
-              {(gate.approvers || []).length > 1 && (
-                <label className="check-row">
-                  <input type="checkbox" checked={!!gate.anyOf} disabled={!canEdit}
-                    onChange={e => onPatchGate({ anyOf: e.target.checked })} />
-                  Any one of them is enough (otherwise all must sign)
-                </label>
-              )}
-              <label className="check-row">
-                <input type="checkbox" checked={gate.exceptionWaivable !== false} disabled={!canEdit}
-                  onChange={e => onPatchGate({ exceptionWaivable: e.target.checked })} />
-                May be waived by an approved milestone exception
-              </label>
-            </>
-          )}
-
-          <label className="afield">Payment terms on the proposal
-            <input type="text" value={rule?.paymentTerms || ''} disabled={!canEdit}
-              onChange={e => onPatch({ paymentTerms: e.target.value })} />
-          </label>
-        </div>
-      )}
-    </div>
-  )
-}
-
 export default function Admin() {
+  const { OWNERS, labelFor } = useFieldLists()
+
   const store = useStore()
   const nav = useNavigate()
   const role = store.role
@@ -267,8 +147,6 @@ export default function Admin() {
   // Uploads card drafts.
   const [supplier, setSupplier] = useState('')
   const [plVersion, setPlVersion] = useState('')
-  const [newKyc, setNewKyc] = useState('')
-  const [openClass, setOpenClass] = useState('')
   const [demoPassword, setDemoPassword] = useState('')
   const [demoUnlocked, setDemoUnlocked] = useState(false)
   const [demoPasswordError, setDemoPasswordError] = useState('')
@@ -399,18 +277,9 @@ export default function Admin() {
   const userCounts = ['Active', 'Pending', 'Suspended']
     .map(st => [st, (store.users || []).filter(u => u.status === st).length])
 
-  const classes = config.customerClasses || DEFAULT_CUSTOMER_CLASSES
-  const checklistNames = [...new Set([...Object.keys(config.documentChecklists || {}), 'kycItems'])]
-  // updateConfig is a shallow top-level merge, so the whole customerClasses
-  // object goes with every write — that also keeps it one audit entry.
-  const patchClass = (cls, patch) => store.updateConfig({
-    customerClasses: { ...classes, [cls]: { ...classes[cls], ...patch } },
-  })
-
   const thresholds = config.approvalThresholds || {}
   const aiTh = { ...seedConfig.aiThresholds, ...(config.aiThresholds || {}) }
   const kycValidation = kycValidationConfig(config)
-  const amber = config.amberFee || {}
   const filteredStateRegions = (config.stateRegions || []).filter(item => {
     const query = regionSearch.trim().toLowerCase()
     if (!query) return true
@@ -550,6 +419,8 @@ export default function Admin() {
         <div className="admin-setting-groups">
         <section id="admin-subpanel-access" className="admin-setting-group" role="tabpanel" aria-labelledby="admin-subtab-access" hidden={workflowView !== 'access'}>
           <div className="admin-setting-grid admin-access-layout">
+          <AccessRulesEditor store={store} canEdit={isAdminRole(store.roles || role)} />
+          <BusinessRulesEditor store={store} canEdit={canEdit} />
           <section className="admin-access-controls-panel" aria-labelledby="admin-access-controls-title">
             <header className="admin-access-controls-head">
               <div>
@@ -605,7 +476,7 @@ export default function Admin() {
                 <span className={`admin-owner-badge owner-${String(r.owner || '').toLowerCase()}`}>{r.owner}</span>
                 <select aria-label={`Owner for ${r.region || 'region'}`} value={r.owner} disabled={!canEdit}
                   onChange={e => patchList('ownershipRules', i, { owner: e.target.value })}>
-                  {OWNERS.map(o => <option key={o}>{o}</option>)}
+                  {OWNERS.map(o => <option key={o} value={o}>{labelFor('owner', o)}</option>)}
                 </select>
               </label>
             </div>
@@ -766,59 +637,51 @@ export default function Admin() {
           </label>
         </div>
 
+        {/* 7 — Price-list & rate registries */}
+        <div className="admin-card admin-card--list">
+          <h3><Icon name="tag" size={14} /> Price-list &amp; rate registries</h3>
+          {(uploads.priceLists || []).map((p, i) => (
+            <div key={i} className="arow">
+              <span>{p.supplier} — {p.name}<br /><span className="hint">{p.version} · uploaded {p.uploaded}</span></span>
+              <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {p.dummy && <Chip tone="state-Review">DUMMY — replace with actual</Chip>}
+                <Chip tone={p.status === 'Expired' ? 'state-Rejected' : 'state-Accepted'}>{p.status || 'Current'}</Chip>
+              </span>
+            </div>
+          ))}
+          <ServiceRateSheetEditor canEdit={canEditPricing} />
+        </div>
+
           </div>
         </section>
 
         <section id="admin-subpanel-customer" className="admin-setting-group" role="tabpanel" aria-labelledby="admin-subtab-customer" hidden={workflowView !== 'customer'}>
           <header className="admin-setting-group-head">
-            <div><h4 id="admin-group-customer-title">Customer governance</h4><p>Verification, lead controls, and customer-facing registries.</p></div>
+            <div><h4 id="admin-group-customer-title">Customer governance</h4></div>
           </header>
           <div className="admin-setting-grid">
 
-        {/* 5 — Customer-class rules & Amber fee */}
-        <div className="admin-card admin-card--featured">
-          <h3><Icon name="flag" size={14} /> Customer-class rules &amp; Amber fee</h3>
-          <p className="hint">What each class must verify, who signs it off and where it gates. Open a class to edit it.</p>
-          {CLASS_ORDER.map(cls => (
-            <ClassRuleRow key={cls} cls={cls} rule={classes[cls]} canEdit={canEdit}
-              open={openClass === cls} onToggle={() => setOpenClass(openClass === cls ? '' : cls)}
-              checklistNames={checklistNames}
-              onPatch={patch => patchClass(cls, patch)}
-              onPatchVerification={patch => patchClass(cls, { verification: { ...classes[cls]?.verification, ...patch } })}
-              onPatchGate={patch => patchClass(cls, { gate: { ...classes[cls]?.gate, ...patch } })} />
-          ))}
-          <NumField label="Amber pre-quote processing fee (INR)" value={amber.amount} disabled={!canEdit}
-            onChange={v => store.updateConfig({ amberFee: { ...amber, amount: v } })} />
-          <p className="hint">Fee is adjustable against the order value once the PO lands. The Amber timer is on the Amber row above.</p>
-        </div>
+        <WorkbookGovernanceEditor store={store} canEdit={canEdit} />
 
-        {/* 6 — KYC checklist */}
-        <div className="admin-card admin-card--list">
-          <h3><Icon name="clipboardCheck" size={14} /> KYC checklist</h3>
-          {(config.kycItems || []).map((k, i) => (
-            <div key={k + i} className="arow">
-              <span>{k}</span>
-              {canEdit && (
-                <button title="Remove item"
-                  onClick={() => store.updateConfig({ kycItems: config.kycItems.filter((_, j) => j !== i) })}>
-                  <Icon name="x" size={10} />
-                </button>
-              )}
-            </div>
-          ))}
-          {canEdit && (
-            <div className="admin-actions">
-              <input type="text" value={newKyc} placeholder="New checklist item"
-                onChange={e => setNewKyc(e.target.value)} />
-              <button onClick={() => {
-                const v = newKyc.trim()
-                if (v && !config.kycItems.includes(v)) store.updateConfig({ kycItems: [...config.kycItems, v] })
-                setNewKyc('')
-              }}><Icon name="plus" size={11} /> Add</button>
-            </div>
-          )}
-        </div>
 
+          </div>
+        </section>
+
+        </div>
+        </div>
+        </div>
+        </section>
+
+        <section id="admin-panel-fields" className={`admin-panel ${adminView === 'fields' ? 'is-active' : ''}`} role="tabpanel" aria-labelledby="admin-tab-fields" hidden={adminView !== 'fields'}>
+          <WorkbookGovernanceEditor store={store} canEdit={canEdit} view="fields" />
+        </section>
+
+        <section id="admin-panel-documents" className={`admin-panel ${adminView === 'documents' ? 'is-active' : ''}`}
+          role="tabpanel" aria-labelledby="admin-tab-documents" hidden={adminView !== 'documents'}>
+        <div className="admin-section-heading">
+          <div><h3>Documents &amp; templates</h3><p>Keep working files and proposal outputs current for the team.</p></div>
+        </div>
+        <div className="admin-wide-grid">
         <div className="admin-card admin-card--list">
           <h3><Icon name="shield" size={14} /> KYC number validation</h3>
           <p className="hint">Choose which GST, PAN, and CIN numbers are checked during KYC. The pattern uses a regular expression.</p>
@@ -848,35 +711,7 @@ export default function Admin() {
           <p className="hint">Changing these settings affects new KYC checks; previously verified documents remain recorded.</p>
         </div>
 
-        {/* 7 — Price-list & rate registries */}
-        <div className="admin-card admin-card--list">
-          <h3><Icon name="tag" size={14} /> Price-list &amp; rate registries</h3>
-          {(uploads.priceLists || []).map((p, i) => (
-            <div key={i} className="arow">
-              <span>{p.supplier} — {p.name}<br /><span className="hint">{p.version} · uploaded {p.uploaded}</span></span>
-              <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                {p.dummy && <Chip tone="state-Review">DUMMY — replace with actual</Chip>}
-                <Chip tone={p.status === 'Expired' ? 'state-Rejected' : 'state-Accepted'}>{p.status || 'Current'}</Chip>
-              </span>
-            </div>
-          ))}
-          <ServiceRateSheetEditor canEdit={canEditPricing} />
-        </div>
 
-          </div>
-        </section>
-
-        </div>
-        </div>
-        </div>
-        </section>
-
-        <section id="admin-panel-documents" className={`admin-panel ${adminView === 'documents' ? 'is-active' : ''}`}
-          role="tabpanel" aria-labelledby="admin-tab-documents" hidden={adminView !== 'documents'}>
-        <div className="admin-section-heading">
-          <div><h3>Documents &amp; templates</h3><p>Keep working files and proposal outputs current for the team.</p></div>
-        </div>
-        <div className="admin-wide-grid">
 
         {/* 8 — Document uploads */}
         <div className="admin-card admin-card-wide admin-documents-card">

@@ -1,13 +1,13 @@
 .users-page .sheet-wrap { overflow-x: auto; }
-.users-page table.users-table { table-layout: fixed; min-width: 1100px; width: 100%; }
-.users-table .users-col-name { width: 13%; }
-.users-table .users-col-email { width: 20%; }
-.users-table .users-col-role { width: 13%; }
-.users-table .users-col-status { width: 9%; }
-.users-table .users-col-auth { width: 9%; }
-.users-table .users-col-created { width: 8%; }
-.users-table .users-col-edit { width: 11%; }
-.users-table .users-col-actions { width: 17%; }
+.users-page table.users-table { table-layout: fixed; min-width: 1050px; width: 100%; }
+.users-table .users-col-name { width: 18%; }
+.users-table .users-col-email { width: 22%; }
+.users-table .users-col-role { width: 20%; }
+.users-table .users-col-status { width: 110px; }
+.users-table .users-col-auth { width: 120px; }
+.users-table .users-col-created { width: 105px; }
+.users-table .users-col-edit { width: 140px; }
+.users-table .users-col-actions { width: 150px; }
 .users-page table.users-table :is(td, th) { white-space: normal; overflow-wrap: anywhere; vertical-align: middle; line-height: 1.5; }
 .users-page .users-table :is(input, select) { display: block; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box; height: auto; min-height: 36px; }
 .users-page .user-name-display { flex-wrap: wrap; align-items: baseline; }
@@ -23,3 +23,36 @@
 .users-page .user-row-editor-actions .err-text { white-space: normal; overflow-wrap: anywhere; }
 .users-page .users-create-heading { flex-wrap: wrap; }
 .users-page .users-provision-summary { flex-wrap: wrap; overflow-wrap: anywhere; }
+
+.users-summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0; }
+.users-summary button { padding: 10px 16px; }
+.users-summary strong { margin-right: 6px; font-size: 20px; }
+.users-summary button[aria-pressed="true"] { border-color: var(--color-primary); }
+.users-filters { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+.users-filters label { display: grid; gap: 5px; font-size: 12px; color: var(--text-secondary); }
+.users-filters label:first-child { flex: 1; min-width: 220px; }
+.users-filters :is(input, select) { min-height: 40px; width: 100%; }
+.users-owner { display: block; margin-top: 4px; color: var(--text-secondary); font-size: 11px; }
+.users-page table.users-table :is(th, td) { padding: 12px 14px; }
+.users-page table.users-table th { height: 44px; padding-block: 10px; }
+.users-page table.users-table .users-actions-heading { white-space: nowrap; }
+.users-action-menu summary { cursor: pointer; padding: 8px 12px; border: 1px solid var(--border-default); border-radius: 6px; width: max-content; min-width: 94px; white-space: nowrap; overflow-wrap: normal; list-style: none; }
+.users-action-menu > div { display: grid; gap: 2px; padding: 6px 0; }
+.users-action-menu button { text-align: left; margin: 0; min-height: 36px; }
+.users-action-menu .users-delete { color: var(--color-danger, #c62828); }
+.users-page { container-type: inline-size; }
+@container (max-width: 700px) {
+  .users-page table.users-table, .users-page .users-table tbody { display: block; min-width: 0; width: 100%; }
+  .users-page .users-table :is(thead,colgroup) { display: none; }
+  .users-page .users-table tr { display: grid; grid-template-columns: 1fr 1fr; padding: 12px; margin-bottom: 12px; border: 1px solid var(--border-default); border-radius: 8px; }
+  .users-page .users-table td { display: block; padding: 6px; border: 0; }
+  .users-page .users-table td:first-child, .users-page .users-table td:nth-child(2), .users-page .users-table td:last-child { grid-column: 1 / -1; }
+  .users-page .users-table .users-edit-cell:not(.is-editing) { display: none; }
+  .users-page .users-table .users-edit-cell.is-editing { grid-column: 1 / -1; }
+  .users-page .users-table td:nth-child(3)::before { content: 'Access role / Owner'; }
+  .users-page .users-table td:nth-child(4)::before { content: 'Status'; }
+  .users-page .users-table td:nth-child(5)::before { content: 'Login status'; }
+  .users-page .users-table td:nth-child(6)::before { content: 'Created'; }
+  .users-page .users-table td::before { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 3px; }
+  .users-filters label { flex: 1; min-width: 130px; }
+}

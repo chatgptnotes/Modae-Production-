@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { displayOpportunityId } from './seed.js'
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import OppPanel from './opppanel.jsx'
@@ -11,14 +12,24 @@ const DrawerCtx = createContext(null)
 
 export function DrawerProvider({ children }) {
   const [sel, setSel] = useState(null) // null | { type: 'opp'|'customer', id }
-  const api = { sel, open: setSel, close: () => setSel(null) }
+  const leaveGuard = useRef(null)
+  const registerBeforeLeave = useCallback(guard => {
+    leaveGuard.current = guard
+    return () => { if (leaveGuard.current === guard) leaveGuard.current = null }
+  }, [])
+  const changeSelection = next => {
+    if (next?.id === sel?.id && next?.type === sel?.type) return
+    if (leaveGuard.current && !leaveGuard.current()) return
+    setSel(next)
+  }
+  const api = { sel, open: changeSelection, close: () => changeSelection(null), registerBeforeLeave }
   return <DrawerCtx.Provider value={api}>{children}</DrawerCtx.Provider>
 }
 
 export const useDrawer = () => useContext(DrawerCtx)
 
 export function DrawerHost() {
-  const { sel, open, close } = useDrawer()
+  const { sel, open, close, registerBeforeLeave } = useDrawer()
   const loc = useLocation()
 
   // Navigating away (e.g. opening the workbook from inside the panel) closes
@@ -41,18 +52,18 @@ export function DrawerHost() {
     <>
       <div className={`drawer-backdrop ${sel ? 'open' : ''}`} onClick={close} />
       <div className={`drawer ${sel ? 'open' : ''}`} role={sel ? 'dialog' : undefined}
-        aria-modal={sel ? 'true' : undefined} aria-label={sel ? (sel.type === 'opp' ? `${sel.id} details` : `${sel.id} customer details`) : undefined}
+        aria-modal={sel ? 'true' : undefined} aria-label={sel ? (sel.type === 'opp' ? `${displayOpportunityId(sel.id)} details` : `${sel.id} customer details`) : undefined}
         aria-hidden={!sel}>
         {shown && (
           <>
             <PhoneOverlayHeader />
             <div className="drawer-head">
-              <span>{shown.type === 'opp' ? `${shown.id} — details` : shown.id}</span>
+              <span>{shown.type === 'opp' ? `${displayOpportunityId(shown.id)} — details` : shown.id}</span>
               <button className="drawer-x" style={{ marginLeft: 'auto' }} type="button"
                 onClick={close} title="Close (Esc)" aria-label="Close details">✕</button>
             </div>
             {shown.type === 'opp'
-              ? <OppPanel oppId={shown.id} />
+              ? <OppPanel oppId={shown.id} registerBeforeLeave={registerBeforeLeave} />
               : <CustomerPanel name={shown.id} openDrawer={open} />}
           </>
         )}
@@ -96,7 +107,7 @@ function CustomerPanel({ name, openDrawer }) {
             <tbody>
               {opps.map(o => (
                 <tr key={o.id} className="rowclick" onClick={() => openDrawer({ type: 'opp', id: o.id })}>
-                  <td className="oppid">{o.id}</td>
+                  <td className="oppid">{displayOpportunityId(o.id)}</td>
                   <td title={o.oppName}>{o.oppName.length > 42 ? o.oppName.slice(0, 42) + '…' : o.oppName}</td>
                   <td>{o.status === 'Closed' ? o.stage : `Open — ${o.stage}`}</td>
                 </tr>

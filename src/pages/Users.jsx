@@ -1,4 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import { isLocalDemoSession } from '../authMode.js'
+import { isActiveUser, isDeletedUser, matchesAccount, accountChangeError } from '../userManagement.js'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { ROLES, DEMO_PASSWORD, LEVEL3_ROLES, LEVEL3_ROLE_IDS } from '../seed.js'
@@ -9,6 +11,7 @@ import { Icon } from '../icons.jsx'
 import { ConfirmModal } from '../ui.jsx'
 import { supabase } from '../supabase.js'
 import { usePagedRows } from '../ui/Pagination.jsx'
+import { useViewportPageSize } from '../ui/useViewportPageSize.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -36,6 +39,21 @@ async function adminUserRequest(body) {
 export default function Users() {
   const store = useStore()
   const nav = useNavigate()
+  const shared = Boolean(supabase) && !isLocalDemoSession(store)
+  const [openActionId, setOpenActionId] = useState(null)
+  const [query, setQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('All')
+  const [roleFilter, setRoleFilter] = useState('All')
+  const [deleting, setDeleting] = useState(null)
+  const [actionError, setActionError] = useState('')
+  const [actionBusy, setActionBusy] = useState(false)
+  const [actionNotice, setActionNotice] = useState('')
+  const roster = store.users.filter(user => !isDeletedUser(user))
+  const actor = store.users.find(user => matchesAccount(user, store.auth?.user))
+  const filteredUsers = roster.filter(user =>
+    `${user.name} ${user.email}`.toLowerCase().includes(query.trim().toLowerCase()) &&
+    (statusFilter === 'All' || user.status === statusFilter) &&
+    (roleFilter === 'All' || applicationRoleFor(user) === roleFilter))
   const canManage = isAdminRole(store.roles || store.role)
   const [editingUserId, setEditingUserId] = useState(null)
   const [userDraft, setUserDraft] = useState(null)
@@ -59,13 +77,17 @@ export default function Users() {
   const [provisionBusy, setProvisionBusy] = useState(false)
   const [provisionConfirm, setProvisionConfirm] = useState(false)
   const [provisionSummary, setProvisionSummary] = useState(null)
-  const pending = store.users.filter(u => u.status === 'Pending')
-  const { pagedRows: pagePending, pagination: pendingPagination } = usePagedRows(pending, store.users.length)
-  const { pagedRows: pageUsers, pagination: usersPagination } = usePagedRows(store.users, store.users.length)
+  const pending = roster.filter(u => u.status === 'Pending')
+  const pendingRegionRef = useRef(null)
+  const accountsRegionRef = useRef(null)
+  const pendingFit = useViewportPageSize(pending.length, { enabled: canManage && usersView === 'accounts' && pending.length > 0, rootRef: pendingRegionRef })
+  const accountsFit = useViewportPageSize(filteredUsers.length, { enabled: canManage && usersView === 'accounts' && !openActionId && !editingUserId && !resettingUserId, rootRef: accountsRegionRef })
+  const { pagedRows: pagePending, pagination: pendingPagination } = usePagedRows(pending, store.users.length, pendingFit.pageSize, pendingFit.pagerRef)
+  const { pagedRows: pageUsers, pagination: usersPagination } = usePagedRows(filteredUsers, `${query}:${statusFilter}:${roleFilter}`, accountsFit.pageSize, accountsFit.pagerRef)
 
   useEffect(() => {
     let active = true
-    if (!supabase || !canManage) return () => { active = false }
+    if (!shared || !canManage) return () => { active = false }
     adminUserRequest({ action: 'status' })
       .then(result => {
         if (!active) return
@@ -75,7 +97,7 @@ export default function Users() {
         if (active) setAuthStatus({ error: error?.message || 'Could not check Supabase Auth accounts.' })
       })
     return () => { active = false }
-  }, [canManage, store.users.length])
+  }, [canManage, shared, store.users])
 
   // Route-level gate: the account roster (names, emails, roles) is restricted
   // directory data — non-admins get a restricted block, not a read-only view.
@@ -93,7 +115,7 @@ export default function Users() {
   const startUserEdit = user => {
     if (!canManage || userBusy) return
     setEditingUserId(user.id)
-    setUserDraft({ name: user.name || '', email: user.email || '', applicationRole: applicationRoleFor(user), status: user.status })
+    setUserDraft({ name: user.name || '', email: user.email || '', applicationRole: applicationRoleFor(user), status: user.pendingAccountPatch?.status || user.status })
     setUserErr('')
   }
 
@@ -133,16 +155,17 @@ export default function Users() {
     }
     setUserBusy(true)
     try {
-      const remote = supabase && authStatus[user.id]?.authStatus === 'Created'
-      ? await adminUserRequest({ action: 'update', authId: authStatus[user.id].authId, email: user.email, nextEmail: email, name, role, roles })
-        : null
-      store.updateUser(user.id, { name, email, role, roles, status, ...(remote?.user?.id ? { authId: remote.user.id } : {}) })
-      if (remote?.user?.id) setAuthStatus(s => ({ ...s, [user.id]: { ...(s[user.id] || {}), authId: remote.user.id, email, authStatus: 'Created' } }))
+      if (shared) {
+        const remote = await adminUserRequest({ action: 'update', profileId: user.id, expectedRevision: user.accountRevision || 0,
+          nextEmail: email, name, applicationRole: userDraft.applicationRole, status })
+        store.acceptUserRoster(remote.users)
+      } else store.updateUser(user.id, { name, email, role, roles, status })
       setEditingUserId(null)
       setUserDraft(null)
       setUserErr('')
     } catch (error) {
       setUserErr(error?.message || 'Could not update the account.')
+      if (shared) await store.refreshSharedData()
     } finally {
       setUserBusy(false)
     }
@@ -188,16 +211,17 @@ export default function Users() {
 
     setCreateBusy(true)
     try {
-      const remote = supabase
-        ? await adminUserRequest({ action: 'create', name, email, password, ...assignment })
+      const remote = shared
+        ? await adminUserRequest({ action: 'create', name, email, password, applicationRole: createDraft.applicationRole })
         : null
-      store.addUser({
+      if (remote) store.acceptUserRoster(remote.users)
+      else store.addUser({
         id: nextUserId(store.users),
         ...(remote?.user?.id ? { authId: remote.user.id } : {}),
         name, email, ...assignment, status: 'Active', created: today(),
         // Supabase owns the password in cloud mode. Local demo mode retains
         // the existing browser-only credential model.
-        ...(supabase ? { pw: '' } : { pw: password }),
+        pw: password,
       })
       setCredentialNotice({ email, password, action: 'created' })
       closeCreate()
@@ -227,9 +251,9 @@ export default function Users() {
     if (password !== String(resetDraft.confirmPassword || '')) return setResetErr('Passwords do not match.')
     setResetBusy(true)
     try {
-      if (supabase) {
-        const result = await adminUserRequest({ action: 'reset', authId: user.authId, email: user.email, password })
-        if (result?.user?.id && result.user.id !== user.authId) store.updateUser(user.id, { authId: result.user.id })
+      if (shared) {
+        const result = await adminUserRequest({ action: 'reset', profileId: user.id, email: user.email, password })
+        if (!result.ok) throw new Error('Password reset failed.')
       } else {
         store.updateUser(user.id, { pw: password })
       }
@@ -240,6 +264,32 @@ export default function Users() {
     } finally {
       setResetBusy(false)
     }
+  }
+
+  const changeAccess = async (user, status) => {
+    setActionBusy(true); setActionError(''); setActionNotice('')
+    try {
+      if (shared) {
+        const result = await adminUserRequest({ action: 'access', profileId: user.id, expectedRevision: user.accountRevision || 0, status })
+        store.acceptUserRoster(result.users)
+      } else store.updateUser(user.id, { status })
+      setActionNotice(`${user.name}: ${status}`)
+    } catch (error) { setActionError(error.message); if (shared) await store.refreshSharedData() }
+    finally { setActionBusy(false) }
+  }
+  const deleteAccount = async user => {
+    setActionBusy(true); setActionError(''); setActionNotice('')
+    try {
+      if (shared) {
+        const result = await adminUserRequest({ action: 'delete', profileId: user.id, expectedRevision: user.accountRevision || 0 })
+        store.acceptUserRoster(result.users)
+      } else store.removeUserAccount(user.id)
+      setActionNotice(`${user.name} was deleted. Business records and history were preserved.`)
+      setDeleting(null); setRejecting(null)
+    } catch (error) {
+      setActionError(error.message); setDeleting(null); setRejecting(null)
+      if (shared) await store.refreshSharedData()
+    } finally { setActionBusy(false) }
   }
 
   const resetRoleNames = () => {
@@ -273,9 +323,9 @@ export default function Users() {
     <div className="page users-page">
       <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="shield" size={18} /> User management</h2>
       <div className="toolbar">
-        <span className="hint">Admins manage accounts, assign roles and approve registrations. {supabase ? 'Accounts are provisioned through Supabase Auth.' : 'Demo accounts are stored only in this browser.'}</span>
+        <span className="hint">Admins manage accounts, assign roles and approve registrations. {shared ? 'Shared workspace — account access is managed on the server.' : 'Local demo — changes affect only this browser.'}</span>
         <span className="spacer" />
-        {supabase && <button type="button" onClick={() => setProvisionConfirm(true)} disabled={provisionBusy}>{provisionBusy ? 'Provisioning…' : 'Provision missing accounts'}</button>}
+        {shared && <button type="button" onClick={() => setProvisionConfirm(true)} disabled={provisionBusy}>{provisionBusy ? 'Provisioning…' : 'Provision missing accounts'}</button>}
         <button type="button" className="primary" onClick={() => { setCreateOpen(true); setCreateErr('') }}>Create account</button>
       </div>
 
@@ -329,17 +379,17 @@ export default function Users() {
         </div>
       )}
       {canManage && pending.length > 0 && (
-        <>
+        <div ref={pendingRegionRef}>
           <div className="section-title">Awaiting approval ({pending.length})</div>
           <div className="sheet-wrap sheet-wrap-fill" style={{ marginBottom: 14 }}>
             <table className="sheet">
-              <tbody>
+              <tbody ref={pendingFit.listRef}>
                 {pagePending.map(u => (
                   <tr key={u.id}>
                     <td><b>{u.name}</b></td><td>{u.email}</td>
                     <td>Requested <b>{LEVEL3_ROLES[applicationRoleFor(u)].name}</b></td>
                     <td>
-                      <button className="primary" onClick={() => store.updateUser(u.id, { status: 'Active' })}>Approve</button>{' '}
+                      <button className="primary" disabled={actionBusy} onClick={() => changeAccess(u, 'Active')}>Approve</button>{' '}
                       <button onClick={() => setRejecting(u)}>Reject</button>
                     </td>
                   </tr>
@@ -348,20 +398,32 @@ export default function Users() {
             </table>
           </div>
           {pendingPagination}
-        </>
+        </div>
       )}
-      <div className="section-title">Accounts ({store.users.length})</div>
+      <div className="users-summary" aria-label="Account totals">{['Active', 'Pending', 'Suspended'].map(status => <button key={status} onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status}><strong>{roster.filter(u => u.status === status).length}</strong> {status}</button>)}</div>
+      <div className="users-filters">
+        <label>Search accounts<input type="search" placeholder="Name or email" value={query} onChange={e => setQuery(e.target.value)} /></label>
+        <label>Status<select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>{['All', 'Active', 'Pending', 'Suspended'].map(status => <option key={status}>{status}</option>)}</select></label>
+        <label>Access role<select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}><option value="All">All roles</option>{LEVEL3_ROLE_IDS.map(role => <option key={role} value={role}>{LEVEL3_ROLES[role].name}</option>)}</select></label>
+        <button onClick={() => { setQuery(''); setStatusFilter('All'); setRoleFilter('All') }}>Clear filters</button>
+      </div>
+      {actionError && <div role="alert" className="err-text">{actionError}</div>}
+      {actionNotice && <p role="status">{actionNotice}</p>}
+      {!filteredUsers.length && <p>No accounts match these filters.</p>}
+      <div ref={accountsRegionRef}>
+      <div className="section-title">Accounts ({filteredUsers.length} of {roster.length})</div>
       <div className="sheet-wrap sheet-wrap-fill">
         <table className="sheet users-table">
           <colgroup>
             <col className="users-col-name" /><col className="users-col-email" /><col className="users-col-role" />
             <col className="users-col-status" /><col className="users-col-auth" /><col className="users-col-created" />
-            <col className="users-col-edit" /><col className="users-col-actions" />
+            {canManage && editingUserId && <col className="users-col-edit" />}
+            {canManage && <col className="users-col-actions" />}
           </colgroup>
           <thead>
-            <tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Supabase Auth</th><th>Created</th>{canManage && <><th>Edit</th><th>Actions</th></>}</tr>
+            <tr><th>Name</th><th>Email</th><th>Access role / Owner</th><th>Status</th><th>Login status</th><th>Created</th>{canManage && <>{editingUserId && <th className="users-edit-heading">Edit</th>}<th className="users-actions-heading">Actions</th></>}</tr>
           </thead>
-          <tbody>
+          <tbody ref={accountsFit.listRef}>
             {pageUsers.map(u => (
               <React.Fragment key={u.id}>
               <tr className={editingUserId === u.id ? 'users-row-editing' : undefined}
@@ -381,11 +443,12 @@ export default function Users() {
                         autoFocus
                         aria-label={`Name for ${u.name}`}
                       />
-                      {u.role === store.role && <span className="pill you"> You</span>}
+                      {matchesAccount(u, store.auth?.user) && <span className="pill you"> You</span>}
                     </td>
                     <td><input className="user-field-input" type="email" disabled={userBusy} value={userDraft.email} onChange={e => { setUserDraft(d => ({ ...d, email: e.target.value })); setUserErr('') }} aria-label={`Email for ${u.name}`} /></td>
                     <td>
                       <select value={userDraft.applicationRole} disabled={u.role === 'SUPER' || userBusy} onChange={e => { setUserDraft(d => ({ ...d, applicationRole: e.target.value })); setUserErr('') }} aria-label={`Role for ${u.name}`}>
+                        {!LEVEL3_ROLE_IDS.includes(userDraft.applicationRole) && <option value={userDraft.applicationRole} disabled>Legacy role — choose Standard or Management User</option>}
                         {LEVEL3_ROLE_IDS.map(r => <option key={r} value={r}>{LEVEL3_ROLES[r].name}</option>)}
                       </select>
                     </td>
@@ -395,14 +458,14 @@ export default function Users() {
                   </>
                 ) : (
                   <>
-                    <td><div className="user-name-display"><b>{u.name}</b>{u.role === store.role && <span className="pill you"> You</span>}</div></td>
+                    <td><div className="user-name-display"><b>{u.name}</b>{matchesAccount(u, store.auth?.user) && <span className="pill you"> You</span>}</div></td>
                     <td>{u.email || 'No email assigned'}</td>
-                    <td>{LEVEL3_ROLES[applicationRoleFor(u)].name}</td>
-                    <td><span className={`pill status-${u.status}`}>{u.status}</span></td>
+                    <td>{LEVEL3_ROLES[applicationRoleFor(u)].name}<small className="users-owner">Owner: {store.config?.roleNames?.[u.role] || ROLES[u.role]?.name || u.role} ({u.role})</small></td>
+                    <td><span className={`pill status-${u.status}`}>{u.deletionPendingAt ? 'Deletion pending' : u.accessPending ? 'Update pending' : u.status}</span></td>
                   </>
                 )}
                 <td>
-                  {!supabase
+                  {!shared
                     ? <span className="users-auth-status neutral">Local demo</span>
                     : authStatus.error
                       ? <span className="users-auth-status warning" title={authStatus.error}>Unavailable</span>
@@ -411,8 +474,8 @@ export default function Users() {
                         : <span className={`users-auth-status ${authStatus[u.id].authStatus === 'Created' ? 'ok' : 'warning'}`}>{authStatus[u.id].authStatus}</span>}
                 </td>
                 <td>{ddMmmYY(u.created)}</td>
-                {canManage && (
-                  <td className="users-edit-cell">
+                {canManage && editingUserId && (
+                  <td className={`users-edit-cell${editingUserId === u.id ? ' is-editing' : ''}`}>
                     {editingUserId === u.id ? (
                       <div className="user-row-editor-actions">
                         <button type="button" className="primary" disabled={userBusy} onClick={() => saveUser(u)} aria-label={`Save details for ${u.name}`}>{userBusy ? 'Saving…' : 'Save'}</button>
@@ -425,17 +488,28 @@ export default function Users() {
                 )}
                 {canManage && (
                   <td className="users-account-actions">
-                    {u.status === 'Active' &&
-                      <><button disabled={editingUserId !== null} onClick={() => { store.signInAs(u.id); nav('/opportunities') }}>Sign in as</button>{' '}<button disabled={editingUserId !== null} onClick={() => startPasswordReset(u)}>Reset password</button></>}
+                    <details className="users-action-menu" onToggle={e => { const open = e.currentTarget.open; setOpenActionId(current => open ? u.id : current === u.id ? null : current) }} onKeyDown={e => { if (e.key === 'Escape') { e.currentTarget.open = false; e.currentTarget.querySelector('summary').focus() } }}>
+                      <summary aria-label={`Actions for ${u.name}`}>Actions ▾</summary>
+                      <div>
+                        <button disabled={actionBusy || editingUserId !== null || Boolean(u.deletionPendingAt)} onClick={() => startUserEdit(u)}>Edit</button>
+                        <button disabled={actionBusy || Boolean(u.deletionPendingAt)} onClick={() => startPasswordReset(u)}>Reset password</button>
+                        {!shared && isActiveUser(u) && <button disabled={actionBusy} onClick={() => { store.signInAs(u.id); nav('/opportunities') }}>Preview as user</button>}
+                        <button disabled={actionBusy || Boolean(accountChangeError(store.users, actor, u, { status: u.status === 'Active' ? 'Suspended' : 'Active' }))}
+                          title={accountChangeError(store.users, actor, u, { status: u.status === 'Active' ? 'Suspended' : 'Active' })}
+                          onClick={() => changeAccess(u, u.status === 'Active' ? 'Suspended' : 'Active')}>{u.status === 'Active' ? 'Suspend' : 'Reactivate'}</button>
+                        <button className="users-delete" disabled={actionBusy || Boolean(accountChangeError(store.users, actor, u, {}, true))}
+                          title={accountChangeError(store.users, actor, u, {}, true)} onClick={() => setDeleting(u)}>{u.deletionPendingAt ? 'Retry delete' : 'Delete'}</button>
+                      </div>
+                    </details>
                   </td>
                 )}
               </tr>
               {editingUserId === u.id && userErr && (
-                <tr className="users-edit-error"><td colSpan={8}><div className="err-text" role="alert">{userErr}</div></td></tr>
+                <tr className="users-edit-error"><td colSpan={canManage ? (editingUserId ? 8 : 7) : 6}><div className="err-text" role="alert">{userErr}</div></td></tr>
               )}
               {resettingUserId === u.id && (
                 <tr key={`${u.id}-reset`} className="users-reset-row">
-                  <td colSpan={8}>
+                  <td colSpan={canManage ? (editingUserId ? 8 : 7) : 6}>
                     <div className="users-reset-panel">
                       <strong>Reset password for {u.name}</strong>
                       <input type="password" autoFocus autoComplete="new-password" value={resetDraft.password} onChange={e => setResetDraft(d => ({ ...d, password: e.target.value }))} placeholder="New password" aria-label={`New password for ${u.name}`} />
@@ -453,12 +527,13 @@ export default function Users() {
         </table>
       </div>
       {usersPagination}
+      </div>
       </section>
 
       <section id="users-panel-role-names" className="users-tab-panel" role="tabpanel"
         aria-labelledby="users-tab-role-names" hidden={usersView !== 'roleNames'}>
       <form className="users-role-names-panel" onSubmit={saveRoleNames}>
-        <div className="section-title">Owner names</div>
+        <div className="section-title">Owner names</div><p className="hint">Owner identities label business records. Access roles control permissions; changing an owner name does not change access.</p>
         <p className="hint">Change owner display names used elsewhere in the workspace. Account roles are managed in the Accounts tab.</p>
         <div className="users-role-name-list">
           {Object.entries(ROLES).map(([id, roleDef]) => (
@@ -479,12 +554,16 @@ export default function Users() {
       </form>
       </section>
 
+      {deleting && <ConfirmModal title="Delete user" tone="danger"
+        message={`Delete ${deleting.name} (${deleting.email})? Their login will be removed. Opportunities, documents, approvals, bookings and audit history will be preserved. This cannot be undone.`}
+        confirmLabel={actionBusy ? 'Deleting…' : 'Delete user'} onClose={() => { if (!actionBusy) setDeleting(null) }}
+        onConfirm={() => { if (!actionBusy) deleteAccount(deleting) }} />}
       {rejecting && <ConfirmModal title="Reject registration" tone="danger"
         message={`Reject and remove the registration for ${rejecting.email}?`}
         confirmLabel="Reject registration" onClose={() => setRejecting(null)}
-        onConfirm={() => { store.deleteUser(rejecting.id); setRejecting(null) }} />}
+        onConfirm={() => { if (!actionBusy) deleteAccount(rejecting) }} />}
       {provisionConfirm && <ConfirmModal title="Provision all missing accounts?"
-        message="This will create Supabase Auth accounts for all 11 visible profiles, including Customer contact, using the shared password Demo@1234. Change these passwords before production use."
+        message="This will create Supabase Auth logins for eligible active profiles, using the shared password Demo@1234. Change these passwords before production use."
         confirmLabel="Provision accounts" onClose={() => setProvisionConfirm(false)} onConfirm={provisionAllAccounts} />}
     </div>
   )

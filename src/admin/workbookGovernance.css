@@ -1,0 +1,78 @@
+.workbook-governance { display: grid; gap: 20px; grid-column: 1 / -1; min-width: 0; }
+.workbook-governance .admin-card { width: 100%; min-width: 0; }
+.workbook-governance label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; min-width: 0; }
+.workbook-governance input:not([type=checkbox]), .workbook-governance select, .workbook-governance textarea { width: 100%; min-width: 0; }
+.workbook-governance label:has(input[type=checkbox]) { flex-direction: row; align-items: center; }
+.workbook-four-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.workbook-save-bar { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; margin: 18px 0 8px; }
+.workbook-save-bar label { flex: 1 1 210px; }
+.workbook-choice-list { margin: 16px 0; display: grid; gap: 9px; }
+.workbook-choice-row { display: flex; align-items: center; gap: 10px; }
+.workbook-choice-row code { width: 120px; flex-shrink: 0; overflow-wrap: anywhere; font-size: 12px; }
+.workbook-choice-row input:not([type=checkbox]) { flex: 1; }
+.workbook-choice-row select { flex: 1; }
+.workbook-choice-row button { flex-shrink: 0; }
+@media(max-width: 900px) { .workbook-four-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media(max-width: 600px) { .workbook-four-grid { grid-template-columns: 1fr; } .workbook-choice-row { flex-wrap: wrap; border-bottom: 1px solid var(--border-default); padding-bottom: 12px; } .workbook-choice-row code { width: 100%; } .workbook-choice-row input:not([type=checkbox]), .workbook-choice-row select { flex-basis: 60%; } .workbook-governance input, .workbook-governance select, .workbook-governance textarea { font-size: 16px; } }
+
+/* The matrix owns its cell surfaces; generic shell table/control styles must
+   not turn its coloured headers grey or its cells into rounded form fields. */
+.admin-page .customer-matrix { gap: 0; }
+.admin-page .customer-matrix-scroll {
+  max-height: min(70dvh, 780px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--border-default);
+  border-radius: 8px 8px 0 0;
+  background: var(--surface-default);
+  color: var(--text-primary);
+  scrollbar-width: thin;
+}
+.admin-page .customer-matrix .customer-matrix-table { width: 100%; min-width: 1060px; border-collapse: separate; border-spacing: 0; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.admin-page .customer-matrix .customer-matrix-table caption { padding: 14px 16px; text-align: left; font-size: 15px; font-weight: 600; color: var(--text-primary); background: var(--surface-default); }
+.admin-page .matrix-criteria-column { width: 26%; }
+.admin-page .matrix-rule-column { width: 14%; }
+.admin-page .matrix-remarks-column { width: 18%; }
+.admin-page .customer-matrix .customer-matrix-table :is(th, td) { border: 0; border-right: 1px solid var(--border-subtle); border-bottom: 1px solid var(--border-subtle); padding: 0; vertical-align: middle; }
+.admin-page .customer-matrix .customer-matrix-table tr > :last-child { border-right: 0; }
+.admin-page .customer-matrix .customer-matrix-table thead th { position: sticky; top: 0; z-index: 2; padding: 12px; border-top: 1px solid var(--border-default); border-bottom: 1px solid var(--border-default); background: var(--surface-sunken); color: var(--text-secondary); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; text-align: center; }
+.admin-page .customer-matrix .customer-matrix-table thead .matrix-blue { background: #D9EEF9; color: #155D86; box-shadow: inset 0 3px #3898CF; }
+.admin-page .customer-matrix .customer-matrix-table thead .matrix-red { background: #FBE2DF; color: #9B2922; box-shadow: inset 0 3px #DF5549; }
+.admin-page .customer-matrix .customer-matrix-table thead .matrix-amber { background: #FFF0C5; color: #805B08; box-shadow: inset 0 3px #E5B134; }
+.admin-page .customer-matrix .customer-matrix-table thead .matrix-green { background: #E2F0D9; color: #35642E; box-shadow: inset 0 3px #73A45A; }
+.admin-page .customer-matrix .customer-matrix-table tbody :is(th, td) { background: var(--surface-default); color: var(--text-primary); transition: background-color .12s ease; }
+.admin-page .customer-matrix .customer-matrix-table tbody tr:hover > :is(th, td) { background: var(--surface-sunken); }
+.admin-page .customer-matrix .customer-matrix-table tr > :first-child { position: sticky; left: 0; z-index: 1; border-right: 1px solid var(--border-default); }
+.admin-page .customer-matrix .customer-matrix-table thead th:first-child { z-index: 3; text-align: left; }
+.admin-page .customer-matrix .customer-matrix-table thead th:last-child { text-align: left; }
+.admin-page .customer-matrix .customer-matrix-table :is(input:not([type=checkbox]), textarea) { display: block; width: 100%; min-width: 0; min-height: 40px; margin: 0; padding: 10px 12px; border: 0; border-radius: 0; background: transparent; color: inherit; box-shadow: none; font-family: inherit; font-size: 13px; font-weight: 400; line-height: 20px; letter-spacing: 0; text-align: center; }
+.admin-page .customer-matrix .customer-matrix-table th input:not([type=checkbox]), .admin-page .customer-matrix .customer-matrix-table td:last-child input { text-align: left; }
+.admin-page .customer-matrix .customer-matrix-table :is(input, textarea):focus { background: var(--surface-default); outline: 2px solid var(--focus-ring); outline-offset: -2px; box-shadow: none; }
+.admin-page .customer-matrix .customer-matrix-table :is(input, textarea):disabled { opacity: 1; background: transparent; cursor: default; }
+.admin-page .matrix-cell { position: relative; }
+.admin-page .matrix-cell.has-definition-help input { padding-right: 27px; }
+.admin-page .matrix-definition-help { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 15px; height: 15px; border: 1px solid var(--status-warning); border-radius: 50%; color: var(--status-warning); font-size: 10px; font-weight: 700; cursor: help; }
+.admin-page .matrix-definition-help:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 3px; }
+.admin-page .matrix-definition-tooltip { display: none; position: absolute; right: 0; top: 23px; width: 240px; padding: 10px 12px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface-raised); color: var(--text-primary); font-size: 12px; font-weight: 400; line-height: 1.5; text-align: left; box-shadow: 0 4px 14px var(--shadow-color); }
+.admin-page .matrix-cell:has(.matrix-definition-help:is(:hover, :focus)) { z-index: 4; }
+.admin-page .matrix-definition-help:is(:hover, :focus) .matrix-definition-tooltip { display: block; }
+.admin-page .customer-matrix .customer-matrix-table .matrix-actions-row > :is(th, td) { border-top: 1px solid var(--border-default); background: var(--surface-sunken); }
+.admin-page .matrix-actions-row input { font-weight: 500; }
+.admin-page .customer-matrix .customer-matrix-table .matrix-accounts-row > :is(th, td) { vertical-align: top; }
+.admin-page .customer-matrix .customer-matrix-table textarea { overflow: hidden; resize: none; text-align: left; color: var(--text-secondary); white-space: pre-wrap; }
+.admin-page .customer-matrix .matrix-save-bar { position: sticky; bottom: 0; z-index: 5; display: flex; align-items: end; gap: 10px; margin: 0; padding: 12px 16px; border: 1px solid var(--border-default); border-top: 0; border-radius: 0 0 8px 8px; background: var(--surface-default); }
+.admin-page .matrix-save-bar label { flex: 1 1 320px; max-width: 560px; gap: 5px; font-size: 11px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0; text-transform: none; }
+.admin-page .matrix-save-bar label input { min-height: 38px; padding: 8px 10px; border: 1px solid var(--border-default); border-radius: 5px; background: var(--surface-default); font-size: 13px; color: var(--text-primary); }
+.admin-page .matrix-save-bar button { min-height: 38px; padding: 8px 16px; white-space: nowrap; }
+.admin-page .matrix-save-bar button.primary { margin-left: auto; }
+@media(max-width: 600px) {
+  .admin-page .customer-matrix-scroll { max-height: 64dvh; }
+  .admin-page .customer-matrix .customer-matrix-table { min-width: 1020px; }
+  .admin-page .matrix-criteria-column { width: 22%; }
+  .admin-page .matrix-rule-column { width: 15%; }
+  .admin-page .customer-matrix .customer-matrix-table :is(input:not([type=checkbox]), textarea) { font-size: 16px; }
+  .admin-page .customer-matrix .matrix-save-bar { flex-wrap: wrap; padding: 12px; }
+  .admin-page .matrix-save-bar label { flex-basis: 100%; max-width: none; }
+  .admin-page .matrix-save-bar label input { font-size: 16px; }
+  .admin-page .matrix-save-bar button.primary { margin-left: 0; }
+}

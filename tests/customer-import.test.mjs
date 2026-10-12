@@ -32,15 +32,15 @@ test('header mapping tolerates the wordings a client sheet actually uses', () =>
   assert.equal(fieldForHeader('Opportunity Value'), null, 'unknown columns are ignored, not guessed')
 })
 
-test('the class normalises to the four customer statuses, defaulting Green', () => {
+test('the class normalises to the four customer statuses, defaulting Blue pending verification', () => {
   assert.equal(normalizeStatus('GREEN'), 'Green')
   assert.equal(normalizeStatus('green customer'), 'Green')
   assert.equal(normalizeStatus('Yellow'), 'Amber')
   assert.equal(normalizeStatus('red'), 'Red')
   assert.equal(normalizeStatus('New'), 'Blue')
   // Existing verified accounts are the whole point of the import.
-  assert.equal(normalizeStatus(''), 'Green')
-  assert.equal(normalizeStatus('whatever'), 'Green')
+  assert.equal(normalizeStatus(''), 'Blue')
+  assert.equal(normalizeStatus('whatever'), 'Blue')
 })
 
 test('a row without a recognisable name is dropped, not invented', () => {
@@ -55,12 +55,12 @@ test('an uploaded workbook round-trips into master records', () => {
     { 'Customer Name': 'No Class Co' },
   ]))
   assert.deepEqual(rows[0], {
-    name: 'Adani Power Ltd', category: 'EUC', status: 'Green', kyc: 'Valid',
+    name: 'Adani Power Ltd', category: 'EUC', status: 'Green', kyc: 'Pending',
     payment: 'Avg 45 days', location: 'Ahmedabad',
   })
   assert.equal(rows[1].status, 'Red')
   assert.equal(rows[1].kyc, 'Pending', 'a non-Green import still needs verification')
-  assert.equal(rows[2].status, 'Green')
+  assert.equal(rows[2].status, 'Blue')
   assert.equal(rows[2].payment, '—')
 })
 

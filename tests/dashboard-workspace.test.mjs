@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { dashboardModel, dashboardPeriod, dashboardTiming, paginationNumbers, dateInPeriod, registerRows, reconcileWinLossReasons } from '../src/pages/myDashboard/model.js'
+import { dashboardModel, dashboardPeriod, dashboardTiming, paginationNumbers, dateInPeriod, registerRows } from '../src/pages/myDashboard/model.js'
 import { dashboardDefaultScope } from '../src/utils.js'
 
 const now = new Date('2026-10-04T12:00:00Z')
@@ -48,7 +48,7 @@ const workspace = (extra = {}) => ({ role: 'LJS', opportunities: [opportunity('A
   approvals: [approval('AP-A', 'A'), approval('AP-B', 'B', { approver: 'AH' })],
   proposals: {}, customers: [], clarifications: [], config: {},
   sales: { fy: 'FY 2026–27', targets: { RS: { annual: 400, q: [100, 100, 100, 100] }, PP: { annual: 200, q: [50, 50, 50, 50] } },
-    orders: [{ id: 'OR-A', owner: 'RS', valueK: 120, booked: '2026-08-01' }, { id: 'OR-B', owner: 'PP', valueK: 80, booked: '2026-10-01' }] },
+    orders: [{ id: 'OR-A', po: 'PO-A', owner: 'RS', valueK: 120, booked: '2026-08-01' }, { id: 'OR-B', po: 'PO-B', owner: 'PP', valueK: 80, booked: '2026-10-01' }] },
   ...extra })
 
 test('global KPIs, approvals, funnel and register share company or selected-owner scope', () => {
@@ -77,7 +77,7 @@ test('reference dashboard exposes top opportunities and probability segments fro
     opportunity('medium', 'LJS', { valueK: 250, prob: 'Medium', orderDate: '2026-10-10' }),
   ] })
   const model = dashboardModel(store, { now })
-  assert.deepEqual(model.topOpportunities.map(row => row.id), ['high', 'medium', 'low'])
+  assert.deepEqual(model.topOpportunities.map(row => row.id), ['medium', 'low', 'high'])
   assert.deepEqual(model.funnel.find(row => row.key === 'rfq').segments, [
     { key: 'high', count: 1, valueK: 400 },
     { key: 'medium', count: 1, valueK: 250 },
@@ -94,39 +94,27 @@ test('dashboard headline totals cover the full pipeline while the preview shows 
   assert.equal(model.topOpportunities.length, 5)
   assert.equal(model.headlineOpenCount, 6)
   assert.equal(model.headlinePipelineK, 2100)
-  assert.equal(model.topOpportunities.reduce((sum, row) => sum + row.valueK, 0), 2000)
+  assert.equal(model.topOpportunities.reduce((sum, row) => sum + row.valueK, 0), 1500)
 })
 
-test('Q3 opportunity widgets use Expected Order Date rather than creation date', () => {
+test('Top 5 uses expected order date while the pipeline retains all active records', () => {
   const store = workspace({ opportunities: [
     opportunity('q3-order', 'RS', { createDate: '2026-06-01', orderDate: '2026-10-01' }),
     opportunity('q2-order', 'RS', { createDate: '2026-10-01', orderDate: '2026-09-30' }),
     opportunity('q4-order', 'RS', { createDate: '2026-10-01', orderDate: '2027-01-01' }),
   ] })
-  const model = dashboardModel(store, { owner: 'RS', period: 'q3', now })
-  assert.deepEqual(model.pipeline.map(row => row.id), ['q3-order'])
+  const model = dashboardModel(store, { owner: 'RS', period: 'q3', topPeriod: 'q3', now })
+  assert.deepEqual(model.pipeline.map(row => row.id), ['q3-order', 'q2-order', 'q4-order'])
   assert.deepEqual(model.topOpportunities.map(row => row.id), ['q3-order'])
 })
 
 test('YTD and QTD targets reconcile from the canonical quarterly target plan', () => {
   const store = workspace({
     opportunities: [],
-    sales: { fy: 'FY 2026–27', currentQ: 3, monthsElapsed: 7, targets: { RS: { annual: 6000, q: [1500, 1500, 1500, 1500] } }, orders: [] },
+    sales: { fy: 'FY 2026–27', currentQ: 3, monthsElapsed: 7, targets: { RS: { annual: 6000, q: [1500, 1500, 1500, 1500], confirmedFy: 'FY 2026–27' } }, orders: [] },
   })
-  assert.equal(dashboardModel(store, { owner: 'RS', period: 'fy', now }).perf.annual, 4500)
+  assert.equal(dashboardModel(store, { owner: 'RS', period: 'fy', now }).perf.annual, 6000)
   assert.equal(dashboardModel(store, { owner: 'RS', period: 'q3', now }).perf.annual, 1500)
-})
-
-test('reason breakdown aggregates overflow so its won and lost totals match the summary', () => {
-  const reasons = reconcileWinLossReasons([
-    { reason: 'Price', won: 5, lost: 1 }, { reason: 'Technical', won: 4, lost: 2 },
-    { reason: 'Budget', won: 3, lost: 3 }, { reason: 'Timing', won: 2, lost: 4 },
-    { reason: 'Other one', won: 1, lost: 5 }, { reason: 'Other two', won: 1, lost: 1 },
-  ])
-  assert.equal(reasons.length, 5)
-  assert.deepEqual(reasons.at(-1), { reason: 'Other', won: 2, lost: 6 })
-  assert.equal(reasons.reduce((sum, row) => sum + row.won, 0), 16)
-  assert.equal(reasons.reduce((sum, row) => sum + row.lost, 0), 16)
 })
 
 test('dashboard route includes the complete reference report without the legacy opportunity register', () => {
@@ -141,17 +129,17 @@ test('dashboard route includes the complete reference report without the legacy 
 test('reference report uses shared header controls and renders the tapered funnel', () => {
   const source = fs.readFileSync(path.join(root, 'src/pages/myDashboard/WorkspaceDashboard.jsx'), 'utf8')
   assert.doesNotMatch(source, /className="reference-toolbar"/)
-  assert.match(source, /reference-funnel-totals/)
-  assert.match(source, /reference-funnel-row/)
+  assert.match(source, /<NormalFunnel view=\{view\} rows=\{model.funnel\}/)
   assert.match(source, /reference-analysis-button/)
   assert.match(source, /useWorkspaceView\(\)/)
 })
 
 test('reference dashboard renders separate funnel count and value totals and uses active period labels', () => {
   const source = fs.readFileSync(path.join(root, 'src/pages/myDashboard/WorkspaceDashboard.jsx'), 'utf8')
-  assert.match(source, /Total Count/)
-  assert.match(source, /Total Value/)
-  assert.match(source, /model\.periodLabel/)
+  const funnel = fs.readFileSync(path.join(root, 'src/pages/myDashboard/FunnelView.jsx'), 'utf8')
+  assert.match(funnel, /normal-funnel-count/)
+  assert.match(funnel, /showMoney && <strong className="normal-funnel-value"/)
+  assert.match(source, /model\.topOpportunitiesEmptyMessage/)
   assert.match(source, /headlineOpenCount/)
 })
 
@@ -209,8 +197,8 @@ test('period and owner filters scope bookings and targets consistently', () => {
   assert.deepEqual(q2.perf.quarterTarget, [0, 150, 0, 0])
   assert.equal(q2.team.find(row => row.owner === 'RS').annual, 100)
   const q3 = dashboardModel(store, { period: 'q3', now })
-  assert.equal(q3.open.length, 0)
-  assert.equal(q3.pending.length, 0)
+  assert.equal(q3.open.length, 3)
+  assert.equal(q3.pending.length, 2)
   assert.equal(q3.perf.achieved, 80)
 })
 
@@ -264,6 +252,6 @@ test('dashboard completion uses the reference performance, action queue, funnel,
   assert.match(source, /function ActionQueue/)
   assert.match(source, /function Funnel/)
   assert.match(source, /function WinLoss/)
-  assert.match(source, /reference-funnel-totals/)
+  assert.match(source, /<NormalFunnel view=\{view\}/)
   assert.doesNotMatch(source, /PipelineStageFlow|Opportunity register|priority-chip|target-marker/)
 })

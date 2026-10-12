@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { displayOpportunityId } from '../seed.js'
@@ -7,8 +7,11 @@ import { Chip, WarnBox } from '../ui.jsx'
 import { Icon } from '../icons.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { usePagedRows } from '../ui/Pagination.jsx'
+import { useViewportPageSize } from '../ui/useViewportPageSize.js'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
 import './purchaseOrders.css'
+import { bookingRegister, businessDate, historicalWin } from '../orderBookings.js'
+import BookingReview from '../BookingReview.jsx'
 
 // Customer purchase orders: proposal-vs-PO validation queue plus the booked
 // order book. Sales owners see their own opportunities; approvers/admins see
@@ -18,7 +21,7 @@ const PO_TONE = { 'In review': 'state-Review', Accepted: 'state-Accepted', Rejec
 const ORDER_TONE = { Delivered: 'state-Accepted', Invoiced: 'state-Accepted' }
 
 function OrderStat({ label, value, detail }) {
-  return <div className="proposal-sent-stat">
+  return <div className="purchase-order-stat">
     <strong className="proposal-sent-stat-value">{value}</strong>
     <span className="proposal-sent-stat-label">{label}</span>
     <span className="proposal-sent-stat-detail">{detail}</span>
@@ -40,20 +43,16 @@ export default function PurchaseOrders() {
     const o = store.opportunities.find(x => x.id === pc.oppId)
     return !!o && o.owner === role
   })
-  // Closed opportunities are the source of truth for the order book. Keep the
-  // legacy sales.orders rows as a compatibility fallback for older workspaces.
-  const closedOpportunities = (store.opportunities || [])
-    .filter(o => o.status === 'Closed' && (scope === 'global' ? (approver || o.owner === role) : o.owner === role))
-    .map(o => ({
-      id: o.id, owner: o.owner, customer: o.sellTo, title: o.oppName,
-      valueK: o.valueK, po: o.stage === 'Won' ? 'Recorded on opportunity' : 'Closed opportunity',
-      status: o.stage, booked: o.orderDate || o.lastUpdated || o.createDate,
-    }))
-  const legacyOrders = (store.sales?.orders || []).filter(o =>
-    (scope === 'global' ? (approver || o.owner === role) : o.owner === role) && !closedOpportunities.some(closed => closed.id === o.id))
-  const orders = [...closedOpportunities, ...legacyOrders]
-  const { pagedRows: pageValidating, pagination: validatingPagination } = usePagedRows(validating, JSON.stringify([scope, role]))
-  const { pagedRows: pageOrders, pagination: ordersPagination } = usePagedRows(orders, JSON.stringify([scope, role]))
+  const register = bookingRegister(store, { owner: scope === 'global' && approver ? null : role })
+  const today = businessDate()
+  const year = Number(String(store.sales?.fy || '').match(/20\d{2}/)?.[0]) || (Number(today.slice(5, 7)) >= 4 ? Number(today.slice(0, 4)) : Number(today.slice(0, 4)) - 1)
+  const orders = register.orders.filter(o => o.booked >= `${year}-04-01` && o.booked < `${year + 1}-04-01`)
+  const validationRef = useRef(null)
+  const ordersRef = useRef(null)
+  const validationFit = useViewportPageSize(validating.length, { enabled: !phone && validating.length > 0, rootRef: validationRef })
+  const ordersFit = useViewportPageSize(orders.length, { enabled: !phone, rootRef: ordersRef })
+  const { pagedRows: pageValidating, pagination: validatingPagination } = usePagedRows(validating, JSON.stringify([scope, role]), phone ? 10 : validationFit.pageSize, validationFit.pagerRef)
+  const { pagedRows: pageOrders, pagination: ordersPagination } = usePagedRows(orders, JSON.stringify([scope, role]), phone ? 10 : ordersFit.pageSize, ordersFit.pagerRef)
   const totalK = orders.reduce((s, o) => s + (+o.valueK || 0), 0)
 
   const needsMe = (role === 'LJS' || role === 'AH')
@@ -80,9 +79,28 @@ export default function PurchaseOrders() {
       <div className="proposal-sent-stats purchase-orders-stats" aria-label="Purchase order summary">
         <OrderStat label={`Orders booked ${store.sales?.fy || ''}`} value={orders.length} detail="Booked orders visible to you" />
         <OrderStat label="Total booked value (₹)" value={comm ? fmtLakh(totalK) : '—'}
-          detail={comm ? 'Sum of booked order values' : 'Restricted — commercial data'} />
+          detail={comm ? 'Confirmed bookings in the configured FY' : 'Restricted — commercial data'} />
         <OrderStat label="POs in validation" value={validating.length} detail="Proposal-vs-PO comparisons in progress" />
       </div>
+
+      {!register.complete && <div className="purchase-orders-alert" role="status">
+        <Icon name="clipboardCheck" size={18} />
+        <div><strong>Booking verification needed</strong><p>{register.pending.length} opportunities await verification{register.invalid.length > 0 ? ` · ${register.invalid.length} existing booking records need correction` : ''}. Totals include verified bookings only.</p></div>
+      </div>}
+      {register.pending.length > 0 && <section className="proposal-sent-register purchase-orders-verification" aria-labelledby="booking-verification-title">
+        <div className="proposal-sent-section-head">
+          <div><h3 id="booking-verification-title">Awaiting booking verification</h3><p className="hint">Verify the customer commitment before it counts as a booked order.</p></div>
+          <span className="proposal-sent-count">{register.pending.length} pending</span>
+        </div>
+        {register.pending.map(opp => <details className="purchase-order-review" key={opp.id}>
+          <summary>
+            <span className="purchase-order-chevron" aria-hidden="true">›</span>
+            <span className="purchase-order-customer"><strong>{opp.sellTo || opp.oppName || 'Customer not recorded'}</strong><span>{displayOpportunityId(opp.id)}{opp.sellTo && opp.oppName && opp.sellTo !== opp.oppName ? ` · ${opp.oppName}` : ''}</span></span>
+            <span className="purchase-order-pending">Pending verification</span>
+          </summary>
+          <div className="purchase-order-review-body">{historicalWin(opp) ? <BookingReview store={store} opp={opp} /> : <button type="button" onClick={() => nav(`/opp/${opp.id}/po`)}>Review customer PO and joint acceptance</button>}</div>
+        </details>)}
+      </section>}
 
       {needsMe.length > 0 && (
         <WarnBox>
@@ -90,13 +108,13 @@ export default function PurchaseOrders() {
         </WarnBox>
       )}
 
-      <section className="proposal-sent-register" aria-labelledby="order-validation-title">
+      <section className="proposal-sent-register" ref={validationRef} aria-labelledby="order-validation-title">
         <div className="proposal-sent-section-head">
           <div><h3 id="order-validation-title">PO validation in progress</h3><p className="hint">Review customer PO deviations and complete joint acceptance.</p></div>
           <span className="proposal-sent-count">{validating.length} in validation</span>
         </div>
         {validating.length === 0 && (
-          <div className="hint purchase-orders-note">No purchase orders are in validation right now. Simulate PO receipt from an opportunity workbench.</div>
+          <div className="hint purchase-orders-note">No purchase orders currently need validation.</div>
         )}
         {validating.length > 0 && (
           <>
@@ -108,7 +126,7 @@ export default function PurchaseOrders() {
                   <th>Open issues</th><th>Status</th><th>Received</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody ref={validationFit.listRef}>
                 {pageValidating.map(pc => {
                   const o = store.opportunities.find(x => x.id === pc.oppId)
                   const blocking = pc.lines.filter(l => l.state === 'Blocking deviation' && !l.resolved).length
@@ -116,7 +134,7 @@ export default function PurchaseOrders() {
                   return (
                     <tr key={pc.oppId} style={{ cursor: 'pointer' }} onClick={() => nav(`/opp/${pc.oppId}/po`)}>
                       <td><b>{pc.poNo}</b></td>
-                      <td><span className="oppid-link">{pc.oppId}</span> <span className="hint">{o?.oppName?.slice(0, 40)}</span></td>
+                      <td><span className="oppid-link">{displayOpportunityId(pc.oppId)}</span> <span className="hint">{o?.oppName?.slice(0, 40)}</span></td>
                       <td>{o?.sellTo || '—'}</td>
                       <td>{displayRole(o?.owner) || '—'}</td>
                       <td>
@@ -139,12 +157,12 @@ export default function PurchaseOrders() {
         )}
       </section>
 
-      <section className="proposal-sent-register" aria-labelledby="booked-orders-title">
+      <section className="proposal-sent-register" ref={ordersRef} aria-labelledby="booked-orders-title">
         <div className="proposal-sent-section-head">
-          <div><h3 id="booked-orders-title">Booked orders</h3><p className="hint">Customer purchase orders and closed opportunities visible in your current scope.</p></div>
+          <div><h3 id="booked-orders-title">Booked orders</h3><p className="hint">Confirmed customer commitments in {store.sales?.fy || 'the current FY'}; Lost, No Bid and other closed outcomes are excluded.</p></div>
           <span className="proposal-sent-count">{orders.length} orders</span>
         </div>
-        {phone ? <section aria-label="Booked orders">{pageOrders.map(o => <button className="phone-record" key={o.id} onClick={() => nav(`/opp/${o.id}/po`)}><strong>{o.customer}</strong><span>{o.title}</span><small>{displayOpportunityId(o.id)} · {o.status} · {ddMmmYY(o.booked)}{comm ? ` · ${fmtLakh(o.valueK)}` : ''}</small></button>)}{!orders.length && <p>No purchase orders booked yet.</p>}</section> : <div className="sheet-wrap">
+        {orders.length === 0 ? <div className="hint purchase-orders-note">No confirmed bookings in this financial year. Verified orders will appear here.</div> : phone ? <section aria-label="Booked orders">{pageOrders.map(o => <button className="phone-record" key={o.id} onClick={() => o.oppId && nav(`/opp/${o.oppId}/po`)}><strong>{o.customer}</strong><span>{o.title}</span><small>{displayOpportunityId(o.oppId || o.id)} · {o.status} · {ddMmmYY(o.booked)}{comm ? ` · ${fmtLakh(o.valueK)}` : ''}</small></button>)}</section> : <div className="sheet-wrap">
           <table className="sheet proposal-sent-table">
             <thead>
               <tr>
@@ -152,10 +170,10 @@ export default function PurchaseOrders() {
                 <th>Value (₹)</th><th>Customer PO</th><th>Status</th><th>Booked</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody ref={ordersFit.listRef}>
               {pageOrders.map(o => (
                 <tr key={o.id}>
-                  <td><b>{displayOpportunityId(o.id)}</b></td>
+                  <td><b>{displayOpportunityId(o.oppId || o.id)}</b></td>
                   {approver && <td>{displayRole(o.owner)}</td>}
                   <td>{o.customer}</td>
                   <td>{o.title}</td>
@@ -165,9 +183,7 @@ export default function PurchaseOrders() {
                   <td>{ddMmmYY(o.booked)}</td>
                 </tr>
               ))}
-              {orders.length === 0 && (
-                <tr><td colSpan={approver ? 9 : 8}><span className="hint">No purchase orders booked yet.</span></td></tr>
-              )}
+
             </tbody>
           </table>
         </div>

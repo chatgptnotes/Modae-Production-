@@ -1,7 +1,10 @@
+import { fieldValues } from '../workbookGovernance.js'
+import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useStore, reserveOppId } from '../store.jsx'
-import { CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, displayOpportunityId } from '../seed.js'
+import { CATEGORIES, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, displayOpportunityId } from '../seed.js'
+
 import { extractPdfText, parseTender, matchParts, buildProposal, buildOpportunityDraft } from '../tenderParse.js'
 import { uploadOppFile } from '../filestore.js'
 import { sameCustomer } from '../utils.js'
@@ -31,7 +34,7 @@ const ANSWERS = {
   contactPerson: 'Contact person', contactPhone: 'Contact phone',
 }
 
-function mergeAi(p, ai) {
+function mergeAi(p, ai, config) {
   p.aiFilled = []
   p.risks = []
   p.aiNotes = []
@@ -53,7 +56,7 @@ function mergeAi(p, ai) {
   // The review screen renders these as <select>s, so a value outside the app's
   // own lists would silently show as blank. The lists are the authority, not
   // the prompt — anything off-list keeps the deterministic guess.
-  const ALLOWED = { segment: SEGMENTS, oppType: OPP_TYPES, bu: BUS, category: CATEGORIES, product: PRODUCTS }
+  const ALLOWED = Object.fromEntries(['segment', 'oppType', 'bu', 'category', 'product'].map(key => [key, fieldValues(config, key)]))
   for (const [k, v] of Object.entries(ai.guesses || {})) {
     if (blank(v)) continue
     const list = ALLOWED[k]
@@ -66,6 +69,8 @@ function mergeAi(p, ai) {
 }
 
 export default function TenderIntake({ fixedTarget = null, destinationPicker = null }) {
+  const { PRODUCTS, CATEGORIES, OWNERS, OPP_TYPES, BUS, SEGMENTS, labelFor } = useFieldLists()
+
   const store = useStore()
   const nav = useNavigate()
   const phone = usePhoneLayout() && store.viewMode === 'tablet'
@@ -130,7 +135,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
         aiAttachments: await aiAttachmentPayload([f]),
       }, { timeoutMs: 90000, fallback: store.config?.aiModel?.provider === 'Built-in fallback' })
       if (!ai) setWarn('AI extraction was unavailable. The local parser results are shown; review every field before confirming.')
-      mergeAi(p, ai)
+      mergeAi(p, ai, store.config)
       await minDelay
       clearInterval(timer)
       setParse(p)
@@ -172,6 +177,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
   const fmtSize = b => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`)
 
   const confirm = async () => {
+    if (store.canPerform?.(target === 'new' ? 'opportunities.create' : 'opportunities.edit') === false || store.canPerform?.('proposals.price') === false) return
     // Replacing a non-empty BoQ on an existing opportunity needs a second,
     // armed click (no blocking confirm() dialogs, same as folder deletes).
     if (attachHasBoq && !replaceArmed) { setReplaceArmed(true); return }
@@ -185,7 +191,8 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
         config: store.config,
         fallback: draft.owner || store.role || 'LJS',
       })
-      id = await reserveOppId(store.opportunities, owner, store.config?.roleNames)
+      try { id = await reserveOppId(store.opportunities, owner, store.config?.roleNames, store.config?.opportunityNumbering) }
+      catch (error) { window.alert(error.message); return }
       const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
       const sellTo = draft.sellTo.trim()
       // Tenders spell the buyer out in full ("MAHARASHTRA STATE POWER GENERATION
@@ -372,23 +379,23 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
                 <div><label>Sell To Customer *</label>
                   <input className={draft.sellTo ? '' : 'needs-input'} value={draft.sellTo} onChange={setD('sellTo')} /></div>
                 <div><label>Category</label>
-                  <select value={draft.category} onChange={setD('category')}>{CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></div>
+                  <select value={draft.category} onChange={setD('category')}>{CATEGORIES.map(c => <option key={c} value={c}>{labelFor('category', c)}</option>)}</select></div>
                 <div><label>Location</label><input value={draft.location} onChange={setD('location')} /></div>
                 <div><label>EUC Name</label><input value={draft.eucName} onChange={setD('eucName')} /></div>
                 <div><label>EUC Location</label><input value={draft.eucLocation} onChange={setD('eucLocation')} /></div>
                 <div><label>Owner * <span className="hint">(sets the opportunity ID)</span></label>
                   <select className={draft.owner ? '' : 'needs-input'} value={draft.owner} onChange={setD('owner')}>
                     <option value="">— select —</option>
-                    {OWNERS.map(o => <option key={o}>{o}</option>)}
+                    {OWNERS.map(o => <option key={o} value={o}>{labelFor('owner', o)}</option>)}
                   </select></div>
                 <div style={{ gridColumn: '1 / -1' }}><label>Opportunity Name/Description *</label>
                   <input className={draft.oppName ? '' : 'needs-input'} value={draft.oppName} onChange={setD('oppName')} /></div>
                 <div><label>Opp Type</label>
-                  <select value={draft.oppType} onChange={setD('oppType')}>{OPP_TYPES.map(c => <option key={c}>{c}</option>)}</select></div>
+                  <select value={draft.oppType} onChange={setD('oppType')}>{OPP_TYPES.map(c => <option key={c} value={c}>{labelFor('oppType', c)}</option>)}</select></div>
                 <div><label>BU</label>
-                  <select value={draft.bu} onChange={setD('bu')}>{BUS.map(c => <option key={c}>{c}</option>)}</select></div>
+                  <select value={draft.bu} onChange={setD('bu')}>{BUS.map(c => <option key={c} value={c}>{labelFor('bu', c)}</option>)}</select></div>
                 <div><label>Segment</label>
-                  <select value={draft.segment} onChange={setD('segment')}>{SEGMENTS.map(c => <option key={c}>{c}</option>)}</select></div>
+                  <select value={draft.segment} onChange={setD('segment')}>{SEGMENTS.map(c => <option key={c} value={c}>{labelFor('segment', c)}</option>)}</select></div>
                 <div><label>Equipment / Product Family</label>
                   <select value={draft.product} onChange={setD('product')}>{PRODUCTS.map(c => <option key={c} value={c}>{c === 'Various' ? 'Multiple equipment items' : c}</option>)}</select></div>
                 <div><label>Contact Person</label><input value={draft.contactPerson} onChange={setD('contactPerson')} /></div>
@@ -476,7 +483,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
             <button onClick={() => { setStep('upload'); setError(null); setReplaceArmed(false) }}>◂ Start over</button>
             <span className="spacer" />
             {!requiredOk && <span className="hint">Fill the required (amber) fields and include at least one line item.</span>}
-            <button className="primary" disabled={!requiredOk} onClick={confirm}>
+            <button className="primary" disabled={!requiredOk || store.canPerform?.(target === 'new' ? 'opportunities.create' : 'opportunities.edit') === false || store.canPerform?.('proposals.price') === false} onClick={confirm}>
               {attachHasBoq && replaceArmed ? 'Replace existing BoQ & continue' : 'Confirm & Generate Proposal ▸'}
             </button>
           </div>

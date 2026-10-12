@@ -1,3 +1,4 @@
+import { isActiveUser, isAccountAdmin, matchesAccount } from '../src/userManagement.js'
 import { randomUUID } from 'node:crypto'
 import { getAdminSupabaseClient } from './_supabase-client.js'
 
@@ -30,8 +31,8 @@ async function currentPurgeAdmin(client, token) {
     .maybeSingle()
   if (error) throw error
   const profiles = Array.isArray(data?.data) ? data.data : []
-  const profile = profiles.find(user => String(user.email || '').toLowerCase() === authData.user.email.toLowerCase())
-  return profile && PURGE_ROLES.has(profile.role) ? profile : null
+  const profile = profiles.find(user => matchesAccount(user, authData.user))
+  return isActiveUser(profile) && isAccountAdmin(profile) ? profile : null
 }
 
 export default async function handler(req, res) {

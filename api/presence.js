@@ -1,3 +1,4 @@
+import { isActiveUser, isAccountAdmin, matchesAccount } from '../src/userManagement.js'
 import { getAdminSupabaseClient } from './_supabase-client.js'
 
 const ADMIN_ROLES = new Set(['SUPER', 'ADMIN', 'LJS'])
@@ -20,8 +21,8 @@ async function currentProfile(client, token) {
     .maybeSingle()
   if (error) throw error
   const profile = (Array.isArray(data?.data) ? data.data : [])
-    .find(user => String(user.email || '').toLowerCase() === authData.user.email.toLowerCase())
-  return profile ? { auth: authData.user, isAdmin: ADMIN_ROLES.has(profile.role) } : null
+    .find(user => matchesAccount(user, authData.user))
+  return isActiveUser(profile) ? { auth: authData.user, isAdmin: isAccountAdmin(profile) } : null
 }
 
 async function onlineUserCount(client) {

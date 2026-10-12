@@ -15,7 +15,7 @@ import usePhoneDialogViewport from '../tablet/usePhoneDialogViewport.js'
 // not drift; this component owns only navigation between them.
 export default function Opportunities() {
   const store = useStore()
-  const [params, setParams] = useSearchParams()
+  const [params] = useSearchParams()
   const requested = params.get('tab')
   const requestedView = params.get('view')
   const canCreate = canSeePage(store.role, 'new')
@@ -28,9 +28,9 @@ export default function Opportunities() {
   ]
   const [createOpen, setCreateOpen] = useState(requested === 'create')
   usePhoneDialogViewport('.opportunity-create-modal', createOpen)
-  const stageStrip = (
+  const stageStrip = ({ filters, onStage }) => (
     <section className="opportunity-stage-strip" aria-label="Pipeline stages">
-      {insightModel.funnel.map(stage => <button type="button" key={stage.key} onClick={() => setParams({ stage: stage.stages.join(',') })}>
+      {insightModel.funnel.map(stage => <button type="button" key={stage.key} aria-pressed={filters.stage?.size === stage.stages.length && stage.stages.every(value => filters.stage.has(value)) && filters.status?.size === 1 && filters.status.has(stage.key === 'won' ? 'Closed' : 'Open')} onClick={() => onStage(stage.stages, stage.key === 'won' ? 'Closed' : 'Open')}>
         <span>{stage.label}</span><b>{stage.count}</b>{canSeePage(store.role, 'analytics') && <small>{stage.valueK ? `₹${(stage.valueK / 100).toFixed(1)} L` : '—'}</small>}
       </button>)}
     </section>

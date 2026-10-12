@@ -1,8 +1,10 @@
 # Local Supabase workbook data
 
-The localhost application loads the Betser workbook into browser storage on
-first launch. To run the workbook data in a database-backed local Supabase
-environment instead, use the local Supabase CLI and Docker:
+The application does not load a hardcoded customer workbook on startup.
+Admins can use Opportunities → More → Upload Excel to review and merge records
+into the active workspace. Database-backed imports require migration 019 and
+commit atomically after review. To explicitly populate local Supabase, use
+the local Supabase CLI and Docker:
 
 ```bash
 npm run local:supabase -- "/Users/ruby/Downloads/Modae production/Betser Sales Pipeline Usage.xlsx"
@@ -25,14 +27,17 @@ npm run local:supabase -- "/Users/ruby/Downloads/Modae production/Betser Sales P
 ```
 
 The bootstrap command applies the active migrations, reads the workbook at
-runtime, imports 9 open and 33 old-closed opportunities, derives customer
-records, and creates the five application profiles. It writes only ignored
+runtime, imports all 73 opportunities (9 open and 64 closed across both sheets),
+derives 64 customers, and creates application profiles only when none exist.
+The Customers sheet supplies classification guidance, not customer records.
+It writes only ignored
 files under `.local/`:
 
 - `.local/local-excel-seed.sql`
 - `.local/local-supabase.env`
 
-Run the command again to reset/reseed the local database. It never connects to
+Running it again merges missing records while preserving edits and opportunity
+tombstones. It never connects to
 the production Supabase project unless the local CLI configuration is changed
 manually.
 

@@ -1,3 +1,4 @@
+import { supabaseAuth } from '../supabase.js'
 import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
 import { useParams, Link } from 'react-router-dom'
@@ -19,7 +20,7 @@ import { downloadProposalXlsx } from '../proposal/excelExport.js'
 import WorkbookPreview from '../proposal/WorkbookPreview.jsx'
 import { generateProposalWorkbook } from '../proposal/templateExcelExport.js'
 import { parseProposalWorkbook as parseRenderedWorkbook } from '../proposal/workbook.js'
-import { isWorkflowAvailable, routeForType } from '../seed.js'
+import { displayOpportunityId, isWorkflowAvailable, routeForType } from '../seed.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { getFile, putFiles } from '../leadBlobs.js'
 import { fmtSize, uploadOppFile } from '../filestore.js'
@@ -51,10 +52,15 @@ const yieldToPaint = () => new Promise(resolve => {
 // one governed message.
 // The submission surface renders the same sender field: <div className="q-label">From</div>.
 export async function sendProposalEmailRequest(payload = {}) {
+  const { data, error } = await supabaseAuth?.getSession?.() || {}
+  if (error) throw error
+  const token = data?.session?.access_token
+  if (!token) throw new Error('A signed-in session is required to send a proposal.')
+  if (!String(payload.oppId || '').trim()) throw new Error('An opportunity ID is required to send a proposal.')
   const attachments = [...(payload.attachments || [])]
   const response = await fetch('/api/send-proposal-email', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify({ ...payload, attachments: [ ...attachments ] }),
   })
   let result = {}
@@ -597,7 +603,7 @@ export default function Proposal(props) {
   const { oppId: routeOppId } = useParams()
   const store = useStore()
   const opp = store.opportunities.find(o => o.id === (oppIdProp || routeOppId))
-  if (opp && !isWorkflowAvailable(opp.oppType)) return <OpportunityComingSoon opp={opp} />
+  if (opp && !isWorkflowAvailable(opp.oppType, store.config)) return <OpportunityComingSoon opp={opp} />
   return <ProposalEditor {...props} />
 }
 
@@ -607,7 +613,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const store = useStore()
   const fb = useFormulaBar()
   const opp = store.opportunities.find(o => o.id === oppId)
-  const isComingSoon = !!opp && !isWorkflowAvailable(opp.oppType)
+  const isComingSoon = !!opp && !isWorkflowAvailable(opp.oppType, store.config)
   const sourcingBlockers = opp?.route === 'Spares'
     ? sparesSourcingBlockers(opp, store.getProposal(oppId), store)
     : []
@@ -666,7 +672,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     // Spares must always enter Proposal through the Sourcing workbench. Do not
     // manufacture sourcing rows from a saved/demo Proposal BoQ when this page
     // is opened; real Spares creation paths write sparesLines first.
-    if (!opp || ['Service', 'Spares'].includes(routeForType(opp.oppType))) return
+    if (!opp || ['Service', 'Spares'].includes(routeForType(opp.oppType, store.config))) return
     const current = store.getProposal(oppId)
     if (!linkedLead || (current.leadImportId === linkedLead.id && current.bom?.length) || !linkedLead.ai) return
     const { extracted, workbenchRows, bom } = buildLeadProposalData(linkedLead, store.priceLists, store.adhocParts)
@@ -682,7 +688,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   // screen immediately reflects the confirmed sourcing dataset.
   useEffect(() => {
     if (isComingSoon) return
-    if (!opp || routeForType(opp.oppType) !== 'Spares') return
+    if (!opp || routeForType(opp.oppType, store.config) !== 'Spares') return
     // Never repair or create a partial customer-facing BoQ while Sourcing is
     // incomplete. The Sourcing page is the only authority for this handoff.
     if (sourcingBlockers.length) return
@@ -992,6 +998,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   }
   const commercialDecisionTerms = (p.terms || []).filter(term => term.status === 'Deviation')
   const requestCommercialApproval = async terms => {
+    if (store.canPerform?.('approvals.request') === false) return
     if (store.config?.requireCommercialDeviationApproval === false) return
     const deviationDetails = commercialApprovalDetails(terms)
     if (!deviationDetails.length) return
@@ -1517,6 +1524,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     }
   }
   const submitForApproval = async () => {
+    if (store.canPerform?.('approvals.request') === false) return
     if (!reviewReady) {
       setReviewError('Run validation after reviewing the proposal before requesting approval.')
       return
@@ -1730,7 +1738,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     <div className={shellClass}>
       {/* The opportunity summary header already names the opportunity, and there
           is no folder to go back to from inside it. */}
-      {!embedded && <h2>{oppId} — {opp.sellTo} — Proposal Workbook</h2>}
+      {!embedded && <h2>{displayOpportunityId(oppId)} — {opp.sellTo} — Proposal Workbook</h2>}
       <header className="proposal-workspace-header">
         <div className="proposal-workspace-title">
           <span className="eyebrow">Customer proposal</span>
@@ -1767,7 +1775,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             onPreviewTemplate={['Project', 'Spares', 'Services'].includes(route) ? openTemplatePreview : null}
           />
           {reviewReady && approvalRequired && !pendingForOpp.length && (
-            <button className="btn-secondary" onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>
+            <button className="btn-secondary" disabled={store.canPerform?.('approvals.request') === false} onClick={submitForApproval}><Icon name="send" size={13} /> Request approval</button>
           )}
           <button className="primary" onClick={() => setValidateChoice(true)} disabled={reviewBusy}>
             {reviewBusy
@@ -1828,7 +1836,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       {reviewedUploadViewing && p.reviewedUpload && (
         <AttachmentViewer
           leadId={p.reviewedUpload.blobKey || `proposal-review-${oppId}`}
-          dialogTitle={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`}
+          dialogTitle={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${displayOpportunityId(oppId)}`}
           attachment={{
             ...p.reviewedUpload,
             name: p.reviewedUpload.name || p.reviewedUpload.filename,
@@ -1976,7 +1984,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
               <span>{bl.text}</span>
               <span className="spacer" />
               {bl.approvalType && bl.severity !== 'wait' && (
-                <button onClick={requestApproval(bl)}>Request {bl.approver} approval</button>
+                <button disabled={store.canPerform?.('approvals.request') === false} onClick={requestApproval(bl)}>Request {bl.approver} approval</button>
               )}
               {bl.approvalId != null && bl.condIdx != null && (
                 <button onClick={confirmCond(bl)}>Confirm incorporated</button>
@@ -2316,7 +2324,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       )}
 
       {pdfPreviewModel && (
-        <Modal title={`PDF preview — ${oppId}`} onClose={() => setPdfPreviewTarget(null)} wide className="proposal-preview-modal proposal-pdf-preview-modal">
+        <Modal title={`PDF preview — ${displayOpportunityId(oppId)}`} onClose={() => setPdfPreviewTarget(null)} wide className="proposal-preview-modal proposal-pdf-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">Customer-facing PDF document · Rev-{pdfPreviewModel.p.revision} · Read-only preview</span>
             <div className="forms-actions">
@@ -2333,7 +2341,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       )}
 
       {previewModel && (
-        <Modal title={`Proposal preview — ${oppId}`} onClose={() => setPreviewTarget(null)} wide className="proposal-preview-modal workbook-preview-modal">
+        <Modal title={`Proposal preview — ${displayOpportunityId(oppId)}`} onClose={() => setPreviewTarget(null)} wide className="proposal-preview-modal workbook-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">
               {previewModel.historical ? 'Historical customer-facing Excel workbook' : 'Customer-facing Excel workbook'} · Rev-{previewModel.p.revision}
@@ -2352,7 +2360,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       )}
 
       {referencePreviewOpen && (
-        <Modal title={`Meggitt Item List — ${oppId}`} onClose={() => setReferencePreviewOpen(false)} wide className="proposal-preview-modal workbook-preview-modal">
+        <Modal title={`Meggitt Item List — ${displayOpportunityId(oppId)}`} onClose={() => setReferencePreviewOpen(false)} wide className="proposal-preview-modal workbook-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">Editable source workbook · changes update the proposal BOQ immediately</span>
             <button onClick={() => setReferencePreviewOpen(false)}>Close</button>
@@ -2376,7 +2384,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       )}
 
       {templatePreviewOpen && (
-        <Modal title={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${oppId}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal workbook-preview-modal">
+        <Modal title={`${route === 'Project' ? 'Project Proposal' : route === 'Spares' ? 'Spares Firm Offer' : 'Service Proposal'} - ${displayOpportunityId(oppId)}`} onClose={() => setTemplatePreviewOpen(false)} wide className="proposal-preview-modal workbook-preview-modal">
           <div className="proposal-preview-toolbar">
             <span className="hint">Draft/reference workbook only — customer documents use the current ModAE preview</span>
             <button onClick={() => setTemplatePreviewOpen(false)}>Close</button>

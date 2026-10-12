@@ -1,3 +1,5 @@
+import { REGISTRATION_FIELDS, registrationFields } from '../businessRules.js'
+import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore, reserveOppId } from '../store.jsx'
@@ -8,7 +10,9 @@ import { useDrawer } from '../drawer.jsx'
 import { Chip, ConfChip, ConfirmModal, WarnBox, ErrBox, Modal, Portal } from '../ui.jsx'
 import WorkspaceInsights from '../ui/WorkspaceInsights.jsx'
 import { usePagedRows } from '../ui/Pagination.jsx'
-import { OWNERS, OPP_TYPES, BUS, SEGMENTS, PRODUCTS, CUSTOMER_STATUSES, LEAD_SOURCES, routeForType, newProposal } from '../seed.js'
+import { useViewportPageSize } from '../ui/useViewportPageSize.js'
+import { displayOpportunityId, LEAD_SOURCES, routeForType, newProposal } from '../seed.js'
+
 import { isAdminRole } from '../utils.js'
 import { aiEnabled, runTaskResult, runText } from '../ai.js'
 import { aiAttachmentPayload } from '../aiAttachments.js'
@@ -38,7 +42,7 @@ import {
   clarificationSender, draftClarification, draftKycRejection, draftPatch, senderLabel, sentPatch,
 } from '../leadClarification.js'
 import { kycItemApproved, leadVerificationComplete, verificationDeadline, verificationItem, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
-import { checklistFor } from '../customerClasses.js'
+import { checklistFor, classRule } from '../customerClasses.js'
 import { kycIdentityKey, simulatedKycValue, validateKycValue } from '../kycValidation.js'
 import { extractKycIdentityCandidate, normalizeKycCandidate } from '../kycExtraction.js'
 import { commercialTermsFromLead } from '../commercialTerms.js'
@@ -78,7 +82,7 @@ function InboxLeadPreview({ lead }) {
     <div className="mailbox-preview-head"><h2>Lead details</h2><span className={`pill ${PILL[lead.status] || 'Blue'}`}>{lead.status || 'Unknown'}</span></div>
     <h3>{lead.subject || 'Untitled enquiry'}</h3>
     <p className="mailbox-preview-sender"><PreviewFieldText value={`${lead.sender || lead.from || 'Sender not recorded'} · ${ddMmmYY((lead.ts || '').slice(0, 10))}`} /></p>
-    {converted && <div className="inbox-linked-opportunity"><div><small>Opportunity</small><button type="button" onClick={() => nav(`/opp/${lead.oppId}`)}>{lead.oppId}</button></div><button type="button" onClick={() => nav(`/opp/${lead.oppId}`)}>Open opportunity <Icon name="arrowRight" size={13} /></button></div>}
+    {converted && <div className="inbox-linked-opportunity"><div><small>Opportunity</small><button type="button" onClick={() => nav(`/opp/${lead.oppId}`)}>{displayOpportunityId(lead.oppId)}</button></div><button type="button" onClick={() => nav(`/opp/${lead.oppId}`)}>Open opportunity <Icon name="arrowRight" size={13} /></button></div>}
     <div className="inbox-preview-switch" role="group" aria-label="Lead detail sections">
       <button type="button" aria-pressed={panel === 'overview'} onClick={() => setPanel('overview')}>Overview</button>
       <button type="button" aria-pressed={panel === 'email'} onClick={() => setPanel('email')}>Original email</button>
@@ -115,17 +119,18 @@ export const isUnavailableAiSummary = lead => /^AI extraction was unavailable\b/
 // small, synchronous path here so the user does not have to pass through a
 // second registration screen just to create the opportunity.
 async function createOpportunityFromLeadPage({ store, lead, fields, decision, customer, customerStatus, regionalOwner }) {
+  if (store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false) throw new Error('Your role cannot create an opportunity from this lead.')
   const today = new Date().toISOString().slice(0, 10)
   const owner = decision.owner || regionalOwner || opportunityOwnerFor({
     location: decision.eucLocation || decision.location || lead.location || lead.region,
     region: lead.region,
     config: store.config,
   })
-  const id = await reserveOppId(store.opportunities, owner, store.config?.roleNames)
+  const id = await reserveOppId(store.opportunities, owner, store.config?.roleNames, store.config?.opportunityNumbering)
   const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
   const identity = leadIdentity(lead, fields)
   const sellTo = decision.sellTo || identity.sellTo || customer?.name || '—'
-  const eucName = decision.eucName || identity.eucName || sellTo
+  const eucName = decision.eucName || identity.eucName || ''
   const eucLocation = decision.eucLocation || identity.eucLocation || lead.location || lead.region || ''
   const contactPerson = decision.contactPerson || identity.contactPerson || customer?.contactPerson || ''
   const contactPhone = decision.contactPhone || identity.contactPhone || customer?.contactPhone || ''
@@ -148,10 +153,10 @@ async function createOpportunityFromLeadPage({ store, lead, fields, decision, cu
     status: 'Open', stage: decision.inquiryType === 'Budgetary' ? 'Budgetary' : 'RFQ', milestone: 'Screening', closedReason: '',
     contactPerson, contactPhone,
     contactEmail: isInternalSender(lead.from, store.config) ? '' : (lead.from || ''), lastUpdated: today, forecast: false,
-    remarks: 'Registered from lead ' + lead.id, route: routeForType(decision.oppType),
+    remarks: 'Registered from lead ' + lead.id, route: routeForType(decision.oppType, store.config),
   }
   store.addOpportunity(opp)
-  if (routeForType(decision.oppType) !== 'Service') {
+  if (routeForType(decision.oppType, store.config) !== 'Service') {
     store.addSparesLinesFromLead(id, workbenchRows)
     const proposal = newProposal(id, opp, { validityDays: store.config?.proposalValidityDays })
     store.saveProposal(id, { ...proposal, rfqNumber: opp.rfqNumber, subject: lead.subject || proposal.subject,
@@ -341,7 +346,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     const labeled = labels => extractLabeledValue(text, labels)
     const customerName = customerCompanyFromText(text)
     const identityFacts = extractLeadIdentityFacts(text)
-    const eucName = identityFacts.eucName || customerName
+    const eucName = leadIdentity({ sellTo: customerName, body: text }, identityFacts.fields).eucName
     const eucLocation = identityFacts.eucLocation
       || identityFacts.fields.find(field => /location$/i.test(field.k))?.v
       || labeled(String.raw`deliver(?:y|ed)\\s+to|${LEAD_LABELS.eucLocation}`)
@@ -355,7 +360,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     if (customerName) fields.push({ group: 'Customer', k: 'Sell-to customer', v: customerName, conf: 98, ev: 'Explicit customer/company label in email body' })
     fields.push(...identityFacts.fields)
     if (eucName && !identityFacts.fields.some(field => field.k === 'EUC Name' && field.v === eucName)) {
-      fields.push({ group: 'Customer', k: 'EUC Name', v: eucName, conf: 96, ev: 'Explicit end-user or customer identity in email body' })
+      fields.push({ group: 'Customer', k: 'EUC Name', v: eucName, conf: 70, ev: 'Customer named in the delivery block or equipment requirement', note: 'Confirm this is the end user.' })
     }
     if (eucLocation && !identityFacts.fields.some(field => /location$/i.test(field.k) && field.v === eucLocation)) {
       fields.push({ group: 'Customer', k: 'EUC Location', v: eucLocation, conf: 96, ev: 'Delivery/location detail in email body' })
@@ -533,7 +538,7 @@ function LeadVerification({ lead, customerStatus, store }) {
   // A converted lead can still be completing customer KYC. Keep the linked
   // opportunity unchanged, but allow the source lead's document evidence to
   // be uploaded, simulated, replaced, or cancelled. Dropped leads stay locked.
-  const editable = lead.status !== 'Dropped'
+  const editable = lead.status !== 'Dropped' && store.canPerform?.('leads.edit') !== false
   const deadline = verificationDeadline(lead, customerStatus, store.config)
   // Was a hardcoded "within 1 week" on both cards, which ignored the
   // configured deadline entirely.
@@ -707,19 +712,22 @@ function LeadVerification({ lead, customerStatus, store }) {
     }, `Amber processing fee ${mode === 'simulated' ? 'marked paid (simulated)' : 'confirmed'}`)
   }
 
-  if (customer?.kyc === 'Valid') return (
+  const policy = classRule(store.config, customerStatus)
+  if (policy?.defaultAction === 'No Bid' && policy.verification?.requires !== 'jointApproval') return <div className="warnbox" style={{ marginTop: 10 }}>No Bid — the customer policy does not allow quoting. An administrator must change the policy or confirm a different customer classification before proceeding.</div>
+
+  if (policy?.verification?.requires === 'documents' && customer?.kyc === 'Valid') return (
     <div className="okbox" style={{ marginTop: 10 }}>
       Existing verified customer — KYC is already complete and will not be requested again.
     </div>
   )
 
-  if (customerStatus === 'Green') return (
+  if (policy?.verification?.required === false || policy?.verification?.requires === 'none') return (
     <div className="okbox" style={{ marginTop: 10 }}>
-      Green customer — KYC and payment verification are not required.
+      {customerStatus} customer — no verification is required by the saved policy.
     </div>
   )
 
-  if (customerStatus === 'Amber') {
+  if (policy?.verification?.requires === 'fee') {
     const confirmed = verification.payment?.state === 'Confirmed'
     return (
       <div className="lead-decision-card" style={{ marginTop: 12 }}>
@@ -740,7 +748,7 @@ function LeadVerification({ lead, customerStatus, store }) {
     )
   }
 
-  if (customerStatus === 'Blue') return (
+  if (policy?.verification?.requires === 'documents') return (
     <div className="lead-decision-card" style={{ marginTop: 12 }}>
       <div className="lead-decision-head"><div><b>Blue customer — KYC request</b><span>Customer shares KYC documents {windowLabel}</span></div>
         <div className="lead-decision-head-actions">
@@ -850,11 +858,11 @@ function LeadVerification({ lead, customerStatus, store }) {
     </div>
   )
 
-  if (customerStatus === 'Red') return (
+  if (policy?.verification?.requires === 'jointApproval') return (
     <div className="lead-decision-card" style={{ marginTop: 12 }}>
-      <div className="lead-decision-head"><div><b>Red customer — payment confirmation</b><span>Payment confirmation is not required at Lead stage</span></div>
+      <div className="lead-decision-head"><div><b>{customerStatus} customer — approval clearance</b><span>Payment confirmation is not required at Lead stage</span></div>
         <span className="lead-decision-saved">Not required</span></div>
-      <div className="okbox">The Red-customer control is the joint LJS + AH approval shown above. Opportunity creation can continue once that approval and the remaining lead decisions are complete.</div>
+      <div className="okbox">The customer policy requires the configured approval clearance. Opportunity creation can continue once that approval and the remaining lead decisions are complete.</div>
     </div>
   )
 
@@ -957,6 +965,7 @@ function PasteLeadModal({ onClose }) {
   })
 
   const add = async () => {
+    if (store.canPerform?.('leads.create') === false) return
     if (!body.trim() && !files.length) { setErr('Paste the email body, or attach the enquiry document.'); return }
     setBusy(true); setErr('')
     const extracted = await extractLead({ from, subject, body, attachments: files, aiAttachments: await aiAttachmentPayload(files) }, store)
@@ -974,6 +983,7 @@ function PasteLeadModal({ onClose }) {
   }
 
   const addRaw = () => {
+    if (store.canPerform?.('leads.create') === false) return
     const id = 'LD-' + Date.now()
     store.addLead({
       ...newLead(id),
@@ -1046,8 +1056,8 @@ function PasteLeadModal({ onClose }) {
         </div>
         <div className="lead-paste-actions">
           <button onClick={onClose}>Cancel</button>
-          {err && <button onClick={addRaw}>Add unextracted</button>}
-          <button className="primary" onClick={add} disabled={busy || reading}>
+          {err && <button disabled={store.canPerform?.('leads.create') === false} onClick={addRaw}>Add unextracted</button>}
+          <button className="primary" onClick={add} disabled={busy || reading || store.canPerform?.('leads.create') === false}>
             <Icon name="bot" size={13} /> {busy ? 'Extracting…' : 'Extract with AI'}
           </button>
         </div>
@@ -1077,14 +1087,7 @@ const sliceAtWordBoundary = (text, maxLen) => {
   return (lastSpace > maxLen - 40 ? cut.slice(0, lastSpace) : cut).trimEnd() + '…'
 }
 
-const REQUIRED_IDENTITY_FIELDS = [
-  ['sellTo', 'Sell-to customer'],
-  ['sellToCustomerLocation', 'Sell-to customer location'],
-  ['eucName', 'EUC Name'],
-  ['eucLocation', 'EUC Location'],
-  ['contactPerson', 'Contact Person'],
-  ['contactPhone', 'Contact Phone'],
-]
+const REQUIRED_IDENTITY_FIELDS = REGISTRATION_FIELDS
 
 const updateLeadField = (fields, key, value, group = 'RFQ') => {
   const index = fields.findIndex(f => f.k.toLowerCase() === key.toLowerCase())
@@ -1169,7 +1172,7 @@ function LeadWorkflowBar({ lead, customerStatus }) {
         </p>
       )}
       {progress.complete && lead.oppId && (
-        <p className="lead-flow-note">Opportunity {lead.oppId} is linked. Continue in the Opportunity Workflow.</p>
+        <p className="lead-flow-note">Opportunity {displayOpportunityId(lead.oppId)} is linked. Continue in the Opportunity Workflow.</p>
       )}
     </section>
   )
@@ -1466,7 +1469,7 @@ function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) 
     <section className="converted-summary" aria-label="Converted lead summary">
       {converted ? (
         <header className="converted-statusbar">
-          <span className="converted-status"><Icon name="checkCircle" size={15} /> Converted to Opportunity {oppId}</span>
+          <span className="converted-status"><Icon name="checkCircle" size={15} /> Converted to Opportunity {displayOpportunityId(oppId)}</span>
           <span className="converted-status-actions">
             {lead.oppId && (
               <button type="button" className="converted-history" onClick={() => nav('/opp/' + lead.oppId)}>
@@ -1500,7 +1503,7 @@ function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) 
           {converted && <ReadOnlyDecisionForm lead={lead} items={items} />}
           {converted && <StructuredItemsTable items={items} />}
 
-          {converted && <p className="converted-complete-note"><Icon name="checkCircle" size={14} /> Lead converted — no further action required. Opportunity {oppId} is linked.</p>}
+          {converted && <p className="converted-complete-note"><Icon name="checkCircle" size={14} /> Lead converted — no further action required. Opportunity {displayOpportunityId(oppId)} is linked.</p>}
           {!converted && <div className="structured-active-sections"><AiLeadDetail lead={lead} compact compactItems={items} /></div>}
         </main>
 
@@ -1510,7 +1513,7 @@ function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) 
             {missing.length ? <ul>{missing.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul> : <p>All required lead information is available.</p>}
           </section>
 
-          <LeadSourceContext lead={lead} canAct={!converted && lead.status !== 'Dropped'} />
+          <LeadSourceContext lead={lead} canAct={!converted && lead.status !== 'Dropped' && store.canPerform?.('leads.edit') !== false} />
 
         </aside>}
       </div>
@@ -1522,6 +1525,8 @@ function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) 
 // Rich three-panel detail for AI-parsed leads (LD-201..LD-206 shape).
 // ---------------------------------------------------------------------------
 function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = false }) {
+  const { OWNERS, OPP_TYPES, CUSTOMER_STATUSES, BUS, SEGMENTS, PRODUCTS, labelFor } = useFieldLists(lead)
+
   const store = useStore()
   const nav = useNavigate()
   const drawer = useDrawer()
@@ -1723,8 +1728,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     return created
   }
   const isRed = previewCustomerStatus === 'Red'
-  const redApproval = redClearanceFor(store.approvals, lead.id, store.config)
-  const redCleared = isRedCleared(redApproval, store.config)
+  const redApproval = redClearanceFor(store.approvals, lead.id, store.config, previewCustomerStatus)
+  const redCleared = isRedCleared(redApproval, store.config, previewCustomerStatus)
   // A Returned clearance is not a decision, it is a request for rework — so the
   // salesperson must be able to raise it again. Without this the ErrBox showed
   // "Returned" with nowhere to go, and the Approvals page had no route back
@@ -1826,8 +1831,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const visibleAiFields = ai.fields
   const groups = [...new Set(visibleAiFields.map(f => f.group))]
   const pendingLow = ai.fields.filter(f => f.state === 'pending' && f.conf < med)
-  const registrationPendingLow = pendingLow.filter(f => isRegistrationCriticalField(f.k))
-  const deferredPendingLow = pendingLow.filter(f => !isRegistrationCriticalField(f.k))
+  const registrationPendingLow = pendingLow.filter(f => isRegistrationCriticalField(f.k, store.config))
+  const deferredPendingLow = pendingLow.filter(f => !isRegistrationCriticalField(f.k, store.config))
 
   const patchField = (idx, patch) => {
     const field = ai.fields[idx]
@@ -1885,7 +1890,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const verificationComplete = leadVerificationComplete({ ...lead, existingCustomerKyc: previewCustomer?.kyc === 'Valid' }, previewCustomerStatus, { redCleared, config: store.config })
   const verificationDeferred = previewCustomerStatus === 'Blue' && lead.verification?.kycRequestStatus === 'deferred'
   const verificationBlocked = !verificationComplete && !verificationDeferred
-  const missingIdentity = REQUIRED_IDENTITY_FIELDS
+  const registrationRequired = new Set(registrationFields(store.config).map(([key]) => key))
+  const missingIdentity = registrationFields(store.config)
     .filter(([key]) => !String(decisionDraft[key] || '').trim())
     .map(([, label]) => label)
   const effectiveMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, ai.fields, ai.lineItems)
@@ -1896,7 +1902,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   // its required-before-registration warning, so do not repeat them here.
   const reviewMissing = effectiveMissing.filter(item => {
     const text = String(item || '').toLowerCase()
-    return !isRegistrationCriticalField(item)
+    return !isRegistrationCriticalField(item, store.config)
       && !/sell[-\s]?to\s+customer|customer\s+name|euc|end\s+user|contact\s+person|contact\s+(?:phone|number)|phone\s+number/i.test(text)
   })
   const displayedMissing = compact ? reviewMissing : effectiveMissing
@@ -1905,13 +1911,14 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   // mandatory identity fields, low-confidence decisions, verification and
   // approval gates block the next step.
   const registrationBlocked = missingIdentity.length > 0 || inquiryMissing || registrationPendingLow.length > 0 || verificationBlocked
-  const canAct = !['Converted', 'Dropped'].includes(lead.status)
+  const canAct = !['Converted', 'Dropped'].includes(lead.status) && store.canPerform?.('leads.edit') !== false
   const clarificationAvailable = canAct && !!clarificationKindFor(lead, previewCustomerStatus)
   const clarificationParts = (ai.lineItems || []).filter(item =>
     String(item?.description || item?.partNumber || item?.customerRef || '').trim()
   )
 
   const createDirectly = async () => {
+    if (store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false) return
     if (registrationBlocked || directCreateBusy || lead.status !== 'Qualified') return
     setDirectCreateBusy(true)
     try {
@@ -2089,7 +2096,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
       fastTrack,
       fastTrackStartedAt: fastTrack ? (lead.fastTrackStartedAt || nowIST()) : lead.fastTrackStartedAt,
       oppType: draft.oppType,
-      route: routeForType(draft.oppType),
+      route: routeForType(draft.oppType, store.config),
       customerStatus: resolvedCustomerStatus,
       customerStatusOverride: '',
       customerClassifiedAt: lead.customerClassifiedAt || nowIST(),
@@ -2097,7 +2104,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
         ? { ...(lead.verification || {}), requestedAt: lead.verification?.requestedAt || nowIST(), requestedFor: resolvedCustomerStatus }
         : (lead.verification || {}),
       redFlag: resolvedCustomerStatus === 'Red',
-      ai: { ...ai, route: routeForType(draft.oppType), fields: scopedFields, missing: nextMissing },
+      ai: { ...ai, route: routeForType(draft.oppType, store.config), fields: scopedFields, missing: nextMissing },
     }
   }
 
@@ -2165,7 +2172,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
 
   const saveDecisions = () => {
     setDecisionErr('')
-    const missingIdentity = REQUIRED_IDENTITY_FIELDS
+    const missingIdentity = registrationFields(store.config)
       .filter(([key]) => !String(decisionDraft[key] || '').trim())
       .map(([, label]) => label)
     if (missingIdentity.length) {
@@ -2283,7 +2290,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
       <p className="modal-intro">Choose the salesperson who should own this lead.</p>
       <label className="reassign-modal-field">Assigned owner
         <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
-          {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
+          {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
         </select>
       </label>
       <div className="reassign-modal-actions">
@@ -2550,7 +2557,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
         <div className="lead-decision-grid">
           <div className="lead-decision-subsection">Customer and contact</div>
             <div data-phone-field="Sell-to customer">
-              <span className="decision-field-heading">Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo', false)}</span>
+              <span className="decision-field-heading">Sell To Customer {registrationRequired.has('sellTo') && <span className="required-mark">*</span>} {decisionAiMeta('sellTo', false)}</span>
               <CustomerPicker
                 customers={store.customers}
                 value={decisionDraft.sellTo}
@@ -2564,7 +2571,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               />
               {decisionAiStatus('sellTo')}
             </div>
-          <label data-phone-field="Sell-to customer location"><span className="decision-field-heading">Sell To Customer Location <span className="required-mark">*</span></span>
+          <label data-phone-field="Sell-to customer location"><span className="decision-field-heading">Sell To Customer Location {registrationRequired.has('sellToCustomerLocation') && <span className="required-mark">*</span>}</span>
             <div className="decision-value-row"><input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" /></div>
           </label>
@@ -2572,11 +2579,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             <div className="decision-value-row"><textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />{decisionAiStatus('scope')}</div>
             </label>
-          <label><span className="decision-field-heading">EUC Name <span className="required-mark">*</span> {decisionAiMeta('eucName', false)}</span>
+          <label><span className="decision-field-heading">EUC Name {registrationRequired.has('eucName') && <span className="required-mark">*</span>} {decisionAiMeta('eucName', false)}</span>
             <div className="decision-value-row"><CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
               onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" />{decisionAiStatus('eucName')}</div>
             </label>
-          <label><span className="decision-field-heading">EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation', false)}</span>
+          <label><span className="decision-field-heading">EUC Location {registrationRequired.has('eucLocation') && <span className="required-mark">*</span>} {decisionAiMeta('eucLocation', false)}</span>
             <div className="euc-location-search">
               <div className="decision-value-row"><input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
                 onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" />{decisionAiStatus('eucLocation')}</div>
@@ -2588,11 +2595,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               </div>}
             </div>
           </label>
-          <label><span className="decision-field-heading">Contact Person <span className="required-mark">*</span> {decisionAiMeta('contactPerson', false)}</span>
+          <label><span className="decision-field-heading">Contact Person {registrationRequired.has('contactPerson') && <span className="required-mark">*</span>} {decisionAiMeta('contactPerson', false)}</span>
             <div className="decision-value-row"><input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" />{decisionAiStatus('contactPerson')}</div>
             </label>
-          <label><span className="decision-field-heading">Contact Phone <span className="required-mark">*</span> {decisionAiMeta('contactPhone', false)}</span>
+          <label><span className="decision-field-heading">Contact Phone {registrationRequired.has('contactPhone') && <span className="required-mark">*</span>} {decisionAiMeta('contactPhone', false)}</span>
             <div className="decision-value-row"><input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" />{decisionAiStatus('contactPhone')}</div>
           </label>
@@ -2600,13 +2607,13 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           <label><span className="decision-field-heading">Assigned owner</span>
             <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })}>
-              {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
+              {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
             </select>
           </label>
           <label><span className="decision-field-heading">Opportunity type {decisionAiMeta('oppType', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })}>
-              {OPP_TYPES.map(type => <option key={type}>{type}</option>)}
+              {OPP_TYPES.map(type => <option key={type} value={type}>{labelFor('oppType', type)}</option>)}
             </select>{decisionAiStatus('oppType')}</div>
           </label>
           <label><span className="decision-field-heading">Inquiry type <span className="required-mark">*</span></span>
@@ -2630,7 +2637,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                 setDecisionErr('')
                 setDecisionSaved(false)
               }}>
-              {CUSTOMER_STATUSES.map(status => <option key={status}>{status}</option>)}
+              {CUSTOMER_STATUSES.map(status => <option key={status} value={status}>{labelFor('customerStatus', status)}</option>)}
             </select>{decisionAiStatus('customerStatus')}</div>
           </label>
           <OptionalLeadFields phone={phoneLayout}>
@@ -2638,14 +2645,14 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             <div className="decision-value-row"><select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
               <option value="">Not specified</option>
-              {BUS.map(bu => <option key={bu}>{bu}</option>)}
+              {BUS.map(bu => <option key={bu} value={bu}>{labelFor('bu', bu)}</option>)}
             </select>{decisionAiStatus('bu')}</div>
           </label>
           <label><span className="decision-field-heading">Segment {decisionAiMeta('segment', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })}>
               <option value="">Not specified</option>
-              {SEGMENTS.map(segment => <option key={segment}>{segment}</option>)}
+              {SEGMENTS.map(segment => <option key={segment} value={segment}>{labelFor('segment', segment)}</option>)}
             </select>{decisionAiStatus('segment')}</div>
           </label>
           <label><span className="decision-field-heading">Equipment / Product Family {decisionAiMeta('product', false)}</span>
@@ -2937,11 +2944,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               {decisionSaved && !decisionIsDirty && !decisionAutosaving && <span className="lead-decision-saved">Saved just now</span>}
             </div>
             <div className="lead-decision-grid">
-              <label>Sell To Customer <span className="required-mark">*</span> {decisionAiMeta('sellTo')}
+              <label>Sell To Customer {registrationRequired.has('sellTo') && <span className="required-mark">*</span>} {decisionAiMeta('sellTo')}
                 <CustomerPicker customers={store.customers} value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
                   onChange={value => updateDecisionField('sellTo', value)} allowCreate={false} label="" />
               </label>
-              <label>Sell To Customer Location <span className="required-mark">*</span>
+              <label>Sell To Customer Location {registrationRequired.has('sellToCustomerLocation') && <span className="required-mark">*</span>}
                 <input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" />
               </label>
@@ -2949,11 +2956,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                 <textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />
               </label>
-              <label>EUC Name <span className="required-mark">*</span> {decisionAiMeta('eucName')}
+              <label>EUC Name {registrationRequired.has('eucName') && <span className="required-mark">*</span>} {decisionAiMeta('eucName')}
                 <CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
                   onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" />
               </label>
-              <label>EUC Location <span className="required-mark">*</span> {decisionAiMeta('eucLocation')}
+              <label>EUC Location {registrationRequired.has('eucLocation') && <span className="required-mark">*</span>} {decisionAiMeta('eucLocation')}
                 <div className="euc-location-search">
                   <input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
                     onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" />
@@ -2965,24 +2972,24 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   </div>}
                 </div>
               </label>
-              <label>Contact Person <span className="required-mark">*</span> {decisionAiMeta('contactPerson')}
+              <label>Contact Person {registrationRequired.has('contactPerson') && <span className="required-mark">*</span>} {decisionAiMeta('contactPerson')}
                 <input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" />
               </label>
-              <label>Contact Phone <span className="required-mark">*</span> {decisionAiMeta('contactPhone')}
+              <label>Contact Phone {registrationRequired.has('contactPhone') && <span className="required-mark">*</span>} {decisionAiMeta('contactPhone')}
                 <input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" />
               </label>
               <label><span className="decision-field-heading">Assigned owner</span>
                 <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })}>
-                  {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
+                  {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
                 </select>
               </label>
               <label>Opportunity type {decisionAiMeta('oppType')}
                 <select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })}>
-                  {OPP_TYPES.map(type => <option key={type}>{type}</option>)}
+                  {OPP_TYPES.map(type => <option key={type} value={type}>{labelFor('oppType', type)}</option>)}
                 </select>
               </label>
               <label>Customer class {decisionAiMeta('customerStatus')}
@@ -2992,21 +2999,21 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                     setDecisionErr('')
                     setDecisionSaved(false)
                   }}>
-                  {CUSTOMER_STATUSES.map(status => <option key={status}>{status}</option>)}
+                  {CUSTOMER_STATUSES.map(status => <option key={status} value={status}>{labelFor('customerStatus', status)}</option>)}
                 </select>
               </label>
               <label>Business unit {decisionAiMeta('bu')}
                 <select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
                   <option value="">Not specified</option>
-                  {BUS.map(bu => <option key={bu}>{bu}</option>)}
+                  {BUS.map(bu => <option key={bu} value={bu}>{labelFor('bu', bu)}</option>)}
                 </select>
               </label>
               <label>Segment {decisionAiMeta('segment')}
                 <select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })}>
                   <option value="">Not specified</option>
-                  {SEGMENTS.map(segment => <option key={segment}>{segment}</option>)}
+                  {SEGMENTS.map(segment => <option key={segment} value={segment}>{labelFor('segment', segment)}</option>)}
                 </select>
               </label>
               <label>Equipment / Product Family {decisionAiMeta('product')}
@@ -3092,7 +3099,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               No opportunity ID until approved.{' '}
               {redApproval && <>Approval <b>{redApproval.id}</b> is <b>{redApproval.status}</b>.{' '}
                 <button onClick={() => nav('/approvals')}>Open approvals</button>{' '}</>}
-              {redRequestable && <button onClick={requestRedClearance}>
+              {redRequestable && <button disabled={store.canPerform?.('approvals.request') === false} onClick={requestRedClearance}>
                 {redApproval ? 'Re-request joint approval' : 'Request joint approval'}
               </button>}
             </ErrBox></div>
@@ -3112,7 +3119,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           {lead.status === 'Converted' && (
             <div className="okbox">
               Qualified and converted{lead.oppId && <> — <span className="oppid-link" style={{ cursor: 'pointer' }}
-                onClick={() => drawer.open({ type: 'opp', id: lead.oppId })}>{lead.oppId}</span></>}.
+                onClick={() => drawer.open({ type: 'opp', id: lead.oppId })}>{displayOpportunityId(lead.oppId)}</span></>}.
             </div>
           )}
           {lead.status === 'Dropped' && (
@@ -3159,7 +3166,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   <Icon name="arrowRight" size={14} /> Fast-track to registration
                 </button>
               )}
-              <button className="primary ws-action" disabled={qualifyBlocked}
+              <button className="primary ws-action" disabled={qualifyBlocked || store.canPerform?.('leads.edit') === false}
                 title={qualifyBlocked ? 'Blocked: Red continuation approval required first' : undefined}
                 onClick={() => store.updateLead(lead.id, { status: 'Qualified' })}>
                 <Icon name="check" size={14} /> Qualify lead
@@ -3169,7 +3176,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           )}
           {lead.status === 'Qualified' && (
             <>
-            <button className="primary ws-action registration-action lead-footer-button" disabled={registrationBlocked || directCreateBusy || Boolean(directCreatedId)}
+            <button className="primary ws-action registration-action lead-footer-button" disabled={registrationBlocked || directCreateBusy || Boolean(directCreatedId) || store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false}
               title={registrationBlocked
                 ? verificationBlocked
                   ? `Complete ${previewCustomerStatus} customer verification first`
@@ -3203,7 +3210,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             </button>
           )}
           {reverting && (
-            <ReasonBox title={lead.oppId ? `Revert to the lead list — this removes opportunity ${lead.oppId}` : 'Revert to the lead list'}
+            <ReasonBox title={lead.oppId ? `Revert to the lead list — this removes opportunity ${displayOpportunityId(lead.oppId)}` : 'Revert to the lead list'}
               confirmLabel="Revert to lead" onCancel={() => setReverting(false)}
               onConfirm={(_c, note) => { store.revertLead(lead.id, note); setReverting(false) }} />
           )}
@@ -3303,6 +3310,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
 // Legacy detail — simple parse table + qualify-via-intake for non-AI leads.
 // ---------------------------------------------------------------------------
 function LegacyLeadDetail({ lead, phoneLayout = false }) {
+  const { OWNERS, labelFor } = useFieldLists(lead)
+
   const store = useStore()
   const nav = useNavigate()
   const drawer = useDrawer()
@@ -3388,7 +3397,7 @@ function LegacyLeadDetail({ lead, phoneLayout = false }) {
           <Icon name="checkCircle" size={12} /> Qualified — converted to opportunity{' '}
           {lead.oppId
             ? <span className="oppid-link" style={{ cursor: 'pointer' }}
-                onClick={() => drawer.open({ type: 'opp', id: lead.oppId })}>{lead.oppId}</span>
+                onClick={() => drawer.open({ type: 'opp', id: lead.oppId })}>{displayOpportunityId(lead.oppId)}</span>
             : '(pending intake submit)'}.
         </p>
       )}
@@ -3422,7 +3431,7 @@ function LegacyLeadDetail({ lead, phoneLayout = false }) {
         </div>
       )}
       {reverting && (
-        <ReasonBox title={lead.oppId ? `Revert to the lead list — this removes opportunity ${lead.oppId}` : 'Revert to the lead list'}
+        <ReasonBox title={lead.oppId ? `Revert to the lead list — this removes opportunity ${displayOpportunityId(lead.oppId)}` : 'Revert to the lead list'}
           confirmLabel="Revert to lead" onCancel={() => setReverting(false)}
           onConfirm={(_c, note) => { store.revertLead(lead.id, note); setReverting(false) }} />
       )}
@@ -3435,7 +3444,7 @@ function LegacyLeadDetail({ lead, phoneLayout = false }) {
         <p className="modal-intro">Choose the salesperson who should own this lead.</p>
         <label className="reassign-modal-field">Assigned owner
           <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
-            {OWNERS.map(owner => <option key={owner}>{displayRole(owner)}</option>)}
+            {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
           </select>
         </label>
         <div className="reassign-modal-actions">
@@ -3461,6 +3470,8 @@ function LegacyLeadDetail({ lead, phoneLayout = false }) {
 // Inbox — table list, or per-lead detail when /inbox/:leadId matches.
 // ---------------------------------------------------------------------------
 export default function Inbox() {
+  const { OPP_TYPES, labelFor } = useFieldLists()
+
   const store = useStore()
   const narrow = usePhoneLayout()
   const phone = narrow && store.viewMode === 'tablet'
@@ -3648,7 +3659,8 @@ export default function Inbox() {
   const viewCounts = inboxViewCounts(rows)
   const activeInboxView = showArchive ? 'all' : inboxView
   const mailboxRows = rows.filter(lead => matchesInboxView(lead, activeInboxView)).sort(compareInboxRows)
-  const { pagedRows: pageRows, pagination } = usePagedRows(mailboxRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF, activeInboxView, showArchive]))
+  const { pageSize, pagerRef } = useViewportPageSize(mailboxRows.length, { enabled: !phone && !sel, listRef: mailboxListRef, rowSelector: ':scope > .mail-row', leadingSelector: ':scope > .mail-column-head', heightSource: 'list' })
+  const { pagedRows: pageRows, pagination } = usePagedRows(mailboxRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF, activeInboxView, showArchive]), phone ? 10 : pageSize, pagerRef)
   if (sel) {
     if (phone && sel.ai) return <StructuredLeadDetail key={sel.id} lead={sel} converted={sel.status === 'Converted'} phoneLayout />
     if (phone) return <LegacyLeadDetail key={sel.id} lead={sel} phoneLayout />
@@ -3760,7 +3772,7 @@ export default function Inbox() {
     setDeleteConfirm({ deletable, protectedCount })
   }
   const confirmDeleteSelected = () => {
-    if (!deleteConfirm?.deletable?.length) return
+    if (!deleteConfirm?.deletable?.length || store.canPerform?.('records.delete') === false) return
     deleteConfirm.deletable.forEach(lead => store.deleteLead(lead.id))
     setSelectedIds(new Set())
     setDeleteConfirm(null)
@@ -3771,6 +3783,7 @@ export default function Inbox() {
   const activeSimShape = simShapeOptions.some(t => t.key === simShape) ? simShape : ''
 
   const createSimulatedLead = async (status, options = {}) => {
+    if (store.canPerform?.('leads.create') === false || store.canPerform?.('opportunities.create') === false) return
     const projectType = options.projectType || simProjectType
     const oppType = options.oppType || activeSimOppType
     const lead = simulatedLead(status, new Date(), {
@@ -3819,7 +3832,9 @@ export default function Inbox() {
     const resolvedOppType = OPP_TYPES.includes(lead.oppType) ? lead.oppType : (oppType || lead.route || 'Project')
     const product = mapped('product') || 'Various'
     const knownCustomer = store.customers.some(c => c.name.toLowerCase() === sellTo.toLowerCase())
-    const oppId = await reserveOppId(store.opportunities, owner, store.config?.roleNames)
+    let oppId
+    try { oppId = await reserveOppId(store.opportunities, owner, store.config?.roleNames, store.config?.opportunityNumbering) }
+    catch (error) { window.alert(error.message); return }
     const today = nowIST().slice(0, 10)
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
     if (!knownCustomer) store.addCustomer({ name: sellTo, category, status, kyc: status === 'Green' ? 'Verified' : 'Pending', payment: '—' })
@@ -3837,7 +3852,7 @@ export default function Inbox() {
       lastUpdated: today, forecast: false, remarks: lead.body || '', nextActionOwner: '', simulated: true,
     }
     store.addOpportunity(opp)
-    if (routeForType(resolvedOppType) !== 'Service') {
+    if (routeForType(resolvedOppType, store.config) !== 'Service') {
       const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
       store.addSparesLinesFromLead(oppId, workbenchRows)
       const proposal = newProposal(oppId, opp, { validityDays: store.config?.proposalValidityDays })
@@ -3942,13 +3957,13 @@ export default function Inbox() {
         onArchive={() => { setShowArchive(value => !value); setSelectedIds(new Set()) }}
         onRefresh={() => { void store.refreshSharedData() }} onFilters={() => setPhoneFilterPanel(true)}
         filterCount={[statusF, routeF, sourceF, ownerF, urgencyF, receivedF, completenessF, ageF].filter(Boolean).length}
-        onNew={() => setPasteOpen(true)} selectionCount={selectedIds.size}
+        onNew={() => setPasteOpen(true)} canCreate={store.canPerform?.('leads.create') !== false} selectionCount={selectedIds.size}
         actions={[
           { label: 'Select all visible', onClick: selectAllVisible },
           { label: 'Clear selection', onClick: clearSelection, disabled: !selectedIds.size },
           { label: 'Mark selected as read', onClick: () => setReadForSelected(true), disabled: !selectedIds.size },
           { label: 'Mark selected as unread', onClick: () => setReadForSelected(false), disabled: !selectedIds.size },
-          { label: 'Delete selected leads', onClick: deleteSelected, disabled: !selectedIds.size },
+          { label: 'Delete selected leads', onClick: deleteSelected, disabled: !selectedIds.size || store.canPerform?.('records.delete') === false },
           ...(staleAiLeads.length ? [{ label: repairingAi ? 'Repairing AI summaries…' : `Repair ${staleAiLeads.length} stale AI summaries`, onClick: repairStaleAi, disabled: repairingAi }] : []),
         ]} />}
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
@@ -4033,7 +4048,7 @@ export default function Inbox() {
             <p>Are you sure you want to permanently delete {deleteConfirm.deletable.length} selected lead{deleteConfirm.deletable.length === 1 ? '' : 's'}?</p>
             <p className="hint">Attachments and inbox history will also be removed.</p>
             {deleteConfirm.protectedCount > 0 && <div className="warnbox">{deleteConfirm.protectedCount} linked lead{deleteConfirm.protectedCount === 1 ? '' : 's'} will be kept because they already have opportunities.</div>}
-            <div className="form-actions"><button type="button" onClick={() => setDeleteConfirm(null)}>Cancel</button><button type="button" className="danger" onClick={confirmDeleteSelected}>Delete permanently</button></div>
+            <div className="form-actions"><button type="button" onClick={() => setDeleteConfirm(null)}>Cancel</button><button type="button" className="danger" disabled={store.canPerform?.('records.delete') === false} onClick={confirmDeleteSelected}>Delete permanently</button></div>
           </> : <>
             <p>The selected lead{deleteConfirm.protectedCount === 1 ? '' : 's'} cannot be deleted because {deleteConfirm.protectedCount === 1 ? 'it is' : 'they are'} linked to an opportunity.</p>
             <p className="hint">Use the opportunity workflow to manage linked records.</p>
@@ -4042,10 +4057,10 @@ export default function Inbox() {
         </Modal>
       )}
 
-      <div className="mailbox-split">
+      <div className={`mailbox-split${previewLead && !phone ? '' : ' mailbox-split--no-preview'}`}>
       <div className="mailbox-list-panel">
       <div className="mailbox-list" ref={mailboxListRef} id="mailbox-lead-list" onScroll={updateMailboxScrollMetrics}>
-        {phone && mobileFiltersOpen && <div className="phone-inbox-selection" role="group" aria-label="Selected lead actions"><button type="button" onClick={selectAllVisible}>Select visible</button><button type="button" onClick={() => setReadForSelected(true)} disabled={showArchive || !selectedIds.size}>Mark read</button><button type="button" onClick={() => setReadForSelected(false)} disabled={showArchive || !selectedIds.size}>Mark unread</button><button type="button" onClick={deleteSelected} disabled={!selectedIds.size}>Delete</button><button type="button" onClick={() => { clearSelection(); setMobileFiltersOpen(false) }}>Done</button><span>{selectedIds.size} selected</span></div>}
+        {phone && mobileFiltersOpen && <div className="phone-inbox-selection" role="group" aria-label="Selected lead actions"><button type="button" onClick={selectAllVisible}>Select visible</button><button type="button" onClick={() => setReadForSelected(true)} disabled={showArchive || !selectedIds.size}>Mark read</button><button type="button" onClick={() => setReadForSelected(false)} disabled={showArchive || !selectedIds.size}>Mark unread</button><button type="button" onClick={deleteSelected} disabled={!selectedIds.size || store.canPerform?.('records.delete') === false}>Delete</button><button type="button" onClick={() => { clearSelection(); setMobileFiltersOpen(false) }}>Done</button><span>{selectedIds.size} selected</span></div>}
         {!phone && mobileFiltersOpen && <button type="button" className="mobile-record-view" aria-expanded={mobileFiltersOpen} onClick={() => setMobileFiltersOpen(false)}>Done selecting</button>}
         <div className="mail-column-head" data-mobile-open={mobileFiltersOpen}>
           <div className="mail-list-toolbar">
@@ -4078,7 +4093,7 @@ export default function Inbox() {
               <div className="mail-content" title={l.subject}>
                 <div className="mail-content-stack">
                   {(l.status === 'Converted' && l.oppId || l.ref) && <div className="mail-subject-meta">
-                    {l.status === 'Converted' && l.oppId && <button className="mail-opportunity-link" onClick={e => { e.stopPropagation(); nav('/opp/' + l.oppId) }} title="Open linked opportunity"><span className="pill Green">Opportunity</span> {l.oppId}</button>}
+                    {l.status === 'Converted' && l.oppId && <button className="mail-opportunity-link" onClick={e => { e.stopPropagation(); nav('/opp/' + l.oppId) }} title="Open linked opportunity"><span className="pill Green">Opportunity</span> {displayOpportunityId(l.oppId)}</button>}
                     {l.ref && <span className="mail-ref"> · {l.ref}</span>}
                   </div>}
                   <b className="mail-subject-title">{l.subject}</b>

@@ -7,12 +7,14 @@
 //                  approvalType?, approver?, approvalId?, condIdx?, kyc? }
 
 import { unitCostINR, unitSellINR } from './utils.js'
-import { defaultCosting, MILESTONES } from './seed.js'
+import { defaultCosting, MILESTONES, seedConfig } from './seed.js'
 import { applyAdjustment, isMissingSparesDescription, normalizeMarkupPct, sparesLineFinancials } from './pricing.js'
 import { isLegacyAutoSparesSupportRow, isPlaceholderSparesLine } from './proposal/sparesBoq.js'
 import { classRule, classOrder, noExceptionKeys } from './customerClasses.js'
 import { needsCommercialApproval, needsCommercialDecision, needsCommercialResolution, commercialApprovalDetails, isLegacyCommercialClarification, isCommercialConfirmationRow, isDeliveryBasisClarification, sourceContainsDeliveryRequirement } from './commercialTerms.js'
 import { clarificationTopic } from './leadClarification.js'
+import { customerGateOverridden } from './kycPolicy.js'
+import { kycItemApproved } from './leadVerification.js'
 import { approvalAffectedByProposal, pricingExceptionSignature, proposalImpact } from './approvalMemory.js'
 
 // A customer answer is complete when it contains a response and does not
@@ -82,7 +84,8 @@ const isLeadVerified = (opp, rule) =>
 function customerChecklistComplete(opp, state, rule) {
   if (isLeadVerified(opp, rule)) return true
   const items = (state.kyc || {})[opp.sellTo]
-  return !!items?.length && items.every(item => item.state === 'Verified')
+  const required = state.config?.kycItems || seedConfig.kycItems
+  return !!required.length && required.every(name => kycItemApproved(items?.find(item => item.name === name)))
 }
 
 // Whether the evidence a class gate names has actually been provided.
@@ -319,7 +322,7 @@ export function readiness(opp, proposal, state) {
   const classGate = classRule(state.config, opp.customerStatus)?.gate
   if (classGate?.readiness) {
     const rule = classRule(state.config, opp.customerStatus)
-    const overridden = classGate.overrideField && opp[classGate.overrideField]
+    const overridden = customerGateOverridden(opp, state.config)
     if (!overridden && !gateSatisfied(opp, state, rule, classGate)) {
       b.push({ ...classGate.readiness })
     }
@@ -464,6 +467,7 @@ export function nextActionWith(opp, proposal, state) {
 export function oppBlockers(opp, proposal, approvals, config = null) {
   if (!opp) return []
   const b = []
+  if (opp.status !== 'Closed' && classRule(config, opp.customerStatus)?.defaultAction === 'No Bid' && classRule(config, opp.customerStatus)?.verification?.requires !== 'jointApproval') b.push({ key: 'customer-no-bid', severity: 'block', text: 'No Bid — customer policy does not allow quoting' })
   const mine = approvals.filter(a => a.oppId === opp.id)
   const currentApproval = (approval, type) => approval.approvalSnapshot
     ? !approvalAffectedByProposal(approval, type, proposal, opp)
@@ -652,6 +656,11 @@ export function approvalForRev(type, proposal, approvals, oppId, opportunity) {
 // The §5C release, kept under its original name — it is the gate the
 // submission panel and the proposal builder read.
 export function releaseState(proposal, approvals, oppId, opportunity, config = {}) {
+  const rule = classRule(config, opportunity?.customerStatus)
+  if (opportunity?.status !== 'Closed' && rule?.defaultAction === 'No Bid') {
+    const clearance = rule.verification?.requires === 'jointApproval' && approvalForRev(rule.verification.approvalType, proposal, approvals, oppId, opportunity).approved
+    if (!clearance) return { pending: null, release: null, required: true, reason: 'No Bid — continuation requires joint LJS/AH approval' }
+  }
   if (config?.requireFinalQuoteApproval === false) return { pending: null, release: null, required: false, reason: '' }
   const { pending, approved } = approvalForRev(APPROVAL_5C, proposal, approvals, oppId, opportunity)
   return { pending, release: approved, required: true, reason: approved ? '' : releaseVoidReason(proposal, approvals, oppId, opportunity) }
@@ -711,6 +720,7 @@ export function transitionBlockers(opp, target, proposal, state) {
   const next = MILESTONES.indexOf(target)
   if (next <= current) return []
   const b = []
+  if (opp.status !== 'Closed' && classRule(state.config, opp.customerStatus)?.defaultAction === 'No Bid' && classRule(state.config, opp.customerStatus)?.verification?.requires !== 'jointApproval') b.push({ key: 'customer-no-bid', severity: 'block', text: 'No Bid — customer policy does not allow quoting' })
   const required = (state.config?.workflowRequiredFields?.length
     ? state.config.workflowRequiredFields.map(item => [item.field, item.text])
     : [
@@ -733,7 +743,7 @@ export function transitionBlockers(opp, target, proposal, state) {
   const classGate = classRule(state.config, opp.customerStatus)?.gate
   if (classGate && next >= MILESTONES.indexOf(classGate.milestone)) {
     const rule = classRule(state.config, opp.customerStatus)
-    const overridden = classGate.overrideField && opp[classGate.overrideField]
+    const overridden = customerGateOverridden(opp, state.config)
     if (!overridden && !gateSatisfied(opp, state, rule, classGate, approved)) {
       const waiting = classGate.approvalType && pending(classGate.approvalType)
       b.push({

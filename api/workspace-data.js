@@ -1,0 +1,145 @@
+import { assertReservedOpportunityIds } from './_opportunity-reservations.js'
+import { getAdminSupabaseClient } from './_supabase-client.js'
+import { activeProfile } from './_user-roster.js'
+import { canAccessPage, canPerform, effectiveAccess } from '../src/accessPolicy.js'
+import { assertWorkspaceRowWrite, projectWorkspace, canReadPricing } from '../src/workspaceAccess.js'
+import { createWorkspaceReader } from '../src/server/workspace.js'
+
+const TABLES = ['records', 'leads', 'opportunities', 'approvals', 'settings', 'proposals', 'spares_lines', 'clarifications', 'audit', 'price_lists', 'price_list_versions']
+const keys = { spares_lines: 'sparesLines', price_lists: 'priceLists' }
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b)
+const fail = (message, status = 403) => { throw Object.assign(new Error(message), { status }) }
+const rows = result => { if (result.error) throw result.error; return result.data || [] }
+
+function validateSelect(input) {
+  if (input?.operation !== 'select' || !TABLES.includes(input.table)) fail('Unsupported workspace table.', 400)
+  if (!Array.isArray(input.filters) || input.filters.length > 8) fail('Invalid query filters.', 400)
+  for (const filter of input.filters) {
+    if (!Array.isArray(filter) || filter.length !== 3) fail('Invalid query filter.', 400)
+    const [op, column, value] = filter
+    if (!['eq', 'is', 'in'].includes(op) || !['entity', 'id', 'deleted_at'].includes(column)
+      || (column === 'entity' && input.table !== 'records') || (op === 'in' && (!Array.isArray(value) || value.length > 1000))) fail('Invalid query filter.', 400)
+  }
+}
+
+async function selectRows(client, input, state, profile) {
+  let query = client.from(input.table).select(input.table === 'records' ? 'entity,id,data,rev,deleted_at' : 'id,data,rev,deleted_at')
+  for (const [op, column, value] of input.filters) query = query[op](column, value)
+  const data = projectedRows(input.table, rows(await query), state, profile)
+  if (input.single && data.length > 1) fail('Expected one workspace row.', 400)
+  return { data: input.options?.head ? null : input.single ? data[0] || null : data, count: data.length, error: null }
+}
+
+export function projectedRows(table, records, state, profile) {
+  const config = state.config || {}
+  const override = table === 'records' ? { ...state, ...Object.fromEntries(records.filter(row => row.entity === 'state').map(row => [row.id, row.data])) }
+    : table === 'settings' ? state
+    : ['proposals'].includes(table) ? { ...state, proposals: { ...state.proposals, ...Object.fromEntries(records.map(row => [row.id, row.data])) } }
+    : { ...state, [keys[table] || table]: records.map(row => row.data) }
+  const projected = projectWorkspace(override, profile)
+  if (effectiveAccess(profile, config).isAdmin) return records.map(row => table === 'records' && row.entity === 'state' && row.id === 'users' ? { ...row, data: projected.users } : row)
+  if (table === 'settings') return records.filter(row => row.id === 'config')
+  if (['price_lists', 'price_list_versions'].includes(table)) return canAccessPage(profile, 'pricelists', config) || canPerform(profile, 'proposals.price', config) ? records : []
+  return records.flatMap(row => {
+    if (table === 'records') {
+      if (row.entity !== 'state') return projectedRows(row.entity, [row], state, profile)
+      if (!(row.id in projected)) return []
+      return [{ ...row, data: projected[row.id] }]
+    }
+    const slice = projected[keys[table] || table]
+    const data = Array.isArray(slice) ? slice.find(item => item.id === row.id) : slice?.[row.id]
+    return data === undefined ? [] : [{ ...row, data }]
+  })
+}
+
+export function createWorkspaceDataHandler({ getClient = getAdminSupabaseClient, getReader = createWorkspaceReader, invalidate = () => {} } = {}) {
+  return async (req, res) => {
+    if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
+    const client = getClient()
+    if (!client) return res.status(503).json({ error: 'Shared workspace data is not configured.' })
+    try {
+      const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim()
+      if (!token) fail('Sign in to access workspace data.', 401)
+      const auth = await client.auth.getUser(token)
+      if (auth.error || !auth.data?.user) fail('Your session has expired.', 401)
+      const profile = await activeProfile(client, auth.data.user)
+      if (!profile) fail('This account no longer has workspace access.')
+      const reader = getReader()
+      if (!reader) fail('Workspace data is not configured.', 503)
+      const state = await reader()
+      const config = state.config || {}
+      const input = req.body || {}
+      if (input.operation === 'select' || input.operation === 'select_many') {
+        const queries = input.operation === 'select' ? [input] : input.queries
+        if (!Array.isArray(queries) || !queries.length || queries.length > 20) fail('Choose between one and twenty read queries.', 400)
+        queries.forEach(validateSelect)
+        if (input.operation === 'select') return res.status(200).json(await selectRows(client, input, state, profile))
+        // One fresh authorization snapshot per batch. Never cache an actor's
+        // permissions between requests, and never accept writes in a read batch.
+        const results = await Promise.all(queries.map(async query => {
+          try { return await selectRows(client, query, state, profile) }
+          catch (error) { return { data: null, error: { message: 'Workspace query failed.', code: error.code || String(error.status || 503) } } }
+        }))
+        return res.status(200).json({ results })
+      }
+      if (input.operation !== 'rpc' || input.name !== 'save_rows') fail('Unsupported workspace operation.', 400)
+      const { p_entity: entity, p_rows: requested } = input.args || {}
+      const table = entity === 'state' ? 'records' : entity
+      if (!TABLES.includes(table) || table === 'records' && entity !== 'state'
+        || !Array.isArray(requested) || !requested.length || requested.length > 2000
+        || requested.some(row => !row || typeof row.id !== 'string' || !row.id || !Number.isSafeInteger(row.rev) || row.rev < 0)
+        || new Set(requested.map(row => row.id)).size !== requested.length) fail('Invalid revision-aware save.', 400)
+      if (['opportunities', 'leads', 'approvals'].includes(entity) && requested.some(row => !row.deleted && row.data?.id !== row.id)) {
+        fail('Record identity must match its saved row ID.', 400)
+      }
+      const generation = String(req.headers?.['x-workspace-generation'] || '')
+      if (generation !== String(state.workspaceGeneration || 0)) fail('The workspace changed. Refresh before saving.', 409)
+      let currentQuery = client.from(table).select(table === 'records' ? 'entity,id,data,rev,deleted_at' : 'id,data,rev,deleted_at').in('id', requested.map(row => row.id))
+      if (table === 'records') currentQuery = currentQuery.eq('entity', entity)
+      const existing = new Map(rows(await currentQuery).map(row => [row.id, row]))
+      if (entity === 'opportunities') await assertReservedOpportunityIds(client, requested.filter(row => !existing.has(row.id) && !row.deleted).map(row => row.id), auth.data.user.id)
+      const payload = requested.flatMap(row => {
+        const previous = existing.get(row.id)
+        if (previous?.deleted_at && !row.deleted) fail('Deleted records cannot be recreated from an old browser snapshot.', 409)
+        if (same(previous?.data, row.data) && !row.deleted) return []
+        // Redacted properties must never disappear when a restricted user edits a visible row.
+        let next = ['opportunities', 'leads', 'approvals'].includes(entity) && previous ? { ...previous.data, ...row.data } : row.data
+        if (entity === 'opportunities' && previous?.data?.booking && next?.booking) next = { ...next, booking: { ...previous.data.booking, ...next.booking } }
+        if (entity === 'state' && row.id === 'sales' && Array.isArray(next?.orders)) {
+          const known = [...(previous?.data?.orders || []), ...(state.opportunities || []).map(opp => opp.booking).filter(Boolean)]
+          next = { ...next, orders: next.orders.map(order => ({ ...known.find(saved => saved.id === order.id), ...order })) }
+        }
+        if (entity === 'state' && previous && !effectiveAccess(profile, config).isAdmin) {
+          const visible = projectWorkspace(state, profile)[row.id]
+          if (Array.isArray(previous.data) && Array.isArray(next) && Array.isArray(visible)) {
+            const visibleIds = new Set(visible.map(item => item.id))
+            const hidden = previous.data.filter(item => !visibleIds.has(item.id))
+            const hiddenIds = new Set(hidden.map(item => item.id))
+            if (next.some(item => hiddenIds.has(item.id))) fail('Protected records cannot be edited through a shared snapshot.')
+            next = [...hidden, ...next]
+          } else if (previous.data && typeof previous.data === 'object' && !Array.isArray(previous.data) && next && typeof next === 'object' && !Array.isArray(next)) {
+            const hidden = Object.fromEntries(Object.entries(previous.data).filter(([key]) => !(key in (visible || {}))))
+            if (Object.keys(next).some(key => key in hidden && !same(next[key], hidden[key]))) fail('Protected records cannot be edited through a shared snapshot.')
+            next = { ...hidden, ...next }
+          }
+        }
+        if (entity === 'opportunities' && previous && !canReadPricing(profile, previous.data, config, state)) {
+          const visible = projectWorkspace({ ...state, opportunities: [previous.data] }, profile).opportunities[0] || {}
+          for (const key of Object.keys(row.data || {})) if (!(key in visible) && !same(row.data[key], previous.data[key])) fail('You do not have permission to edit protected opportunity data.')
+        }
+        assertWorkspaceRowWrite(profile, entity, previous?.data, next, config, state, row.id, row.deleted === true)
+        return [{ ...row, data: next, by: auth.data.user.id }]
+      })
+      if (!payload.length) return res.status(200).json({ data: { accepted: [], conflicts: [] }, error: null })
+      const result = await client.rpc('save_rows', { p_entity: entity, p_rows: payload })
+      if (result.error) throw result.error
+      invalidate()
+      const data = { ...result.data, conflicts: projectedRows(table, (result.data?.conflicts || []).map(row => ({ ...row, ...(table === 'records' ? { entity } : {}) })), state, profile) }
+      return res.status(200).json({ data, error: null })
+    } catch (error) {
+      const status = error.status || (error.code === '40001' ? 409 : error.code === '42501' ? 403 : 503)
+      return res.status(status).json({ error: status === 503 ? 'Workspace data is temporarily unavailable. Check the database migrations and retry.' : error.message, code: error.code || String(status) })
+    }
+  }
+}
+export default createWorkspaceDataHandler()

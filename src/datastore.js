@@ -1,7 +1,12 @@
-import { describeSupabaseError, isSupabaseAuthError, supabase } from './supabase.js'
+import { createWorkspaceDataClient } from './workspaceDataClient.js'
+import { getWorkspaceGeneration } from './workspaceApi.js'
+import { describeSupabaseError, isSupabaseAuthError, supabase as directSupabase } from './supabase.js'
 import { writeCachedRules } from './rules.js'
 import { loadWorkspaceFromServer, saveWorkspaceToServer } from './workspaceApi.js'
 import { mergeOpportunityRow } from './workflowTransitions.js'
+import { mergeSalesBookings } from './orderBookings.js'
+
+const supabase = createWorkspaceDataClient(directSupabase, getWorkspaceGeneration)
 
 // Server persistence for the store: normalized business rows plus dedicated
 // JSONB entity tables. Mirrors the filestore facade —
@@ -10,7 +15,7 @@ import { mergeOpportunityRow } from './workflowTransitions.js'
 
 // Per-device/session state that must never be shared across browsers.
 export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'viewModePinnedAt', 'viewModePreferenceRev', 'spSync', 'auth', 'role',
-  'inboxShowAll', 'leadSyncBaseline', 'clarificationSyncBaseline', 'opportunitySyncBaseline',
+  'roles', 'inboxShowAll', 'leadSyncBaseline', 'clarificationSyncBaseline', 'opportunitySyncBaseline',
   'sparesLinesSyncBaseline', 'deletedLeadIds', 'deletedOpportunityIds', 'pendingOpportunitySyncIds',
   // Migration markers and derived deadline timers belong to this browser.
   // Persisting them as shared state makes every device dirty immediately
@@ -22,13 +27,16 @@ let localDemoMode = false
 export const setLocalDemoMode = enabled => { localDemoMode = Boolean(enabled) }
 export const dbEnabled = () => !!supabase && !localDemoMode
 
-export async function reserveOpportunitySequence(yymm) {
-  if (!supabase) return null
-  const result = await supabase.rpc('next_opportunity_sequence', { p_yymm: yymm })
-  if (result.error) throw result.error
-  const sequence = Number(result.data)
-  if (!Number.isInteger(sequence) || sequence < 1) throw new Error('Supabase returned an invalid opportunity sequence.')
-  return sequence
+export async function reserveOpportunityNumber() {
+  const { data, error } = await supabase.auth.getSession()
+  if (error) throw error
+  const token = data?.session?.access_token
+  if (!token) throw new Error('A signed-in session is required to reserve an opportunity number.')
+  const response = await fetch('/api/opportunity-number', { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(body.error || 'Could not reserve an opportunity number. Please retry.')
+  if (typeof body.id !== 'string' || !body.id) throw new Error('The server returned an invalid opportunity number.')
+  return body.id
 }
 
 export const DEDICATED_ENTITIES = {
@@ -178,11 +186,15 @@ async function saveConsolidatedRows(entity, rows, label) {
     if (!conflicts.length) return pending.map(row => row.id)
     pending = conflicts.map(serverRow => {
       const local = localById.get(serverRow.id)
-      return {
+      const rebased = {
         id: serverRow.id,
         data: local?.data ?? serverRow.data,
         rev: Number(serverRow.rev) || 0,
       }
+      if (entity === CONSOLIDATED_STATE_ENTITY && serverRow.id === 'sales') {
+        rebased.data = mergeSalesBookings(serverRow.data, rebased.data)
+      }
+      return rebased
     })
   }
   throw new Error(`Consolidated ${label} save conflict after ${MAX_CONFLICT_RETRIES + 1} attempts`)
@@ -190,10 +202,12 @@ async function saveConsolidatedRows(entity, rows, label) {
 
 async function saveConsolidatedState(dirty = {}) {
   const rows = Object.entries(dirty)
-    .filter(([key]) => !BUSINESS_KEYS.has(key) && key !== 'config')
+    .filter(([key]) => !BUSINESS_KEYS.has(key) && key !== 'config' && key !== 'users')
     .map(([id, data]) => ({
       id,
-      data,
+      data: id === 'sales'
+        ? mergeSalesBookings(normalizedRecords.get(normalizedKey(CONSOLIDATED_STATE_ENTITY, id))?.data, data)
+        : data,
       rev: normalizedRevisions.get(normalizedKey(CONSOLIDATED_STATE_ENTITY, id)) ?? 0,
     }))
   if (!rows.length) return []
@@ -462,8 +476,18 @@ async function fetchAll() {
 async function saveSlicesNow(dirty) {
   if (!supabase) return
   invalidateLoadCache()
-  let normalizedDirty = dirty
-  const collaborativeDirty = Object.fromEntries(Object.entries(dirty)
+  let normalizedDirty = { ...dirty }
+  if ('sales' in normalizedDirty) {
+    await saveConsolidatedState({ sales: normalizedDirty.sales })
+    delete normalizedDirty.sales
+  }
+  // PO signatures are evidence for the immutable booking in the opportunity row.
+  // Persist their validated revision before attempting the linked booking save.
+  if ('poCompare' in normalizedDirty) {
+    await saveConsolidatedState({ poCompare: normalizedDirty.poCompare })
+    delete normalizedDirty.poCompare
+  }
+  const collaborativeDirty = Object.fromEntries(Object.entries(normalizedDirty)
     .filter(([key]) => key === 'leads' || key === 'opportunities' || key === 'approvals'))
   if (Object.keys(collaborativeDirty).length) {
     const savedByServer = await saveWorkspaceToServer(collaborativeDirty)
@@ -922,9 +946,17 @@ export async function resetAll(seedMap) {
   // while Supabase still contains active rows. Read the canonical tables and
   // tombstone anything left behind through the same RPC contract.
   await purgeActiveNormalizedRows(seedMap)
-  const stateKeys = Object.keys(seedMap).filter(key => !BUSINESS_KEYS.has(key) && key !== 'config')
-  const { error } = await supabase.from('records').delete()
-    .eq('entity', CONSOLIDATED_STATE_ENTITY)
-    .not('id', 'in', `(${stateKeys.join(',') || '__none__'})`)
-  if (error) throw error
+  // Legacy state is already authoritative and empty slices were saved above.
+  // Do not delete unknown state rows: roster, generation and future metadata
+  // must survive a reset. Production cleanup uses the dedicated purge RPC.
+
+}
+
+// A dedicated policy save already persisted this exact revision.
+export function acceptAccessConfig(config, rev) {
+  const key = normalizedKey('settings', 'config')
+  normalizedRevisions.set(key, Number(rev) || 0)
+  normalizedRecords.set(key, { data: config, rev: Number(rev) || 0 })
+  writeCachedRules(config)
+  invalidateLoadCache()
 }

@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 
+import { seedConfig } from '../src/seed.js'
 import { nextActionWith, readiness, transitionBlockers } from '../src/gates.js'
 
 const workbenchSource = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
@@ -32,10 +33,7 @@ test('Blue KYC blocks Proposal until every KYC item is verified', () => {
   const verified = transitionBlockers(baseOpp, 'Proposal', proposal, {
     ...state,
     kyc: {
-      'Blue Buyer Ltd': [
-        { name: 'GST', state: 'Verified' },
-        { name: 'PAN', state: 'Verified' },
-      ],
+      'Blue Buyer Ltd': seedConfig.kycItems.map(name => ({ name, state: 'Verified' })),
     },
   })
   assert.equal(verified.some(b => b.key === 'kyc'), false, 'verified KYC should clear the KYC blocker')

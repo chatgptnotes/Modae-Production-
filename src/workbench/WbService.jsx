@@ -16,7 +16,7 @@ export default function WbService({ opp, focus = 'offer', onConfirmSent }) {
     : null
   const survey = (store.surveys || []).find(v => v.oppId === opp.id)
   const reviewReady = !!est.travelConfirmed && (!est.surveyRequired || !!survey?.report)
-  const reviewAllowed = canPriceProposal(store.role) && reviewReady
+  const reviewAllowed = canPriceProposal(store.role) && reviewReady && store.canPerform?.('approvals.request') !== false
 
   const requestServiceReview = () => {
     if (!reviewAllowed || reviewApproval) return

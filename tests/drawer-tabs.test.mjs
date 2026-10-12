@@ -39,7 +39,7 @@ test('the record form belongs to Details, and the file list to the folders', () 
     'the file list must render only on a folder tab')
   // The regression this replaces: an unconditional editor under every tab.
   const gate = drawer.indexOf('{isDetails && (')
-  const editor = drawer.indexOf('<OpportunityDetailsView')
+  const editor = drawer.indexOf('<OpportunityDetailsEditor')
   assert.ok(gate !== -1 && editor > gate,
     'the editor must sit inside the isDetails branch, not above it')
 })

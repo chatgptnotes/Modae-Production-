@@ -12,6 +12,7 @@ import { buildPricing, normalizeProposal } from '../proposal/docProps.js'
 import WorkspaceInsights from '../ui/WorkspaceInsights.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { usePagedRows } from '../ui/Pagination.jsx'
+import { useViewportPageSize } from '../ui/useViewportPageSize.js'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
 import { PhoneOverlayHeader } from '../tablet/PhoneWorkspaceChrome.jsx'
 import PhoneFilters from '../tablet/PhoneFilters.jsx'
@@ -19,7 +20,6 @@ import PhoneFilters from '../tablet/PhoneFilters.jsx'
 const NEW_APPROVAL_MS = 48 * 60 * 60 * 1000
 // Approval updates remain near-real-time without making every open approvals
 // tab issue a request every few seconds against the Supabase free tier.
-const APPROVAL_REFRESH_MS = 30000
 // Approval ts/decisionTs are full ISO stamps; ddMmmYY wants YYYY-MM-DD.
 const day = ts => ddMmmYY((ts || '').slice(0, 10))
 const time = ts => {
@@ -408,16 +408,9 @@ export default function Approvals() {
       const refreshed = await store.refreshApprovals()
       if (active) setRefreshError(!refreshed)
     }
-    const onVisibilityChange = () => {
-      if (isVisible()) void refresh()
-    }
     void refresh()
-    const timer = setInterval(refresh, APPROVAL_REFRESH_MS)
-    document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       active = false
-      clearInterval(timer)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   }, [])
 
@@ -438,7 +431,7 @@ export default function Approvals() {
   const scopedApprovals = scope === 'my'
     ? store.approvals.filter(a => a.requestedBy === role || neededOf(a).includes(role))
     : store.approvals
-  const canDecide = a => neededOf(a).includes(role)
+  const canDecide = a => store.canPerform?.('approvals.decide') !== false && neededOf(a).includes(role)
   const updateDecisionDraft = (id, patch) => setDecisionDrafts(current => ({
     ...current,
     [id]: { ...(current[id] || {}), ...patch },
@@ -459,7 +452,7 @@ export default function Approvals() {
   }
   const OppLink = ({ id }) => (
     <a onClick={() => drawer.open({ type: 'opp', id })} style={{ cursor: 'pointer' }}>
-      <b>{id}</b>{oppName(id) && <span> — {oppName(id)}</span>}
+      <b>{displayOpportunityId(id)}</b>{oppName(id) && <span> — {oppName(id)}</span>}
     </a>
   )
   const RefLink = ({ a }) => a.oppId
@@ -651,10 +644,15 @@ export default function Approvals() {
   const decided = scopedApprovals
     .filter(a => a.status !== 'Pending' && matches(a))
     .sort((a, b) => (b.decisionTs || '').localeCompare(a.decisionTs || ''))
-  const { pagedRows: pageMine, pagination: minePagination } = usePagedRows(mine, approvalResetKey)
-  const { pagedRows: pageForMe, pagination: forMePagination } = usePagedRows(forMe, approvalResetKey)
-  const { pagedRows: pageOthers, pagination: othersPagination } = usePagedRows(others, approvalResetKey)
-  const { pagedRows: pageDecided, pagination: decidedPagination } = usePagedRows(decided, approvalResetKey)
+  const cardFitOptions = { enabled: !phone, selfRoot: true, rowSelector: ':scope > .approval-card', measureTallest: true }
+  const mineFit = useViewportPageSize(mine.length, cardFitOptions)
+  const forMeFit = useViewportPageSize(forMe.length, cardFitOptions)
+  const othersFit = useViewportPageSize(others.length, cardFitOptions)
+  const decidedFit = useViewportPageSize(decided.length, cardFitOptions)
+  const { pagedRows: pageMine, pagination: minePagination } = usePagedRows(mine, approvalResetKey, phone ? 10 : mineFit.pageSize, mineFit.pagerRef)
+  const { pagedRows: pageForMe, pagination: forMePagination } = usePagedRows(forMe, approvalResetKey, phone ? 10 : forMeFit.pageSize, forMeFit.pagerRef)
+  const { pagedRows: pageOthers, pagination: othersPagination } = usePagedRows(others, approvalResetKey, phone ? 10 : othersFit.pageSize, othersFit.pagerRef)
+  const { pagedRows: pageDecided, pagination: decidedPagination } = usePagedRows(decided, approvalResetKey, phone ? 10 : decidedFit.pageSize, decidedFit.pagerRef)
   const filterBarProps = {
     q,
     statusF,
@@ -683,7 +681,7 @@ export default function Approvals() {
         <details className="approval-notice approval-notice-info"><summary>How approvals work</summary>
           <Icon name="info" size={14} /> Approvals are decided by LJS / AH, and technical approvals by LJS or AN. Your requests remain visible here until resolved.
         </details>
-        <div className="approval-list">{pageMine.map(a => phone ? <button key={a.id} className="phone-record" onClick={() => setRequestTimelineId(a.id)}><strong>{store.opportunities.find(o => o.id === a.oppId)?.sellTo || a.customerName || a.id}</strong><span>{a.type} · {a.status}</span><small>{a.id} · {stamp(a.ts)}</small></button> : <div key={a.id} className={cardClass(a)}><div className="approval-card-top"><b>{a.id}</b><span className={`pill ${pillFor(a.status)}`}>{a.status}</span><NewMarker a={a} /><span className="approval-type">{a.type}</span><span className="hint">requested {stamp(a.ts)}</span></div><div className="approval-ref"><RefLink a={a} /></div><Detail a={a} /><div className="approval-meta"><div><span>Approvers</span><RoleChips a={a} /></div><div><span>Decision note</span><p>{COMMERCIAL_RX.test(a.decisionNote || '') && !comm ? 'Restricted' : (a.decisionNote || 'No decision yet')}</p></div></div><QuickLinks a={a} /><button type="button" className="approval-timeline-open" onClick={() => setRequestTimelineId(a.id)}>View decision timeline</button></div>)}</div>
+        <div className="approval-list" ref={mineFit.listRef}>{pageMine.map(a => phone ? <button key={a.id} className="phone-record" onClick={() => setRequestTimelineId(a.id)}><strong>{store.opportunities.find(o => o.id === a.oppId)?.sellTo || a.customerName || a.id}</strong><span>{a.type} · {a.status}</span><small>{a.id} · {stamp(a.ts)}</small></button> : <div key={a.id} className={cardClass(a)}><div className="approval-card-top"><b>{a.id}</b><span className={`pill ${pillFor(a.status)}`}>{a.status}</span><NewMarker a={a} /><span className="approval-type">{a.type}</span><span className="hint">requested {stamp(a.ts)}</span></div><div className="approval-ref"><RefLink a={a} /></div><Detail a={a} /><div className="approval-meta"><div><span>Approvers</span><RoleChips a={a} /></div><div><span>Decision note</span><p>{COMMERCIAL_RX.test(a.decisionNote || '') && !comm ? 'Restricted' : (a.decisionNote || 'No decision yet')}</p></div></div><QuickLinks a={a} /><button type="button" className="approval-timeline-open" onClick={() => setRequestTimelineId(a.id)}>View decision timeline</button></div>)}</div>
         {minePagination}
         {!mine.length && <p className="hint">No approval requests yet — raise one from the proposal workbench when a deviation needs clearance.</p>}
         {requestTimelineId && (() => {
@@ -728,7 +726,7 @@ export default function Approvals() {
           <p className="approval-section-subtitle">{oldestForMe ? `Oldest has been waiting since ${shortDate(oldestForMe.ts)}. Review each one and record a decision.` : 'Nothing is waiting on you right now.'}</p>
         </div>
       </div>
-      {pageForMe.map(a => <PendingCard
+      <div ref={forMeFit.listRef}>{pageForMe.map(a => <PendingCard
         key={a.id}
         a={a}
         role={role}
@@ -747,14 +745,14 @@ export default function Approvals() {
         }}
         compact
         onReview={() => setDecisionDrawerId(a.id)}
-      />)}
+      />)}</div>
       {forMePagination}
       {!forMe.length && <p className="hint">Nothing pending for you — all clear.</p>}
 
       {others.length > 0 && (
         <>
           <div className="approval-section-heading"><div><span className="approval-section-kicker">IN PROGRESS</span><h3>Awaiting other approvers <span>{others.length}</span></h3></div></div>
-          {pageOthers.map(a => <PendingCard
+          <div ref={othersFit.listRef}>{pageOthers.map(a => <PendingCard
             key={a.id}
             a={a}
             role={role}
@@ -773,13 +771,13 @@ export default function Approvals() {
             }}
             compact
             onReview={() => setDecisionDrawerId(a.id)}
-          />)}
+          />)}</div>
           {othersPagination}
         </>
       )}
 
       <div className="approval-section-heading"><div><span className="approval-section-kicker">HISTORY</span><h3>Approved requests <span>{decided.length}</span></h3></div></div>
-      {pageDecided.map(a => (
+      <div ref={decidedFit.listRef}>{pageDecided.map(a => (
         <div key={a.id} className="form-card approval-card" style={{ marginBottom: 10 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <b>{a.id}</b>
@@ -800,7 +798,7 @@ export default function Approvals() {
           )}
           <QuickLinks a={a} />
         </div>
-      ))}
+      ))}</div>
       {decidedPagination}
       {!decided.length && <p className="hint">No decisions yet.</p>}
       {decisionDrawerId && (() => {

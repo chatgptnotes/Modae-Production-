@@ -180,7 +180,7 @@ test('simulated inquiries return to the shared inbox after saving', () => {
   assert.match(inbox, /store\.addLead\(lead\)/)
   assert.match(inbox, /store\.addOpportunity\(/)
   assert.match(inbox, /store\.updateLead\(lead\.id, \{ status: 'Converted', oppId \}\)/)
-  assert.match(inbox, /reserveOppId\(store\.opportunities, owner, store\.config\?\.roleNames\)/)
+  assert.match(inbox, /reserveOppId\(store\.opportunities, owner, store\.config\?\.roleNames, store\.config\?\.opportunityNumbering\)/)
   assert.match(inbox, /setSimulationOpen\(false\)\r?\n\s+nav\('\/inbox'\)/)
   // The stop-at-inbox option instead opens the New lead, returning before any
   // opportunity is created — the class gates are then walked manually.
@@ -304,7 +304,7 @@ test('customer requests are displayed separately from accepted facts', () => {
 })
 
 test('non-identity low-confidence fields are deferred until the opportunity exists', () => {
-  assert.match(inbox, /const deferredPendingLow = pendingLow\.filter\(f => !isRegistrationCriticalField\(f\.k\)\)/)
+  assert.match(inbox, /const deferredPendingLow = pendingLow\.filter\(f => !isRegistrationCriticalField\(f\.k, store\.config\)\)/)
   assert.match(inbox, /Follow-up information.*low-confidence sourcing or commercial fields/s)
 })
 
@@ -415,9 +415,9 @@ test('Opportunity Customer/KYC tab can complete optional customer details', () =
 })
 
 test('red leads explain why payment confirmation is not shown', () => {
-  assert.match(inbox, /Red customer — payment confirmation/)
+  assert.match(inbox, /customerStatus\} customer — approval clearance/)
   assert.match(inbox, /Payment confirmation is not required at Lead stage/)
-  assert.match(inbox, /joint LJS \+ AH approval shown above/)
+  assert.match(inbox, /configured approval clearance/)
 })
 
 test('active structured lead details use the full page width', () => {

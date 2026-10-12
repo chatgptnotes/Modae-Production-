@@ -1,0 +1,28 @@
+.access-rules-editor { min-width: 0; }
+.access-rules-fields { min-width: 0; margin: 18px 0; padding: 0; border: 0; }
+.access-rules-fields legend { margin-bottom: 10px; font-weight: 650; }
+.access-rules-matrices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.access-rules-matrix { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.access-rules-matrix caption { text-align: left; font-weight: 600; padding-bottom: 8px; }
+.access-rules-matrix th, .access-rules-matrix td { padding: 10px 6px; border-bottom: 1px solid var(--line, #deded9); overflow-wrap: anywhere; }
+.access-rules-matrix th { text-align: left; font-size: 12px; }
+.access-rules-matrix th:first-child { width: 48%; }
+.access-rules-matrix thead th:not(:first-child), .access-rules-matrix td { text-align: center; }
+.access-rules-matrix thead th:not(:first-child) { font-size: 11px; letter-spacing: 0; text-transform: none; overflow-wrap: normal; word-break: normal; }
+.access-rules-matrix input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+.access-rules-numbering { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.access-rules-numbering label, .access-rules-save > label { display: grid; gap: 6px; font-size: 12px; }
+.access-rules-numbering input, .access-rules-numbering select, .access-rules-save input { width: 100%; min-width: 0; min-height: 40px; box-sizing: border-box; }
+.access-rules-preview { margin-bottom: 6px; }
+.access-rules-preview output { font-weight: 650; overflow-wrap: anywhere; }
+.access-rules-save { display: grid; gap: 12px; }
+.access-rules-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 760px) {
+  .access-rules-matrices { grid-template-columns: 1fr; }
+  .access-rules-numbering { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .access-rules-buttons button { min-height: 44px; }
+}
+@media (max-width: 400px) {
+  .access-rules-numbering { grid-template-columns: 1fr; }
+  .access-rules-matrix th, .access-rules-matrix td { padding: 10px 3px; }
+}
