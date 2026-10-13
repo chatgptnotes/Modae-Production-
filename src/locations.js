@@ -1,3 +1,4 @@
+import { workspaceSyncState } from './workspaceSyncState.js'
 import { useEffect, useState } from 'react'
 import { INDIA_LOCATIONS } from './indiaLocations.js'
 import { runTask } from './ai.js'
@@ -100,6 +101,7 @@ export function useGlobalLocationSearch(query, limit = 50) {
       return () => { active = false; controller.abort() }
     }
 
+    if(!workspaceSyncState.ready||workspaceSyncState.enabled){setState({matches:local,loading:false});return()=>{active=false;controller.abort()}}
     setState({ matches: local, loading: true })
     const timer = setTimeout(async () => {
       try {

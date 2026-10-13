@@ -42,6 +42,7 @@ import TabletHome from './TabletHome.jsx'
 import './tablet.css'
 import './phone.css'
 import PhoneWorkspaceHeader from './PhoneWorkspaceHeader.jsx'
+import PersonalSettings from '../pages/PersonalSettings.jsx'
 import { PhoneWorkspaceChromeContext } from './PhoneWorkspaceChrome.jsx'
 import { PhoneLayoutContext } from './PhoneLayoutContext.jsx'
 import './phoneMode.css'
@@ -138,6 +139,7 @@ function TabletWorkspace() {
       <Route path="/proposal-sent" element={<TabletGate page="proposalSent"><ProposalSent /></TabletGate>} />
       <Route path="/admin/workflow" element={<TabletGate page="admin"><WorkflowAdmin /></TabletGate>} />
       <Route path="/more" element={<MobileMore />} />
+      <Route path="/personal-settings" element={<PersonalSettings />} />
       <Route path="*" element={<Navigate to="/more" replace />} />
       <Route path="/approvals" element={<TabletGate page="approvals"><Approvals /></TabletGate>} />
       <Route path="/order" element={<TabletGate page="po"><PurchaseOrders /></TabletGate>} />
@@ -173,6 +175,7 @@ function TabletWorkspace() {
           <h1>{title && <Icon name={title.icon} size={18} />}{title?.label || (loc.pathname === '/more' ? 'More' : detailLabel)}</h1>
         </div>
         {!phone && <div className="tb-utilities" aria-label="Workspace utilities">
+          <button type="button" onClick={() => nav('/personal-settings')} aria-label="Personal settings"><Icon name="gear" size={18} /></button>
           {['/my-dashboard', '/inbox', '/opportunities', '/approvals', '/analytics', '/order', '/proposal-sent'].includes(loc.pathname) && <WorkspaceViewToggle />}
           <details className="mobile-overflow"><summary aria-label="Workspace actions">•••</summary><div>
             <button type="button" onClick={refresh} disabled={refreshing} title="Refresh workspace data"><Icon name="refresh" size={18} />{refreshing ? 'Refreshing…' : 'Refresh workspace'}</button>

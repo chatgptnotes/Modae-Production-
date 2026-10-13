@@ -66,6 +66,7 @@ export default function PhoneAccountMenu({ store }) {
         {user?.email && <span>{user.email}</span>}
         {role && <small>{role}</small>}
       </div>
+      <button type="button" onClick={() => { close(false); nav('/personal-settings') }}><Icon name="gear" size={18} />Personal settings</button>
       {typeof store.setViewMode === 'function' && <button type="button" onClick={fullSite}><Icon name="monitor" size={18} />Full site</button>}
       {user && typeof store.logout === 'function' && <button type="button" onClick={() => { close(false); store.logout() }}><Icon name="logout" size={18} />Log out</button>}
     </div>}

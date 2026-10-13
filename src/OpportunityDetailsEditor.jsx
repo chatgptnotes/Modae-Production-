@@ -1,3 +1,5 @@
+import { releaseWorkspaceElementInputs } from './workspaceInputOwnership.js'
+import { workspaceSyncState } from './workspaceSyncState.js'
 import { changedOpportunityFields, validateOpportunityEdit } from './opportunityEdits.js'
 import { useFieldLists } from './useFieldLists.js'
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
@@ -205,7 +207,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
     setError('')
   }
 
-  const save = () => {
+  const save = async () => {
     if (!canEdit) return
     const invalid = formRef.current?.querySelector(':invalid')
     if (invalid) { invalid.reportValidity(); return }
@@ -226,6 +228,8 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
         patch[key] = ['valueK', 'cogsK'].includes(key) ? (changed[key] === '' ? null : rupeesToK(changed[key])) : changed[key]
       }
       if (Object.keys(patch).length) store.updateOpportunity(opp.id, patch)
+      releaseWorkspaceElementInputs(formRef.current)
+      if(workspaceSyncState.enabled && await store.flushPersistence([{entity:'opportunities',id:opp.id}])===false){setError('Changes were not saved. Review conflicts or retry.');return}
       baseline.current = normalizedDraft
       setDirty(false)
       setError('')
@@ -233,6 +237,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
   }
 
   const cancel = () => {
+    releaseWorkspaceElementInputs(formRef.current)
     baseline.current = makeDraft(opp)
     setDraft(baseline.current)
     setDirty(false)

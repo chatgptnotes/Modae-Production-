@@ -1,3 +1,11 @@
+import { activeWorkspaceInput, appliedWorkspaceInput } from './workspaceInputOwnership.js'
+import { WorkspaceSyncRuntime } from './ui/WorkspaceSync.jsx'
+import { workspaceDrafts, SYNC_ENTITIES } from './workspaceDrafts.js'
+import { workspaceSyncState, committedWorkspace, resolvedWorkspaceRecord } from './workspaceSyncState.js'
+import { recordFrom, replaceRecord } from './workspaceReconcile.js'
+import { applyApprovalEffects } from './approvalEffects.js'
+import { createApprovalCommands } from './approvalCommands.js'
+import { getWorkspaceGeneration } from './workspaceApi.js'
 import { previewOpportunityNumber, validateOpportunityNumbering } from './opportunityNumbering.js'
 import { canPerform as policyCanPerform, effectiveAccess, validateAccessPolicy } from './accessPolicy.js'
 import { readAdminPolicy, saveAdminPolicy } from './adminPolicyApi.js'
@@ -217,87 +225,6 @@ function withAudit(s, action, objectId, detail = '') {
 // Side effects of a resolved approval (BT prototype's applyApprovalEffects):
 // Red-continuation gates qualify or archive the lead; final quote release
 // flips the proposal release state and the milestone.
-function applyApprovalEffects(s, appr) {
-  let next = s
-  if (appr.type === 'Red customer clearance' && appr.leadId) {
-    // 'Returned' does NOT clear the gate — leave the lead untouched so the
-    // salesperson can address the comments and re-request.
-    const lead = next.leads.find(l => l.id === appr.leadId)
-    const leadPatch = appr.status === 'Rejected'
-      ? { status: 'Dropped', droppedReason: 'Red-class continuation rejected' }
-      : appr.status === 'Approved' || appr.status === 'Approved with conditions'
-        // A late decision must not walk an already-registered lead backwards:
-        // 'Converted' owns a live opportunity, and Qualified would orphan it.
-        ? (lead?.status === 'Converted' ? null : { status: 'Qualified' })
-        : null
-    if (leadPatch) next = { ...next, leads: next.leads.map(l => (l.id === appr.leadId ? { ...l, ...leadPatch } : l)) }
-  }
-  // A sales-raised customer-master change only lands once the gate clears.
-  if (appr.type === 'Customer master change' && appr.customerName && appr.patch) {
-    if (appr.status === 'Approved' || appr.status === 'Approved with conditions') {
-      next = {
-        ...next,
-        ...applyCustomerChange(next, appr.customerName, appr.patch),
-      }
-    }
-  }
-  if (appr.type === 'Final quote release' && appr.oppId) {
-    if (appr.status === 'Approved' || appr.status === 'Approved with conditions') {
-      const p = next.proposals[appr.oppId]
-      if (p) next = {
-        ...next,
-        proposals: { ...next.proposals, [appr.oppId]: {
-          ...p,
-          releaseStatus: 'Released',
-          approvedPricing: {
-            revision: p.revision,
-            approvalSnapshot: appr.approvalSnapshot || proposalApprovalSnapshot(p, next.opportunities.find(o => o.id === appr.oppId)),
-            listValue: appr.listValue ?? null,
-            approvedValue: appr.requestedValue ?? null,
-            discountPct: appr.discountPct ?? 0,
-            markupPct: appr.markupPct ?? 0,
-            approvedAt: new Date().toISOString(),
-            approvalId: appr.id,
-          },
-          pricingHistory: [...(p.pricingHistory || []), {
-            revision: p.revision,
-            status: appr.status,
-            when: new Date().toISOString(),
-            listValue: appr.listValue ?? null,
-            approvedValue: appr.requestedValue ?? null,
-            discountPct: appr.discountPct ?? 0,
-            markupPct: appr.markupPct ?? 0,
-            approvalId: appr.id,
-          }],
-        } },
-      }
-      // Once the second joint decision lands, the quote is ready to dispatch
-      // without requiring the owner to revisit the stepper.  Run the same
-      // transition guard used by the workbench: a release must not skip a
-      // still-pending technical/commercial gate or another lifecycle rule.
-      const releasedProposal = next.proposals[appr.oppId]
-      const releasedOpp = next.opportunities.find(o => o.id === appr.oppId)
-      if (releasedProposal && releasedOpp && releasedOpp.milestone === 'Approval'
-        && !transitionBlockers(releasedOpp, 'Submitted', releasedProposal, next).length) {
-        next = {
-          ...next,
-          opportunities: next.opportunities.map(o => o.id === appr.oppId
-            ? { ...o, milestone: 'Submitted', lastUpdated: nowIST().slice(0, 10),
-                workflowTransition: workflowTransition(o.milestone, 'Submitted', 'Final quote release approved', `WFT-${appr.id}-approved`) }
-            : o),
-        }
-      }
-    } else if (appr.status === 'Returned') {
-      next = { ...next, opportunities: next.opportunities.map(o => (o.id === appr.oppId && o.milestone === 'Approval'
-        ? { ...o, milestone: 'Proposal', workflowTransition: workflowTransition(o.milestone, 'Proposal', appr.decisionNote || 'Approval returned', `WFT-${appr.id}-returned`) }
-        : o)) }
-    } else if (appr.status === 'Rejected') {
-      next = { ...next, opportunities: next.opportunities.map(o => (o.id === appr.oppId ? { ...o, health: 'Blocked' } : o)) }
-    }
-  }
-  return next
-}
-
 // An approval may have been completed before this version was deployed, or on
 // another device while this browser was closed.  Reconcile those already-valid
 // releases during boot and shared-state refresh, rather than waiting for a new
@@ -305,6 +232,9 @@ function applyApprovalEffects(s, appr) {
 // a green historical release must never skip a quote from Proposal directly to
 // Submitted, and later milestones must never move backward.
 function reconcileApprovedSubmissions(s) {
+  // Connected decisions and their effects are committed together by the server.
+  // A pull must never manufacture another release write from a browser snapshot.
+  if (datastore.dbEnabled()) return s
   // Approval and proposal rows are persisted separately in Supabase. A
   // pull/focus refresh can therefore briefly deliver the approved
   // decision without the proposal mutation written by applyApprovalEffects
@@ -354,7 +284,15 @@ function reconcileApprovedSubmissions(s) {
 }
 
 export function StoreProvider({ children }) {
-  const [state, setState] = useState(initialState)
+  const [state, commitState] = useState(initialState)
+  const setState = update => {
+    const input=activeWorkspaceInput()
+    commitState(previous=>{
+      const next=typeof update==='function'?update(previous):update
+      appliedWorkspaceInput(input,previous,next)
+      return next
+    })
+  }
   const initialHydrationRef = useRef(null)
   const sharedPullInFlightRef = useRef(null)
   datastore.setLocalDemoMode(isLocalDemoSession(state))
@@ -370,6 +308,22 @@ export function StoreProvider({ children }) {
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
   const stateRef = useRef(state)
   stateRef.current = state
+  const approvalCommandsRef = useRef(null)
+  const approvalViewRevisionsRef = useRef({})
+  if (!approvalCommandsRef.current) {
+    let storage
+    try { storage = window.sessionStorage } catch { /* optional */ }
+    approvalCommandsRef.current = createApprovalCommands({
+      identity: () => ({ actorId: stateRef.current.auth?.user?.id, generation: getWorkspaceGeneration() }),
+      revision: id => approvalViewRevisionsRef.current[id],
+      send: datastore.sendApprovalDecision,
+      storage,
+    })
+  }
+  useEffect(() => {
+    approvalViewRevisionsRef.current = {}
+    if (!state.auth?.user) approvalCommandsRef.current.clear()
+  }, [state.auth?.user?.id])
   const localAccessRevisionRef = useRef(0)
 
   // ---- Supabase records-state sync (see datastore.js). localStorage is an
@@ -413,6 +367,32 @@ export function StoreProvider({ children }) {
     return true
   }
 
+  const registerDirtyRecords = () => {
+    if (!workspaceSyncState.enabled) return
+    for (const entity of [...SYNC_ENTITIES,'spares_lines','clarifications']) {
+      const current = stateRef.current
+      const rows = entity === 'proposals' ? Object.entries(current.proposals || {}).map(([id,data])=>({id,...data})) : current[entity==='spares_lines'?'sparesLines':entity] || []
+      for (const row of rows) {
+        const baseData = recordFrom(lastSavedRef.current,entity,row.id)
+        if (JSON.stringify(baseData) === JSON.stringify(entity === 'proposals' ? current.proposals[row.id] : row)) continue
+        let entry = workspaceDrafts.get(entity,row.id)
+        const local = entity === 'proposals' ? current.proposals[row.id] : row
+        if (!entry) {
+          workspaceDrafts.edit(entity,row.id,{data:baseData || {},rev:datastore.workspaceRecord(entity,row.id)?.rev || 0})
+          entry = workspaceDrafts.get(entity,row.id)
+          entry.draftData = structuredClone(local)
+        } else if (JSON.stringify(entry.draftData) !== JSON.stringify(local)) {
+          // Programmatic form actions must advance the edit sequence too.
+          // A save acknowledgment only owns the version it submitted.
+          entry.draftData = structuredClone(local)
+          entry.seq++
+          entry.touchedAt = Date.now()
+          workspaceDrafts.notify()
+        }
+      }
+    }
+  }
+
   const dirtySlices = () => {
     const s = stateRef.current
     const dirty = {}
@@ -422,7 +402,11 @@ export function StoreProvider({ children }) {
     return dirty
   }
 
-  const flushSaves = () => {
+  const flushSaves = ({ explicit = false, selection = null } = {}) => {
+    if (datastore.dbEnabled() && !workspaceSyncState.ready) return Promise.resolve(false)
+    if (workspaceSyncState.enabled && !explicit) return Promise.resolve(false)
+    if (workspaceSyncState.suspended) return Promise.resolve(false)
+    registerDirtyRecords()
     if (permanentPurgeRef.current) return Promise.resolve()
     persistLocalSnapshot(stateRef.current)
     clearTimeout(saveTimerRef.current)
@@ -431,7 +415,7 @@ export function StoreProvider({ children }) {
     if (authInvalidRef.current) return Promise.resolve()
     const retry = saveRetryRef.current
     if (retry.retryAt > Date.now()) return Promise.resolve()
-    const dirty = dirtySlices()
+    const dirty = selection || dirtySlices()
     if (!Object.keys(dirty).length) {
       setAdminSaveState('saved')
       return Promise.resolve(true)
@@ -462,7 +446,7 @@ export function StoreProvider({ children }) {
             opportunitySyncBaseline: confirmed.opportunities || s.opportunitySyncBaseline || [],
           }))
         }
-        return true
+        return ![...workspaceDrafts.entries.values()].some(e=>workspaceDrafts.blocked(e.entity,e.id))
       })
       .catch(e => {
         setAdminSaveState('error')
@@ -493,6 +477,7 @@ export function StoreProvider({ children }) {
           console.warn('Supabase session expired or was rejected; local changes are retained until sign-in succeeds.', saveError)
           return false
         }
+        if (workspaceSyncState.enabled) return false
         retry.attempts += 1
         const delay = Math.min(30000, 2000 * (2 ** Math.min(retry.attempts - 1, 4)))
         retry.retryAt = Date.now() + delay
@@ -599,6 +584,12 @@ export function StoreProvider({ children }) {
   // A server slice replaces only a clean local slice. This protects edits that
   // are still being saved while accepting a live update from another browser.
   const applyServer = (slices, diagnostics = null) => {
+    if (authInvalidRef.current) return
+    if (workspaceSyncState.enabled && workspaceSyncState.generation && workspaceSyncState.generation !== getWorkspaceGeneration()) {
+      workspaceSyncState.suspended = true
+      return
+    }
+    registerDirtyRecords()
     if (diagnostics) setSyncDiagnostics(diagnostics)
     const s = stateRef.current
     const updates = {}
@@ -611,6 +602,16 @@ export function StoreProvider({ children }) {
       const hasSavedBaseline = Object.prototype.hasOwnProperty.call(lastSavedRef.current, k)
       const baseline = hasSavedBaseline ? lastSavedRef.current[k] : bootRef.current[k]
       const dirty = k in s && JSON.stringify(s[k]) !== JSON.stringify(baseline)
+      if (workspaceSyncState.enabled && [...SYNC_ENTITIES,'sparesLines','clarifications'].includes(k)) {
+        let merged = { [k]: v }
+        const entity=k==='sparesLines'?'spares_lines':k
+        for (const entry of workspaceDrafts.entries.values()) if (entry.entity === entity) {
+          const local = recordFrom(s,entity,entry.id)
+          merged = replaceRecord(merged,{entity,id:entry.id,data:local,available:!!local})
+        }
+        updates[k] = merged[k]
+        continue
+      }
       if (dirty) {
         if (k === 'config') updates.config = { ...s.config, accessPolicy: v.accessPolicy, opportunityNumbering: v.opportunityNumbering }
         continue
@@ -618,9 +619,13 @@ export function StoreProvider({ children }) {
       if (JSON.stringify(s[k]) === JSON.stringify(v)) continue
       updates[k] = v
     }
+    if (Array.isArray(slices.approvals) && (updates.approvals || JSON.stringify(s.approvals) === JSON.stringify(slices.approvals))) {
+      // Bind expectedRev to the version actually presented, never to a newer
+      // datastore revision that a dirty local slice refused to display.
+      approvalViewRevisionsRef.current = Object.fromEntries(Object.entries(slices._approvalRevisions || {}).map(([id,rev])=>[id,workspaceDrafts.get('approvals',id) ? approvalViewRevisionsRef.current[id] : rev]))
+    }
     const serverSlices = syncedOf(slices)
     const baselineUpdates = {
-      ...Object.fromEntries(Object.entries(serverSlices)),
       ...(serverSlices.leads ? { leadSyncBaseline: serverSlices.leads } : {}),
       ...(serverSlices.clarifications ? { clarificationSyncBaseline: serverSlices.clarifications } : {}),
       ...(serverSlices.opportunities ? { opportunitySyncBaseline: serverSlices.opportunities } : {}),
@@ -671,9 +676,21 @@ export function StoreProvider({ children }) {
   // React state updates and the stateRef mirror are committed on the next
   // turn. Wait for that commit before a workflow transition claims that its
   // persistence completed, otherwise navigation can race the save.
-  const flushPersistence = async () => {
+  const flushPersistence = async (records = null) => {
     await new Promise(resolve => setTimeout(resolve, 0))
+    if (workspaceSyncState.enabled) return records ? api.saveSelectedRecords(records) : !Object.keys(dirtySlices()).length
     return flushSaves()
+  }
+
+  const refreshDecisionState = async (allEffects = false) => {
+    const actor = stateRef.current.auth?.user?.id
+    const generation = getWorkspaceGeneration()
+    const slices = await datastore.loadApprovalDecisionState({ allEffects,
+      isCurrent: () => actor === stateRef.current.auth?.user?.id && generation === getWorkspaceGeneration() })
+    if (!slices) return false
+    if (actor !== stateRef.current.auth?.user?.id || generation !== getWorkspaceGeneration()) return false
+    applyServer(slices)
+    return true
   }
 
   // Pull only on user/lifecycle events. Idle browsers must not reconnect a
@@ -682,7 +699,8 @@ export function StoreProvider({ children }) {
     if (!datastore.dbEnabled()) return false
     if (!force && sharedPullInFlightRef.current) return sharedPullInFlightRef.current
     const pull = (async () => {
-      await flushSaves()
+      if (!workspaceSyncState.enabled) await flushSaves()
+      registerDirtyRecords()
       const res = await datastore.loadAll({ force: true })
       if (!res) { setLiveSyncStatus('error'); return false }
       if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
@@ -714,7 +732,7 @@ export function StoreProvider({ children }) {
     loadApprovedPriceLists()
     const onFocus = () => {
       if (!hydratedRef.current) return
-      void pullSharedData()
+      if (!workspaceSyncState.enabled) void pullSharedData()
     }
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
@@ -749,10 +767,11 @@ export function StoreProvider({ children }) {
       if (Object.keys(dirtySlices()).length) setAdminSaveState('saved')
       return
     }
+    registerDirtyRecords()
     if (!Object.keys(dirtySlices()).length) return
-    setAdminSaveState('saving')
+    setAdminSaveState(workspaceSyncState.enabled ? 'unsaved' : 'saving')
     clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(flushSaves, 1500)
+    if (workspaceSyncState.ready && !workspaceSyncState.enabled) saveTimerRef.current = setTimeout(flushSaves, 1500)
   }, [state])
 
   useEffect(() => () => clearTimeout(localCacheTimerRef.current), [])
@@ -770,6 +789,100 @@ export function StoreProvider({ children }) {
   const api = {
     ...state,
     flushPersistence,
+    async saveSelectedRecords(records) {
+      if (!workspaceSyncState.enabled || workspaceSyncState.suspended) return false
+      await new Promise(resolve=>setTimeout(resolve,0))
+      registerDirtyRecords()
+      const actor=stateRef.current.auth?.user?.id,generation=getWorkspaceGeneration()
+      const current=()=>stateRef.current.auth?.user?.id===actor&&getWorkspaceGeneration()===generation&&!workspaceSyncState.suspended
+      const selected=[...new Map(records.map(r=>[`${r.entity}:${r.id}`,r])).values()].filter(r=>[...SYNC_ENTITIES,'spares_lines','clarifications'].includes(r.entity))
+      const oppIds=new Set(selected.filter(r=>r.entity==='opportunities'||r.entity==='proposals').map(r=>r.id))
+      for(const [entity,slice] of [['spares_lines','sparesLines'],['clarifications','clarifications']]) {
+        const related=[...(stateRef.current[slice]||[]),...(lastSavedRef.current[slice]||[])].filter(row=>oppIds.has(row.oppId))
+        for(const id of new Set(related.map(row=>row.id)))selected.push({entity,id})
+      }
+      const selectedKeys=new Set()
+      for(let i=0;i<selected.length;){const key=`${selected[i].entity}:${selected[i].id}`;if(selectedKeys.has(key))selected.splice(i,1);else{selectedKeys.add(key);i++}}
+      if(selected.some(r=>workspaceDrafts.blocked(r.entity,r.id)))return false
+      const snapshots=selected.flatMap(r=>{
+        const data=recordFrom(stateRef.current,r.entity,r.id),base=datastore.workspaceRecord(r.entity,r.id)
+        if(JSON.stringify(data)===JSON.stringify(base?.data))return []
+        if(!workspaceDrafts.get(r.entity,r.id))workspaceDrafts.edit(r.entity,r.id,base||{data:{},rev:0})
+        return [{...r,data:structuredClone(data||base?.data||{}),deleted:!data,rev:base?.rev||0,seq:workspaceDrafts.get(r.entity,r.id)?.seq}]
+      })
+      const clearUnchanged=()=>{for(const r of selected){const draft=workspaceDrafts.get(r.entity,r.id);if(draft&&!draft.localOnly&&JSON.stringify(recordFrom(stateRef.current,r.entity,r.id))===JSON.stringify(datastore.workspaceRecord(r.entity,r.id)?.data))workspaceDrafts.clear(r.entity,r.id)}}
+      if(!snapshots.length){clearUnchanged();return true}
+      try {
+        const result=await datastore.saveSelectedWorkspaceRecords(snapshots,current)
+        if(!current())return false
+        let next=stateRef.current
+        for(const row of result.committed){
+          const submitted=snapshots.find(r=>r.entity===row.entity&&r.id===row.id)
+          if(!submitted)continue
+          datastore.acceptWorkspaceRecord(row)
+          lastSavedRef.current=replaceRecord(lastSavedRef.current,row)
+          workspaceDrafts.saved(row.entity,row.id,{data:row.data,rev:row.rev},submitted.seq)
+          if(JSON.stringify(recordFrom(next,row.entity,row.id))===JSON.stringify(submitted.data))next=replaceRecord(next,row)
+        }
+        stateRef.current=next;setState(next)
+        committedWorkspace(result.committed)
+        for(const row of result.conflicts)workspaceDrafts.observe(row.entity,row.id,{...row,conflict:true,available:!row.unavailable&&!!row.data&&!row.deleted_at})
+        clearUnchanged()
+        if(result.error){workspaceSyncState.error=result.error.message||'Save failed. Retry explicitly.';if(['WORKSPACE_PURGED','DEPLOYMENT_CHANGED'].includes(result.error.code))workspaceSyncState.suspended=true;workspaceDrafts.notify()}
+        persistLocalSnapshot(next)
+        return !result.error&&result.conflicts.length===0
+      }catch(e){setAdminSaveState('error');return false}
+    },
+    async saveOtherWorkspaceChanges() {
+      const selection=Object.fromEntries(Object.entries(dirtySlices()).filter(([key])=>![...SYNC_ENTITIES,'sparesLines','clarifications'].includes(key)))
+      return flushSaves({explicit:true,selection})
+    },
+    syncAccessChanged() {
+      authInvalidRef.current = true
+      workspaceSyncState.suspended = true
+      clearTimeout(saveTimerRef.current)
+      workspaceDrafts.reset()
+      approvalCommandsRef.current.clear()
+      const next = { ...emptyState(stateRef.current), auth:{user:null}, users:[], audit:[], priceLists:{}, rateSheets:{}, adhocParts:[], importedWorkbook:null, config:{} }
+      stateRef.current=next
+      lastSavedRef.current={}
+      persistLocalSnapshot(next)
+      setState(next)
+      void clearSupabaseSession().finally(() => window.location.reload())
+    },
+    syncInstall(rows, isCurrent = () => true) {
+      if (!isCurrent()) return
+      registerDirtyRecords()
+      let next = stateRef.current
+      let baseline = lastSavedRef.current
+      for (const row of rows) {
+        if (!workspaceDrafts.observe(row.entity,row.id,row)) continue
+        const previous = datastore.workspaceRecord(row.entity,row.id)
+        if (row.available && previous?.rev > row.rev) continue
+        next = replaceRecord(next,row)
+        baseline = replaceRecord(baseline,row)
+        datastore.acceptWorkspaceRecord(row)
+        if (row.entity === 'approvals') approvalViewRevisionsRef.current[row.id] = row.available ? row.rev : undefined
+      }
+      if (!isCurrent()) return
+      lastSavedRef.current = baseline
+      stateRef.current = next
+      setState(next)
+    },
+    syncResolve(remote, data, scope, { discard = false, expectedSeq } = {}) {
+      if (workspaceSyncState.suspended || !scope || scope.actor !== stateRef.current.auth?.user?.id || scope.generation !== getWorkspaceGeneration()) return false
+      const draft = workspaceDrafts.get(remote.entity,remote.id)
+      if (!discard && (draft?.localOnly || !remote.available)) return false
+      if (expectedSeq !== undefined && draft?.seq !== expectedSeq) return false
+      workspaceDrafts.clear(remote.entity,remote.id)
+      datastore.acceptWorkspaceRecord(remote)
+      lastSavedRef.current = replaceRecord(lastSavedRef.current,remote)
+      const next = replaceRecord(stateRef.current,{...remote,data,available:remote.available})
+      stateRef.current=next; setState(next)
+      if (remote.available && JSON.stringify(data)!==JSON.stringify(remote.data)) workspaceDrafts.edit(remote.entity,remote.id,{data:remote.data,rev:remote.rev})
+      resolvedWorkspaceRecord(remote.entity,remote.id)
+      return true
+    },
     canPerform(action) {
       const current = stateRef.current
       return policyCanPerform(current.roles || current.role, action, current.config)
@@ -856,7 +969,7 @@ export function StoreProvider({ children }) {
       // workbench. Do not make the first refresh depend on the ordinary draft
       // debounce or on an asynchronous pagehide event; the next turn gives
       // React time to publish the new state through stateRef before saving it.
-      setTimeout(flushSaves, 0)
+      setTimeout(()=>workspaceSyncState.enabled?api.saveSelectedRecords([{entity:'opportunities',id:opp.id}]):flushSaves(), 0)
       spTrack(opp.id, 'Open', () => filestore.ensureOppFolder(opp))
     },
 
@@ -1057,7 +1170,7 @@ export function StoreProvider({ children }) {
         // Commercial decisions are workflow-critical. Publish the state
         // change through React, then flush on the next turn so stateRef sees
         // the new proposal instead of waiting for the ordinary debounce.
-        setTimeout(flushSaves, 0)
+        setTimeout(()=>workspaceSyncState.enabled?api.saveSelectedRecords([{entity:'proposals',id:oppId},{entity:'opportunities',id:oppId}]):flushSaves(), 0)
       }
     },
 
@@ -1316,7 +1429,7 @@ export function StoreProvider({ children }) {
       // A new enquiry is immediately followed by navigation. Publish it after
       // React commits the state update so a quick refresh cannot lose the row
       // before the ordinary draft-save debounce runs.
-      setTimeout(flushSaves, 0)
+      setTimeout(()=>workspaceSyncState.enabled?api.saveSelectedRecords([{entity:'leads',id:lead.id}]):flushSaves(), 0)
     },
 
     // Throw away the rows the inbox simulator generated, without the blunt
@@ -1435,6 +1548,7 @@ export function StoreProvider({ children }) {
 
     // ---- Approvals --------------------------------------------------------
     requestApproval(req) {
+      let requestedRecords = []
       setState(s => {
         const opportunity = s.opportunities.find(item => item.id === req.oppId)
         // The builder can display a generated proposal before the first save.
@@ -1450,7 +1564,8 @@ export function StoreProvider({ children }) {
           && existing.type === req.type
           && existing.status === 'Pending'
           && (existing.approvalKey || approvalMemoryKey(existing)) === memoryKey)
-        if (alreadyRemembered) {
+        if (alreadyRemembered && !req.refreshPendingContext) return s
+        if (alreadyRemembered && !datastore.dbEnabled()) {
           if (!req.refreshPendingContext || alreadyRemembered.status !== 'Pending') return s
           const { refreshPendingContext, ...requestContext } = req
           return withAudit({
@@ -1496,14 +1611,15 @@ export function StoreProvider({ children }) {
         const superseded = s.approvals
           .filter(existing => existing.oppId === req.oppId
             && existing.type === req.type
-            && ['Approved', 'Approved with conditions', 'Returned'].includes(existing.status)
+            && (['Approved', 'Approved with conditions', 'Returned'].includes(existing.status) || existing.id === alreadyRemembered?.id)
             && (existing.approvalKey || approvalMemoryKey(existing)) === memoryKey)
+        requestedRecords = [{entity:'approvals',id:appr.id}, ...superseded.map(row=>({entity:'approvals',id:row.id})), ...(req.oppId?[{entity:'opportunities',id:req.oppId},{entity:'proposals',id:req.oppId}]:[]), ...(req.leadId?[{entity:'leads',id:req.leadId}]:[])]
         return withAudit(
           { ...s,
             approvals: [
               appr,
               ...s.approvals.map(existing => superseded.some(x => x.id === existing.id)
-                ? { ...existing, status: 'Cancelled', supersededBy: id, cancelledAt: new Date().toISOString(), __sv: new Date().toISOString() }
+                ? { ...existing, status: existing.status === 'Pending' || !datastore.dbEnabled() ? 'Cancelled' : existing.status, supersededBy: id, ...(existing.status === 'Pending' ? { cancelledAt: new Date().toISOString() } : {}), __sv: new Date().toISOString() }
                 : existing),
             ] },
           'Approval requested', appr.id, `${appr.type} — ${appr.oppId} → ${appr.approver}`)
@@ -1512,7 +1628,7 @@ export function StoreProvider({ children }) {
       // immediate reload. Publish through React, then save on the next turn so
       // stateRef contains the newly requested approval instead of waiting for
       // the ordinary draft-save debounce.
-      setTimeout(flushSaves, 0)
+      setTimeout(()=>workspaceSyncState.enabled?api.saveSelectedRecords(requestedRecords):flushSaves(), 0)
     },
 
     cancelApproval(id, reason = '') {
@@ -1522,7 +1638,7 @@ export function StoreProvider({ children }) {
         const next = {
           ...s,
           approvals: s.approvals.map(a => (a.id === id
-            ? { ...a, status: 'Cancelled', cancelledBy: s.role, cancelledAt: new Date().toISOString(), __sv: new Date().toISOString(), decisionNote: reason || a.decisionNote }
+            ? { ...a, status: 'Cancelled', cancelledBy: s.role, cancelledAt: new Date().toISOString(), __sv: new Date().toISOString(), cancellationReason: reason }
             : a)),
         }
         return withAudit(next, 'Approval cancelled', id, reason || 'No longer required')
@@ -1530,10 +1646,11 @@ export function StoreProvider({ children }) {
       // Cancellation changes the active gate just like a request or decision;
       // do not leave another browser looking at the stale pending row during
       // the normal draft-save debounce.
-      setTimeout(flushSaves, 0)
+      setTimeout(()=>workspaceSyncState.enabled?api.saveSelectedRecords([{entity:'approvals',id}]):flushSaves(), 0)
     },
 
     decideApproval(id, { status, conditions = [], decisionNote = '' }) {
+      if (datastore.dbEnabled()) throw new Error('Use the approval decision form to commit this decision.')
       setState(s => withAudit({
         ...s,
         approvals: s.approvals.map(a => a.id === id
@@ -1705,6 +1822,33 @@ export function StoreProvider({ children }) {
     // Records one approver's decision; overall status resolves when every
     // needed role has decided (any Reject → Rejected immediately).
     recordDecision(id, { d, comment = '', commentReview = null }) {
+      if (datastore.dbEnabled()) return (async () => {
+        if (!['Approved', 'Rejected'].includes(d)) return false
+        // Explicit approvals never flush unrelated local drafts.
+        if (workspaceSyncState.enabled) {
+          registerDirtyRecords()
+          const approval=stateRef.current.approvals.find(row=>row.id===id)
+          const dependencies=[['approvals',id],['opportunities',approval?.oppId],['proposals',approval?.oppId],['leads',approval?.leadId]]
+          if(dependencies.some(([entity,key])=>key&&workspaceDrafts.get(entity,key)) || [...workspaceDrafts.entries.values()].some(entry=>['spares_lines','clarifications'].includes(entry.entity)&&recordFrom(stateRef.current,entry.entity,entry.id)?.oppId===approval?.oppId))throw new Error('Save or review this approval’s related drafts before deciding.')
+        } else if (await flushPersistence() === false) throw new Error('Save pending changes before deciding.')
+        const result = await approvalCommandsRef.current.decide(id, { action: d === 'Approved' ? 'accept' : 'reject', comment, commentReview })
+        if (result.kind === 'committed') {
+          committedWorkspace([{entity:'approvals',id}])
+          try { await refreshDecisionState(true) }
+          catch { setLiveSyncStatus('error') }
+          return true
+        }
+        if (result.kind === 'refresh-required' || result.status === 409) {
+          await refreshDecisionState(true)
+          throw new Error('This request changed. Review the refreshed request before deciding.')
+        }
+        if (result.kind === 'uncertain') {
+          if (result.error?.status === 409) await refreshDecisionState(true)
+          const detail = result.error?.message ? `${result.error.message} ` : ''
+          throw new Error(`${detail}The earlier decision is still unconfirmed. Retry to check the same operation; it will not be submitted twice.`)
+        }
+        throw new Error(result.message || 'Sign in and refresh before deciding.')
+      })()
       let accepted = false
       setState(s => {
         const appr = s.approvals.find(a => a.id === id)
@@ -2703,10 +2847,7 @@ export function StoreProvider({ children }) {
       // their background refresh independent from the heavier workspace pull.
       if (!datastore.dbEnabled()) return true
       try {
-        const slices = await readLiveData(['approvals', 'opportunities'])
-        if (!slices) return false
-        applyServer(slices)
-        return true
+        return await refreshDecisionState()
       } catch (error) {
         if (invalidateSupabaseAuth(error)) return false
         console.warn('Approval refresh failed:', error?.message || error)
@@ -2776,6 +2917,8 @@ export function StoreProvider({ children }) {
       return { ok: true }
     },
     logout() {
+      approvalCommandsRef.current.clear()
+      workspaceDrafts.reset()
       datastore.setLocalDemoMode(false)
       if (supabase) {
         // The app auth state is local-only, but the Supabase session must also
@@ -2978,7 +3121,7 @@ export function StoreProvider({ children }) {
     return () => window.removeEventListener('focus', onFocus)
   }, [])
 
-  return <StoreCtx.Provider value={{ ...api, authReady, liveSyncStatus: workspaceSyncStatus({ status: liveSyncStatus, enabled: datastore.dbEnabled(), localDemo: isLocalDemoSession(state), configError: supabaseConfigError }), syncDiagnostics, adminSaveState }}>{children}</StoreCtx.Provider>
+  return <StoreCtx.Provider value={{ ...api, authReady, liveSyncStatus: workspaceSyncStatus({ status: liveSyncStatus, enabled: datastore.dbEnabled(), localDemo: isLocalDemoSession(state), configError: supabaseConfigError }), syncDiagnostics, adminSaveState }}><WorkspaceSyncRuntime />{children}</StoreCtx.Provider>
 }
 
 export const useStore = () => useContext(StoreCtx)

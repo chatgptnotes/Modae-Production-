@@ -88,7 +88,7 @@ export default function PropBuilder({ opp, onRevision }) {
     setReviseType(REVISION_TYPES[0].id)
   }
 
-  const condApprovals = store.approvals.filter(a =>
+  const condApprovals = store.approvals.filter(a => !a.supersededBy &&
     a.oppId === opp.id && a.status === 'Approved with conditions')
 
   const insertTerms = () => {

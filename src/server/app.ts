@@ -1,6 +1,7 @@
 import { projectWorkspace } from '../workspaceAccess.js'
 import { createWorkspaceDataHandler } from '../../api/workspace-data.js'
 import adminPolicyHandler from '../../api/admin-policy.js'
+import userPreferencesHandler from '../../api/user-preferences.js'
 import opportunityNumberHandler from '../../api/opportunity-number.js'
 import { controller } from './controllers/legacy.js'
 import cors from 'cors'
@@ -65,6 +66,11 @@ export function createApp({
   app.use('/api/workspace/data', express.json({ limit: '32mb' }))
   app.use('/api/send-proposal-email', express.json({ limit: '32mb' }))
   app.use(express.json({ limit: '2mb' }))
+  app.use(['/api/workspace/save','/api/workspace/import'], (req,res,next) => {
+    const deployment=process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || 'local'
+    if(req.method==='POST' && process.env.WORKSPACE_SYNC_ENABLED==='true' && deployment!=='local' && req.get('x-workspace-deployment')!==deployment) return res.status(409).json({error:'Reload after the latest deployment before saving.',code:'DEPLOYMENT_CHANGED',errorCode:'DEPLOYMENT_CHANGED'})
+    next()
+  })
 
   app.get('/healthz', (_req, res) => res.status(200).json({ ok: true }))
   app.get('/api/workspace/bootstrap', async (req, res, next) => {
@@ -94,6 +100,7 @@ export function createApp({
         res.setHeader('x-workspace-generation', workspaceCache.generationHeader())
         return res.status(409).json({ ok: false, error: 'The workspace was purged. Refresh before saving.', errorCode: 'WORKSPACE_PURGED' })
       }
+      if (process.env.WORKSPACE_SYNC_ENABLED === 'true' && ['leads','opportunities','approvals','proposals'].some(key=>key in dirty)) return res.status(409).json({ ok: false, error: 'Use revision-aware row saves. Reload the application.', errorCode: 'ROW_REVISIONS_REQUIRED' })
       await writer(dirty, user.profile)
       workspaceCache.invalidate()
       const liveChanges = (['leads', 'opportunities', 'approvals'] as const).filter(key => key in dirty)
@@ -109,6 +116,8 @@ export function createApp({
   })
   app.post('/api/workspace/data', controller(createWorkspaceDataHandler({ invalidate: () => workspaceCache.invalidate() })))
   app.get('/api/admin-policy', controller(adminPolicyHandler))
+  app.get('/api/user-preferences', controller(userPreferencesHandler))
+  app.put('/api/user-preferences', controller(userPreferencesHandler))
   app.post('/api/admin-policy', async (req, res, next) => {
     try { await adminPolicyHandler(req, res) } catch (error) { next(error) } finally { workspaceCache.invalidate() }
   })

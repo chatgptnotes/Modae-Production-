@@ -70,7 +70,7 @@ test('Sourcing retry uses the fast sourcing read instead of the full workspace p
 test('approval cancellation is persisted immediately instead of waiting for draft debounce', () => {
   const store = read('src/store.jsx')
   const cancellation = store.slice(store.indexOf('cancelApproval(id, reason = \'\')'), store.indexOf('decideApproval(id,'))
-  assert.match(cancellation, /setTimeout\(flushSaves, 0\)/)
+  assert.match(cancellation, /workspaceSyncState.enabled\?api.saveSelectedRecords\(\[\{entity:'approvals',id\}\]\):flushSaves\(\)/)
 })
 
 test('the live-sync migration publishes only shared business tables', () => {
@@ -116,20 +116,20 @@ test('opportunity saves are serialized across debounce and pagehide flushes', ()
 test('opportunity creation flushes before immediate workbench navigation', () => {
   const store = read('src/store.jsx')
   assert.match(store, /Opportunity creation is immediately followed by navigation/)
-  assert.match(store, /setTimeout\(flushSaves, 0\)\n      spTrack\(opp\.id, 'Open'/)
+  assert.match(store, /setTimeout\(\(\)=>workspaceSyncState.enabled\?api.saveSelectedRecords\(\[\{entity:'opportunities',id:opp.id\}\]\):flushSaves\(\), 0\)\n      spTrack\(opp\.id, 'Open'/)
 })
 
 test('approval requests flush before a reload can discard the pending gate', () => {
   const store = read('src/store.jsx')
   const requestApproval = store.slice(store.indexOf('    requestApproval(req) {'), store.indexOf('    cancelApproval(', store.indexOf('    requestApproval(req) {')))
   assert.match(requestApproval, /Approval requests gate workflow transitions[\s\S]*must survive an[\s\S]*immediate reload/)
-  assert.match(requestApproval, /setTimeout\(flushSaves, 0\)/)
+  assert.match(requestApproval, /workspaceSyncState.enabled\?api.saveSelectedRecords\(requestedRecords\):flushSaves\(\)/)
 })
 
 test('lead creation flushes before immediate inbox navigation', () => {
   const store = read('src/store.jsx')
   assert.match(store, /A new enquiry is immediately followed by navigation/)
-  assert.match(store, /'Lead received',[\s\S]*setTimeout\(flushSaves, 0\)/)
+  assert.match(store, /'Lead received',[\s\S]*api.saveSelectedRecords\(\[\{entity:'leads',id:lead.id\}\]\)/)
 })
 
 test('empty workspace hydration does not republish the browser snapshot', () => {
@@ -336,7 +336,7 @@ test('generic opportunity updates attach a transition intent when they change wo
 })
 
 test('the second final-release decision uses the normal transition gate before auto-advancing', () => {
-  const store = read('src/store.jsx')
+  const store = read('src/approvalEffects.js')
   assert.match(store, /transitionBlockers\(releasedOpp, 'Submitted', releasedProposal, next\)/)
   assert.match(store, /milestone: 'Submitted'/)
   assert.match(store, /releasedOpp\.milestone === 'Approval'/,

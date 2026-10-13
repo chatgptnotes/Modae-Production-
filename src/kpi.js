@@ -46,7 +46,7 @@ export const TURNAROUND_TARGET = { Spares: 1, Service: 1, Project: 14 }
 export function counts(store, role = store.role) {
   const openOpps = store.opportunities.filter(o => o.status === 'Open')
   const stale = openOpps.filter(o => (ageDays(o.lastUpdated) ?? 0) > 30)
-  const approvals = store.approvals || []
+  const approvals = (store.approvals || []).filter(a => !a.supersededBy)
   const pending = approvals.filter(a => a.status === 'Pending')
   const newLeads = (store.leads || []).filter(l => l.status === 'New')
   return {
@@ -333,7 +333,7 @@ export function miniSeries(items, dateOf, buckets = 6) {
 export function homeKpis(store, role) {
   const c = counts(store, role)
   const leads = store.leads || []
-  const approvals = store.approvals || []
+  const approvals = (store.approvals || []).filter(a => !a.supersededBy)
   return [
     {
       key: 'leads', label: 'New leads', value: c.newLeads, tone: 'good', to: '/inbox',

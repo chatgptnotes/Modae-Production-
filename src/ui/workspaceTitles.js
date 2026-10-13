@@ -4,6 +4,7 @@ export const topbarTitleFor = (pathname, role) => {
   const titles = {
     '/': ['Opportunities', 'cards'],
     '/my-dashboard': ['Dashboard', 'chartBar'],
+    '/personal-settings': ['Personal settings', 'gear'],
     '/inbox': ['Lead inbox', 'inbox'],
     '/opportunities': ['Opportunities', 'cards'],
     '/proposal-sent': ['Proposal Sent', 'send'],

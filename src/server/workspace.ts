@@ -2,6 +2,7 @@ import { assertReservedOpportunityIds } from '../../api/_opportunity-reservation
 import { assertWorkspaceRowWrite, projectWorkspace } from '../workspaceAccess.js'
 import { createServiceClient } from './supabase.js'
 import { mergeConcurrentOpportunityRows as mergeOpportunityRows } from '../workflowTransitions.js'
+import { assertNoApprovalCommandWrite, publicAuditEvent } from '../approvalWriteGuard.js'
 
 export type WorkspaceSlices = Record<string, unknown>
 export type WorkspaceReader = () => Promise<WorkspaceSlices>
@@ -13,64 +14,15 @@ type ApprovalRow = Record<string, any> & { id: string; status?: string; approval
 
 const configuredValue = (...names: string[]) => names.map(name => process.env[name]?.trim()).find(Boolean) || ''
 
-const decisionTime = (decision: ApprovalDecision | undefined) => String(decision?.when || '')
-const rowTime = (row: ApprovalRow) => String(row.__sv || row.decisionTs || row.ts || '')
-const latestRow = (rows: ApprovalRow[]) => rows.reduce((latest, row) => rowTime(row) >= rowTime(latest) ? row : latest)
-
-const mergeApprovalGroup = (rows: ApprovalRow[]) => {
-  const latest = latestRow(rows)
-  const decisions: Record<string, ApprovalDecision> = {}
-  for (const row of rows) {
-    for (const [role, decision] of Object.entries(row.decisions || {})) {
-      if (!decisions[role] || decisionTime(decision) >= decisionTime(decisions[role])) decisions[role] = decision
-    }
-  }
-  const needed = Array.isArray(latest.needed)
-    ? latest.needed.map(String)
-    : latest.approver ? [String(latest.approver)] : []
-  const hasDecisions = Object.keys(decisions).length > 0
-  const sourceStatuses = rows.map(row => String(row.status || 'Pending'))
-  const anyRejected = Object.values(decisions).some(decision => decision?.d === 'Rejected') || sourceStatuses.includes('Rejected')
-  const allDecided = latest.anyOf
-    ? needed.some(role => decisions[role])
-    : needed.every(role => decisions[role])
-  const status = anyRejected ? 'Rejected'
-    : hasDecisions ? (allDecided ? 'Approved' : 'Pending')
-    : sourceStatuses.includes('Cancelled') ? 'Cancelled'
-    : sourceStatuses.includes('Returned') ? 'Returned'
-    : sourceStatuses.includes('Approved with conditions') ? 'Approved with conditions'
-    : sourceStatuses.includes('Approved') ? 'Approved'
-    : latest.status || 'Pending'
-  const oldest = rows.reduce((first, row) => rowTime(row) < rowTime(first) ? row : first)
-  return {
-    ...latest,
-    id: oldest.id,
-    decisions,
-    status,
-    __sv: rowTime(latest),
-  }
-}
-
-// Browsers save the approval slice as a snapshot. Merge pending rows at the
-// server boundary so LJS and AH can decide from different snapshots without
-// one decision replacing the other.
+// Generic snapshots can add/cancel requests and update permitted metadata.
+// Signatures belong to one request and may only be changed by the command RPC.
 export function mergeConcurrentApprovalRows(currentRows: ApprovalRow[] = [], desiredRows: ApprovalRow[] = []) {
-  const byId = new Map<string, ApprovalRow[]>()
-  for (const row of [...currentRows, ...desiredRows]) {
-    if (!row?.id) continue
-    byId.set(row.id, [...(byId.get(row.id) || []), row])
+  const rows = new Map(currentRows.map(row => [row.id, row]))
+  for (const row of desiredRows) {
+    assertNoApprovalCommandWrite('approvals', rows.get(row.id), row)
+    rows.set(row.id, row)
   }
-  const perId = [...byId.values()].map(mergeApprovalGroup)
-  const pendingByKey = new Map<string, ApprovalRow[]>()
-  const finalRows: ApprovalRow[] = []
-  for (const row of perId) {
-    if (row.status !== 'Pending' || !row.approvalKey) {
-      finalRows.push(row)
-      continue
-    }
-    pendingByKey.set(row.approvalKey, [...(pendingByKey.get(row.approvalKey) || []), row])
-  }
-  return [...finalRows, ...[...pendingByKey.values()].map(mergeApprovalGroup)]
+  return [...rows.values()]
 }
 
 export const mergeConcurrentOpportunityRows = mergeOpportunityRows
@@ -175,7 +127,7 @@ export function createWorkspaceReader(): WorkspaceReader | null {
       proposals: Object.fromEntries(rows(proposals).map(row => [row.id, row.data])),
       sparesLines: rows(sparesLines).map(row => row.data),
       clarifications: rows(clarifications).map(row => row.data),
-      audit: rows(audit).map(row => row.data),
+      audit: rows(audit).map(row => publicAuditEvent(row.data)),
     }
   }
 }
@@ -222,6 +174,7 @@ export function createWorkspaceWriter(): WorkspaceWriter | null {
       const desiredRows = (desired as ApprovalRow[]).map(row => {
         const before = existingRows.get(row.id)
         const after = before ? { ...before, ...row, ...(before.booking && row.booking ? { booking: { ...before.booking, ...row.booking } } : {}) } : row
+        assertNoApprovalCommandWrite(entity, before, after)
         if (JSON.stringify(before) !== JSON.stringify(after)) assertWorkspaceRowWrite(actor, entity, before, after, config, state)
         return after
       })
@@ -256,7 +209,10 @@ export function createWorkspaceWriter(): WorkspaceWriter | null {
               .map((row: any) => ({ id: row.id, data: row.data, rev: Number(row.rev) || 0, deleted: true }))),
         ]
         if (!payload.length) break
-        for (const row of payload) assertWorkspaceRowWrite(latestActor, entity, existing.get(row.id)?.data, row.data, latest.config || {}, latest, row.id, 'deleted' in row && row.deleted === true)
+        for (const row of payload) {
+          assertNoApprovalCommandWrite(entity, existing.get(row.id)?.data, row.data)
+          assertWorkspaceRowWrite(latestActor, entity, existing.get(row.id)?.data, row.data, latest.config || {}, latest, row.id, 'deleted' in row && row.deleted === true)
+        }
         const result = await service.rpc('save_rows', { p_entity: entity, p_rows: payload })
         if (result.error) throw result.error
         const conflicts = Array.isArray(result.data?.conflicts) ? result.data.conflicts : []

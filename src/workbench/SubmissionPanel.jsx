@@ -103,7 +103,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
   const { release: genericRelease, reason: releaseReason, pending: pendingRelease } = releaseState(p, store.approvals, opp.id, opp, store.config)
   const release = onLegacyReview ? serviceRelease : genericRelease
   const finalQuoteApprovalRequired = onLegacyReview || store.config?.requireFinalQuoteApproval !== false
-  const pendingConds = store.approvals
+  const pendingConds = store.approvals.filter(a => !a.supersededBy)
     .filter(a => a.oppId === opp.id && a.status === 'Approved with conditions')
     .flatMap(a => (a.conditions || []).filter(c => !c.incorporated)
       .map(c => ({ ...c, approver: a.approver, type: a.type })))

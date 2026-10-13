@@ -6,10 +6,33 @@ submission, and follow-up.
 
 ## What the application does
 
+- Personal settings → Appearance lets each signed-in user choose Candara (default),
+  Inter, Roboto, Open Sans, Merriweather, Lora or their device's system font. Account-backed choices follow the user across
+  devices; local/demo choices remain per user on that browser. Open settings from
+  the desktop sidebar, tablet utilities or phone account menu. Company proposals
+  and printed documents keep Candara regardless of the interface choice.
+- Candara webfont binaries have not been supplied. The interface uses installed
+  Candara when available and reports fallback use in Personal settings otherwise.
+  Hosting is wired for `public/fonts/candara/regular.woff2`, `bold.woff2`,
+  `italic.woff2`, and `bold-italic.woff2`. Supply all four licensed files before
+  rollout; Vite includes public files in the website build automatically.
+  Approved webfont assets are required to guarantee Candara on all devices. Before
+  proposal printing, all four Candara faces must load; missing fonts show an error.
+  Inter and the four additional families are bundled locally and work without an
+  external font service. The additional families include normal and italic variable
+  faces with weights 400–700, Latin/extended Latin coverage and bundled OFL licences.
+
+
 - Dashboard KPIs, pipeline counts, performance figures, funnel stages/probability
   bands, and outcome reasons open matching-record popups without changing register
   filters. Target and Gap show calculation details. Won/Lost labels filter reasons;
-  their numbers open records. Top 5 and action rows open their existing workspaces.
+  their numbers open records. In Full site, hovering a Won/Lost doughnut slice
+  lifts its sculpted 3D slice with a gentle pointer tilt and shows its count and
+  share in the upright centre. Reflections follow the cursor, legend hover previews
+  the matching slice, and press feedback acknowledges clicks. Reduced motion is supported.
+  Full-site KPI cards lift with cursor lighting; individual funnel probability
+  segments lift and highlight their stage details in both Normal and Dynamic views.
+  Top 5 and action rows open their existing workspaces.
   Popups retain My/Global scope, period and value permissions on desktop and phone.
   At phone widths, amounts stay together, performance controls form two columns,
   and Full site tables scroll within readable columns. Below 360px, KPIs stack.
@@ -56,6 +79,8 @@ submission, and follow-up.
   30%–80% display range for readability. The shape follows saved stage counts and
   can narrow, widen or form an hourglass. Live probability splits, offset labels
   and separate count/value totals remain visible; empty stages stay grey.
+- Desktop Dashboard uses tighter KPI, report and table spacing, with 48px
+  funnel stages in wide containers. Phone layouts and Analytics retain their sizing.
 - Dashboard uses one compact glass card with a divided KPI strip, raised
   controls, dimensional charts, and recessed tracks in both workspace themes.
   Reports share a continuous surface with fine dividers; phone layouts use shallower
@@ -277,6 +302,13 @@ submission, and follow-up.
 
 ## Technology
 
+Approval decisions use an authenticated command with a stable operation ID.
+The database locks and revision-checks the request, saves its business effects
+and audit receipt atomically, and safely replays a retry after a lost response.
+Other devices continue to pull updates on page entry, focus, reconnect or Refresh.
+Apply `supabase/migrations/20261013080111_atomic_approval_commands.sql` after
+migration 023 before deploying this client. See `supabase/README.md` for validation.
+
 - React 18 and Vite
 - React Router
 - Supabase Auth, pull-based database synchronization, and persistence
@@ -411,3 +443,19 @@ Migration 022 closes direct browser business-table access: the application uses
 authenticated, permission-filtered data routes instead. Deploy the migration and
 application during the same maintenance window; older clients must sign in again.
 This feature does not execute the separate workbook reset/import SQL.
+
+### Optional concurrent editing support
+
+Enable `WORKSPACE_SYNC_ENABLED=true` on Railway staging after verification.
+This mode uses explicit record saves: typing stays local, and idle screens do
+not poll Railway or Supabase. Authentication renewal remains enabled.
+Returning to the app checks visible record versions once; manual refresh and
+Save/Approve are explicit network actions. Same-browser tabs exchange committed
+records locally without server fetches. Other devices update on their next
+activation, refresh or conflicting save—not continuously.
+
+Conflicts pause the affected record while preserving its draft. Form-only inputs
+must be applied with that form's Save action before the shared draft can merge.
+Discard lists related records that reset together. No Supabase Realtime is used.
+See [deployment guidance](DEPLOYMENT.md#optional-event-driven-workspace-synchronization)
+for limits and rollout requirements.

@@ -181,7 +181,7 @@ test('a Returned clearance can be raised again from the inbox', () => {
 test('only a needed role can decide, and a converted lead never regresses', () => {
   const source = read('src/store.jsx')
   assert.match(source, /if \(needed\.length && !needed\.includes\(s\.role\)\) \{\s*\n\s*console\.warn\(`Decision ignored/)
-  assert.match(source, /lead\?\.status === 'Converted' \? null : \{ status: 'Qualified' \}/)
+  assert.match(read('src/approvalEffects.js'), /lead\?\.status === 'Converted' \? null : \{ status: 'Qualified' \}/)
 })
 
 // Found by a red-team pass over the delivered fix. Adding `needed` to the
@@ -264,7 +264,7 @@ test('migrate keeps a half-approved final quote release pending', () => {
 // stuck. Only a Pending request may suppress a duplicate.
 test('requestApproval only dedupes against a Pending request, never a stale Approved one', () => {
   const source = read('src/store.jsx')
-  const dedupe = source.match(/const alreadyRemembered = s\.approvals\.find\(([\s\S]*?)\)\n        if \(alreadyRemembered\)/)
+  const dedupe = source.match(/const alreadyRemembered = s\.approvals\.find\(([\s\S]*?)\)\n        if \(alreadyRemembered &&/)
   assert.ok(dedupe, 'requestApproval dedupe block not found in store.jsx')
   assert.match(dedupe[1], /existing\.status === 'Pending'/,
     'dedupe must only match Pending requests')

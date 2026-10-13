@@ -1,3 +1,4 @@
+import { useWorkspaceWatch, markWorkspaceEditing } from '../ui/WorkspaceSync.jsx'
 import EditableOpportunityCell, { OpportunityCellEditingProvider, EditableOpportunityRow, OpportunityRowEditButton, OpportunityRowEditOnly } from '../ui/EditableOpportunityCell.jsx'
 import { validateOpportunityEdit } from '../opportunityEdits.js'
 import { displayOpportunityId } from '../seed.js'
@@ -396,6 +397,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
   const currentPage = Math.min(page, pageCount)
   const visiblePageSize = phone ? 10 : pageSize
   const pageRows = rows.slice((currentPage - 1) * visiblePageSize, currentPage * visiblePageSize)
+  useWorkspaceWatch(pageRows.map(r=>({entity:'opportunities',id:r.id})),[{entity:'opportunities',page:0,pageSize:50}])
   const firstRow = rows.length ? (currentPage - 1) * visiblePageSize + 1 : 0
   const lastRow = Math.min(currentPage * visiblePageSize, rows.length)
 
@@ -873,7 +875,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
               </EditableOpportunityRow>
             ))}
             {!rows.length && (
-              <tr>
+              <tr onInputCapture={()=>markWorkspaceEditing([{entity:"opportunities",id:o.id}])}>
                 <td colSpan={COLS.length + 1} className="tracker-empty-state">
                   <strong>{base.length ? 'No opportunities match these filters.' : 'No opportunities are loaded for this view.'}</strong>
                   <span>{base.length

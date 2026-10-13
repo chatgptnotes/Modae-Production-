@@ -217,7 +217,7 @@ test('workspace view is controlled from the top bar and dashboard navigation sta
   assert.match(styles, /workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__thumb[^}]*translateX\(104px\)/)
   assert.match(styles, /\.workspace-view-switch__thumb[^}]*background-color: #282828/)
   assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__thumb[^}]*background-color: var\(--primary-fill\)/)
-  assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__label[^}]*color: #282828 !important/)
+  assert.match(styles, /\.workspace-view-switch\[aria-checked="true"\] \.workspace-view-switch__label[^}]*color: var\(--text-primary\) !important/)
   assert.match(tablet, /<WorkspaceViewToggle \/>/)
 })
 

@@ -25,3 +25,14 @@ test('probability bands share curved boundaries without overlap or gaps', () => 
   assert.ok(second.startsWith(`M ${boundary[0]} 0`))
   assert.ok(second.includes(`${boundary[6]} 100 L`))
 })
+
+test('normal probability slices are clipped to the stage before they lift', async () => {
+  const { normalFunnelBandPath } = await import('../src/pages/myDashboard/funnelGeometry.js')
+  assert.equal(normalFunnelBandPath(0), 'M 0 0 L 880 0 L 825 100 L 55 100 Z')
+  const tiny = normalFunnelBandPath(0, 0, .01)
+  assert.doesNotMatch(tiny, /NaN|Infinity/)
+  const points = [...tiny.matchAll(/(?:M|L) ([\d.]+) ([\d.]+)/g)].map(m => [+m[1], +m[2]])
+  assert.ok(points.length >= 3)
+  assert.ok(points.every(([x, y]) => x <= 8.800001 && x >= .55 * y - .000001))
+  assert.equal(normalFunnelBandPath(3, 0, 0), '')
+})

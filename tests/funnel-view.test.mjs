@@ -57,3 +57,15 @@ test('switch exposes the selected mode and dispatches the requested view', () =>
   input.props.onChange({ target: { checked: true } })
   assert.equal(selected, 'normal')
 })
+
+for (const view of ['normal', 'dynamic']) {
+  test(`${view} animated funnel retains accessible segment targets without leaking restricted values`, () => {
+    const html = render({ view, animate: true, showMoney: false, onSegmentClick() {}, onStageClick() {} })
+    assert.equal((html.match(/class="funnel-segment-hit"/g) || []).length, 2)
+    assert.match(html, /aria-label="View Budgetary: 1 high probability opportunities"/)
+    assert.match(html, /aria-label="View Budgetary: 5 low probability opportunities"/)
+    assert.doesNotMatch(html, /₹|58590|58490|normal-funnel-value/)
+    assert.match(html, /No opportunities — empty stage/)
+    assert.doesNotMatch(render({ view }), /funnel-segment-hit|data-animated/)
+  })
+}

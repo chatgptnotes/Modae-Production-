@@ -1,0 +1,31 @@
+/* Full-site surfaces opt in; fixed hit shapes remain above decorative movement. */
+.normal-funnel[data-animated] .normal-funnel-chart svg { overflow: visible; }
+.normal-funnel[data-animated] .normal-funnel-chart line { pointer-events: none; }
+.funnel-segment-faces { pointer-events: none; }
+.funnel-segment-hit { fill: transparent; cursor: pointer; }
+.funnel-segment-hit:focus-visible { stroke: var(--text-primary); stroke-width: 2; vector-effect: non-scaling-stroke; outline: none; }
+.funnel-segment-face { filter: drop-shadow(0 2px 1px rgb(0 0 0 / 12%)); }
+.funnel-segment-reflection { opacity: .2; }
+@media (hover: hover) and (pointer: fine) {
+  .reference-kpi { isolation: isolate; }
+  .reference-kpi::after { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: var(--kpi-surface, var(--surface-default)); opacity: 1; transition: transform 350ms cubic-bezier(.2,.9,.25,1.08), box-shadow 350ms ease-out, opacity 200ms ease-out; }
+  .reference-kpi > div, .reference-kpi > span, .reference-kpi::before { transition: transform 350ms cubic-bezier(.2,.9,.25,1.08); }
+  .reference-kpi:hover::after { background: radial-gradient(ellipse at var(--surface-x, 50%) var(--surface-y, 20%), rgb(255 255 255 / 22%), transparent 65%), var(--kpi-surface, var(--surface-default)); opacity: 1; transform: translateY(-3px); box-shadow: 0 6px 10px rgb(0 0 0 / 13%); }
+  .reference-kpi:hover > div, .reference-kpi:hover::before { transform: translateY(-3px); }
+  .reference-kpi:hover > span { transform: translateY(-5px); }
+  .reference-kpi:active::after, .reference-kpi:active > div, .reference-kpi:active::before { transform: translateY(-1px); transition-duration: 90ms; }
+  .reference-kpi:active > span { transform: translateY(-2px); transition-duration: 90ms; }
+  .funnel-segment-face { transition: transform 350ms cubic-bezier(.2,.9,.25,1.08), filter 350ms ease-out, opacity 200ms ease-out; }
+  .funnel-segment-face[data-active] { transform: translateY(-5.4px); filter: brightness(1.12) drop-shadow(0 6px 3px rgb(0 0 0 / 22%)); }
+  .funnel-segment-face[data-active] .funnel-segment-reflection { opacity: 1; }
+  .funnel-segment-reflection { transition: opacity 200ms ease-out; }
+  .normal-funnel[data-animated] .normal-funnel-row[data-highlighted] :is(.normal-funnel-stage, .normal-funnel-count, .normal-funnel-value) { text-shadow: 0 0 10px color-mix(in srgb, currentColor 25%, transparent); }
+  .normal-funnel[data-animated] .normal-funnel-chart:active .funnel-segment-face[data-active] { transform: translateY(-2px); transition-duration: 90ms; }
+}
+.reference-kpi:focus-within { outline: 2px solid var(--focus-ring, #2563eb); outline-offset: -2px; }
+@media (prefers-reduced-motion: reduce) {
+  .reference-kpi::after, .reference-kpi > div, .reference-kpi > span, .reference-kpi::before,
+  .funnel-segment-face, .funnel-segment-reflection { transition: none !important; }
+  .reference-kpi:hover::after, .reference-kpi:hover > div, .reference-kpi:hover > span, .reference-kpi:hover::before,
+  .normal-funnel[data-animated] .normal-funnel-chart .funnel-segment-face { transform: none; }
+}

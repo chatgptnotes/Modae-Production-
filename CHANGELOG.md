@@ -1,3 +1,106 @@
+## 2026-10-13 — Event-driven explicit workspace saves
+
+- Replace optional continuous version checks with coalesced activation checks;
+  local BroadcastChannel commits and editing hints do not trigger server reads.
+- Remove presence/deployment polling; keep ephemeral presence in Railway memory
+  and validate deployment identity before workspace mutations.
+- Gate background autosave in the opt-in mode, add selected-record Save controls,
+  preserve form input ownership, and guard navigation with unsaved inputs.
+- Return HTTP 409 with partial save results, keep earlier entity successes after
+  later failures, and retain atomic approval operation IDs and revision checks.
+- Include linked sourcing/clarification changes in explicit opportunity saves;
+  use local location suggestions while typing in this mode.
+
+## 2026-10-13 — Concurrent editing audit fixes
+
+- Refresh clean proposal editor buffers before accepting new input, and install
+  explicitly reviewed values in the editor even when the merge needs saving.
+- Remove the unsafe form-input acknowledgement bypass. Component-local inputs
+  block merging; discard explicitly identifies and reloads all related editor
+  records, including unavailable records, with account and edit-sequence guards.
+- Fall back to slower independent tab polling when BroadcastChannel is absent
+  or restricted, even if browser locks are available.
+- Reject mixed targeted-read/discovery requests before database access; add
+  regression coverage for buffer refresh, tab fallback and grouped discard races.
+
+## 2026-10-13 — Additional personal fonts
+
+- Add locally hosted Roboto, Open Sans, Merriweather and Lora, including italic
+  and bold styles and their open-source licences.
+- Share the supported font catalogue between the preference API and interface;
+  preserve account choices, Candara defaults and company document typography.
+- Check each selected font's actual availability and name it in loading errors.
+
+## 2026-10-13 — Draft-safe active workspace synchronization
+
+- Add opt-in Railway revision checks, bounded tab coordination, targeted reads,
+  and memory-only editing indicators; avoid Supabase Realtime and typing writes.
+- Preserve dirty form buffers and record baselines across background/lifecycle
+  refreshes; pause conflicted row saves and offer explicit review/discard.
+- Bind review and refresh results to the active account/workspace generation;
+  retain atomic approval operation IDs and protect against late responses.
+- Add admission/backoff limits and tests for tab coordination, metadata access,
+  editing expiry, draft preservation and session-safe conflict resolution.
+
+## 2026-10-13 — Personal typography preferences
+
+- Add account-scoped Candara, Inter and System font settings on desktop, tablet
+  and phone, with revision-checked server saves and per-user local demo caching.
+- Apply the selected family to business interface text and improve prose wrapping;
+  keep company documents, embedded files, code and icons independent of the choice.
+- Detect actual Candara availability and wait for document faces before printing.
+  Licensed Candara webfont assets remain pending; missing local fonts are reported.
+- Store private preferences in `records` under `user_preferences`, through the
+  dedicated authenticated API; do not alter shared configuration or user roles.
+
+## 2026-10-13 — Atomic approval decisions
+
+- Route connected Accept/Reject actions through a server command with stable
+  operation IDs, displayed-row revisions, and safe uncertain-response retries.
+- Commit signatures, approval outcomes, business effects and audit receipts in
+  one PostgreSQL transaction; scope revisions detect inserted or changed dependencies.
+- Keep submitted inputs immutable, block legacy decision writes and forged
+  receipts, and retain pull-only device synchronization and local demo behavior.
+- Add disposable local PostgreSQL race/rollback tests. Apply the atomic approval
+  migration after 023 before deploying the matching application.
+
+## 2026-10-13 — Compact desktop dashboard
+
+- Keep all funnel segments fully opaque on hover and keyboard focus while
+  preserving glossy reflections and lift in Normal and Dynamic views.
+- Tighten desktop KPI, report, performance and table spacing while preserving
+  the selected colours, readable text, record popups and hover effects.
+- Shorten Normal and Dynamic funnel stages from 74px to 48px in wide dashboard
+  containers; retain existing phone, narrow-funnel and Analytics sizing.
+
+## 2026-10-13 — Opportunity identifier theme consistency
+
+- Keep opportunity IDs on one line beside the edit action in both themes.
+- Use the light-mode classification colours in the dark register and remove its
+  extra status dot; preserve wrapping for descriptions and other business text.
+- Restore readable Global View text and keep sidebar access badges together.
+
+## 2026-10-13 — KPI and funnel surface interactions
+
+- Match the reference KPI surfaces (white, pale amber and pale pink) and funnel
+  probability colours (green, amber, red and empty grey), retaining hover lighting.
+- Add Full-site KPI lift, cursor lighting, icon depth and press feedback while
+  retaining independent pipeline links and all existing record popups.
+- Lift individual probability segments in both funnel views using clipped visual
+  shapes and stationary accessible targets; highlight matching stage details.
+- Preserve Phone mode, restricted values, empty stages and reduced-motion support.
+
+## 2026-10-13 — Full-site outcome chart hover
+
+- Add cursor-following reflections, a softly settling lift, softer moving shadows,
+  legend hover previews and immediate press feedback without changing click actions.
+- Add shaded 6px slice depth, a stronger 300ms hover lift and bounded pointer tilt
+  to the Full-site doughnut; keep centre text upright and remove its native tooltip.
+- Highlight the hovered slice’s legend and fade its count and
+  percentage into the centre. Preserve the existing combined opportunity popup.
+- Limit hover to mouse/trackpad input in Full site; keep Phone mode unchanged and
+  disable movement for reduced-motion preferences.
+
 ## 2026-10-13 — Dashboard phone wrapping
 
 - Give KPI amounts full card width and keep amounts, units and summary counts

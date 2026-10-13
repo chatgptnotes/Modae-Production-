@@ -1,3 +1,4 @@
+import { WorkspaceRecordBoundary } from './ui/WorkspaceSync.jsx'
 import { displayOpportunityId } from './seed.js'
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
@@ -63,7 +64,7 @@ export function DrawerHost() {
                 onClick={close} title="Close (Esc)" aria-label="Close details">✕</button>
             </div>
             {shown.type === 'opp'
-              ? <OppPanel oppId={shown.id} registerBeforeLeave={registerBeforeLeave} />
+              ? <WorkspaceRecordBoundary records={sel ? [{entity:"opportunities",id:shown.id}] : []}><OppPanel oppId={shown.id} registerBeforeLeave={registerBeforeLeave} /></WorkspaceRecordBoundary>
               : <CustomerPanel name={shown.id} openDrawer={open} />}
           </>
         )}

@@ -464,3 +464,19 @@ Our Ref 2511096RS) are retained with the local reference documents.
   save/reload and error messages are readable and usable.
 - Verify ordinary owner PO updates still work, but another approver's signature
   cannot be changed; confirmed bookings survive opportunity deletion.
+
+## Optional event-driven synchronization (desktop and phone)
+
+- Enable the staging flag only; initial loading succeeds and Save controls appear.
+- Read/type for five minutes: no application network calls; auth renewal is allowed.
+- Type with two same-account tabs open: local editing hints require no fetch.
+- Save in one tab: the other installs clean records or preserves a conflicting draft.
+- Return from another tab: overlapping focus/visibility events cause one version check.
+- Save unrelated records concurrently: only stale records pause; accepted rows stay saved.
+- Fail a later entity save: earlier successful rows remain acknowledged.
+- Save a proposal/sourcing edit: linked selected changes persist, unrelated drafts do not.
+- Review a conflict with form-only input: merging remains blocked until form application.
+- Navigate by link and native Back/Forward with local input: Save/Discard/Stay protects it.
+- Switch accounts during a save/read: old results do not enter the new workspace.
+- Deploy while the app stays focused: an old-deployment mutation is rejected.
+- Disable BroadcastChannel: no fallback polling; activation still revalidates.

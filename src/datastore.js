@@ -1,3 +1,6 @@
+import { commitWorkspaceRecords } from './workspaceExplicitSave.js'
+import { workspaceDrafts, SYNC_ENTITIES } from './workspaceDrafts.js'
+import { workspaceSyncState, committedWorkspace } from './workspaceSyncState.js'
 import { createWorkspaceDataClient } from './workspaceDataClient.js'
 import { getWorkspaceGeneration } from './workspaceApi.js'
 import { describeSupabaseError, isSupabaseAuthError, supabase as directSupabase } from './supabase.js'
@@ -14,7 +17,7 @@ const supabase = createWorkspaceDataClient(directSupabase, getWorkspaceGeneratio
 // original localStorage-only behavior without env vars.
 
 // Per-device/session state that must never be shared across browsers.
-export const LOCAL_ONLY = ['viewMode', 'viewModePinned', 'viewModePinnedAt', 'viewModePreferenceRev', 'spSync', 'auth', 'role',
+export const LOCAL_ONLY = ['_approvalRevisions', 'viewMode', 'viewModePinned', 'viewModePinnedAt', 'viewModePreferenceRev', 'spSync', 'auth', 'role',
   'roles', 'inboxShowAll', 'leadSyncBaseline', 'clarificationSyncBaseline', 'opportunitySyncBaseline',
   'sparesLinesSyncBaseline', 'deletedLeadIds', 'deletedOpportunityIds', 'pendingOpportunitySyncIds',
   // Migration markers and derived deadline timers belong to this browser.
@@ -81,6 +84,44 @@ let pendingDirtySlices = null
 let pendingSaveWaiters = []
 const MAX_CONFLICT_RETRIES = 3
 const normalizedKey = (entity, id) => `${entity}|${id}`
+
+export const sendApprovalDecision = command => supabase.decideApproval(command)
+
+// Read full permitted slices after a command, bypassing both browser caches and
+// server workspace caches. Revisions stay outside shared React business data.
+let approvalReadEpoch = 0
+export async function loadApprovalDecisionState({ allEffects = false, isCurrent = () => true } = {}) {
+  const epoch = ++approvalReadEpoch
+  const tables = allEffects ? ['approvals', 'opportunities', 'leads', 'proposals', 'audit'] : ['approvals', 'opportunities']
+  const results = await Promise.all(tables.map(table => supabase.from(table).select('id,data,rev').is('deleted_at', null)))
+  const customerResult = allEffects
+    ? await supabase.from('records').select('id,data,rev').eq('entity', 'state').eq('id', 'customers').is('deleted_at', null)
+    : null
+  for (const result of [...results, customerResult].filter(Boolean)) if (result.error) throw result.error
+  // Discard stale responses before touching shared persistence caches.
+  if (epoch !== approvalReadEpoch || !isCurrent()) return null
+  const slices = { _approvalRevisions: Object.fromEntries((results[0].data || []).map(row => [row.id, row.rev])) }
+  results.forEach((result, index) => {
+    const entity = tables[index]
+    slices[entity] = entity === 'proposals' ? Object.fromEntries(result.data.map(row => [row.id, row.data])) : result.data.map(row => row.data)
+    clearNormalizedEntity(entity)
+    if (entity === 'opportunities') { opportunityRevisions.clear(); opportunityRecords.clear() }
+    for (const row of result.data) {
+      normalizedRevisions.set(normalizedKey(entity, row.id), row.rev)
+      normalizedRecords.set(normalizedKey(entity, row.id), { data: row.data, rev: row.rev })
+      if (entity === 'opportunities') { opportunityRevisions.set(row.id, row.rev); opportunityRecords.set(row.id, { data: row.data, rev: row.rev }) }
+    }
+  })
+  if (workspaceSyncState.enabled) {
+    for (let index=0;index<tables.length;index++) if(SYNC_ENTITIES.includes(tables[index])) {
+      const records=(results[index].data||[]).map(row=>({...row,entity:tables[index],available:true}))
+      for(let offset=0;offset<records.length;offset+=100)committedWorkspace(records.slice(offset,offset+100))
+    }
+  }
+  if (customerResult) slices.customers = customerResult.data[0]?.data || []
+  invalidateLoadCache()
+  return slices
+}
 
 async function currentActorId() {
   if (!supabase?.auth) return null
@@ -489,7 +530,7 @@ async function saveSlicesNow(dirty) {
   }
   const collaborativeDirty = Object.fromEntries(Object.entries(normalizedDirty)
     .filter(([key]) => key === 'leads' || key === 'opportunities' || key === 'approvals'))
-  if (Object.keys(collaborativeDirty).length) {
+  if (!workspaceSyncState.enabled && Object.keys(collaborativeDirty).length) {
     const savedByServer = await saveWorkspaceToServer(collaborativeDirty)
     if (!savedByServer) throw new Error('A signed-in server session is required to save shared leads, opportunities, and approvals.')
     normalizedDirty = { ...normalizedDirty }
@@ -742,7 +783,7 @@ function normalizedPayload(entity, rows, deletedIds = []) {
   const active = rows.map(row => ({
     id: row.id,
     data: row,
-    rev: normalizedRevisions.get(normalizedKey(entity, row.id)) ?? 0,
+    rev: workspaceDrafts.get(entity, row.id)?.base.rev ?? normalizedRevisions.get(normalizedKey(entity, row.id)) ?? 0,
   }))
   const deleted = deletedIds.map(id => {
     const previous = normalizedRecords.get(normalizedKey(entity, id))
@@ -753,6 +794,20 @@ function normalizedPayload(entity, rows, deletedIds = []) {
 
 async function saveNormalizedRowsNow(entity, rows, retainedIds = new Set()) {
   const actor = await currentActorId()
+  // Audit is append-only. Never echo redacted command receipts or historical
+  // events back as updates/deletes when a new local event is appended.
+  if (entity === 'audit') {
+    const fresh = rows.filter(row => row.kind !== 'approval_command' && !String(row.id).startsWith('APPROVAL-COMMAND:') && !normalizedRecords.has(normalizedKey(entity, row.id)))
+    if (!fresh.length) return
+    const result = await supabase.rpc('save_rows', { p_entity: entity, p_rows: fresh.map(data => ({ id: data.id, data, rev: 0, by: actor })) })
+    if (result.error) throw annotateRpcError(entity, result.error)
+    if (result.data?.conflicts?.length) throw new Error('Audit append conflicted. Refresh before retrying.')
+    for (const data of fresh) {
+      normalizedRecords.set(normalizedKey(entity, data.id), { data, rev: 1 })
+      normalizedRevisions.set(normalizedKey(entity, data.id), 1)
+    }
+    return
+  }
   const localById = new Map(rows.map(row => [row.id, row]))
   const prefix = `${entity}|`
   const deletedIds = [...normalizedRecords.keys()]
@@ -776,10 +831,20 @@ async function saveNormalizedRowsNow(entity, rows, retainedIds = new Set()) {
   }
 
   let pending = normalizedPayload(entity, rows, deletedIds)
+  const guarded = workspaceSyncState.enabled && SYNC_ENTITIES.includes(entity)
+  if (guarded) pending = pending.filter(row => !workspaceDrafts.blocked(entity,row.id) && (row.deleted || JSON.stringify(row.data) !== JSON.stringify(workspaceDrafts.get(entity,row.id)?.base.data ?? normalizedRecords.get(normalizedKey(entity,row.id))?.data)))
+  if (!pending.length) return
+  const submitted = new Map(pending.map(row => [row.id, workspaceDrafts.get(entity,row.id)?.seq]))
   for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt += 1) {
     const result = await write(pending)
     const conflicts = Array.isArray(result.conflicts) ? result.conflicts : []
     applyAccepted(pending, conflicts)
+    if (guarded) {
+      for (const row of pending) if (!conflicts.some(c=>c.id===row.id)) workspaceDrafts.saved(entity,row.id,{data:row.data,rev:row.rev+1},submitted.get(row.id))
+      committedWorkspace(pending.filter(row=>!conflicts.some(c=>c.id===row.id)).map(row=>({entity,id:row.id})))
+      for (const row of conflicts) { if (!workspaceDrafts.get(entity,row.id)) workspaceDrafts.edit(entity,row.id,{data:localById.get(row.id),rev:pending.find(r=>r.id===row.id)?.rev||0}); workspaceDrafts.observe(entity,row.id,{...row,conflict:true,available:!row.unavailable && !!row.data && !row.deleted_at}) }
+      return
+    }
     if (!conflicts.length) return
     pending = conflicts.map(serverRow => ({
       id: serverRow.id,
@@ -805,7 +870,7 @@ function opportunityPayload(rows, deletedIds = []) {
     id: row.id,
     data: row,
     // New rows start at revision zero; save_rows stores them as revision one.
-    rev: opportunityRevisions.get(row.id) ?? 0,
+    rev: workspaceDrafts.get('opportunities', row.id)?.base.rev ?? opportunityRevisions.get(row.id) ?? 0,
   }))
   const deleted = deletedIds
     .map(id => {
@@ -852,10 +917,19 @@ async function saveOpportunityRowsNow(rows) {
   // revision guard, preserving the local row being saved while the shared
   // transition merger keeps an old browser from lowering a newer milestone.
   let pending = opportunityPayload(changedRows, deletedIds)
+  if (workspaceSyncState.enabled) pending = pending.filter(row=>!workspaceDrafts.blocked('opportunities',row.id))
+  if (!pending.length) return
+  const submitted = new Map(pending.map(row=>[row.id,workspaceDrafts.get('opportunities',row.id)?.seq]))
   for (let attempt = 0; attempt <= MAX_CONFLICT_RETRIES; attempt += 1) {
     const result = await write(pending)
     const conflicts = Array.isArray(result.conflicts) ? result.conflicts : []
     applyAccepted(pending, conflicts)
+    if (workspaceSyncState.enabled) {
+      for (const row of pending) if (!conflicts.some(c=>c.id===row.id)) workspaceDrafts.saved('opportunities',row.id,{data:row.data,rev:row.rev+1},submitted.get(row.id))
+      committedWorkspace(pending.filter(row=>!conflicts.some(c=>c.id===row.id)).map(row=>({entity:'opportunities',id:row.id})))
+      for (const row of conflicts) { if (!workspaceDrafts.get('opportunities',row.id)) workspaceDrafts.edit('opportunities',row.id,{data:localById.get(row.id),rev:pending.find(r=>r.id===row.id)?.rev||0}); workspaceDrafts.observe('opportunities',row.id,{...row,conflict:true,available:!row.unavailable && !!row.data && !row.deleted_at}) }
+      return
+    }
     if (!conflicts.length) return
     pending = conflicts.map(serverRow => {
       const local = localById.get(serverRow.id)
@@ -960,3 +1034,19 @@ export function acceptAccessConfig(config, rev) {
   writeCachedRules(config)
   invalidateLoadCache()
 }
+
+// Draft baselines take precedence over caches refreshed by unrelated lifecycle reads.
+export function workspaceRecord(entity,id) {
+  return workspaceDrafts.get(entity,id)?.base || (entity === 'opportunities' ? opportunityRecords.get(id) : normalizedRecords.get(normalizedKey(entity,id)))
+}
+export function acceptWorkspaceRecord(row) {
+  const {entity,id,data,rev,available}=row
+  if (entity === 'opportunities') {
+    if (!available) { opportunityRecords.delete(id); opportunityRevisions.delete(id) }
+    else { opportunityRecords.set(id,{data,rev}); opportunityRevisions.set(id,rev) }
+  } else if (!available) { normalizedRecords.delete(normalizedKey(entity,id)); normalizedRevisions.delete(normalizedKey(entity,id)) }
+  else { normalizedRecords.set(normalizedKey(entity,id),{data,rev}); normalizedRevisions.set(normalizedKey(entity,id),rev) }
+  invalidateLoadCache()
+}
+
+export const saveSelectedWorkspaceRecords=(records,isCurrent)=>commitWorkspaceRecords(records,(name,args)=>supabase.rpc(name,args),isCurrent)

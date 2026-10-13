@@ -1,3 +1,4 @@
+import { WorkspaceRecordBoundary, useWorkspaceWatch } from '../ui/WorkspaceSync.jsx'
 import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
@@ -299,9 +300,14 @@ function OpportunityNotFound({ oppId }) {
 }
 
 export default function Workbench() {
+  const { oppId } = useParams()
+  return <WorkspaceRecordBoundary records={[{entity:'opportunities',id:oppId},{entity:'proposals',id:oppId}]}><WorkbenchRecord /></WorkspaceRecordBoundary>
+}
+function WorkbenchRecord() {
   const { oppId, tab = 'overview' } = useParams()
   const store = useStore()
   const [searchParams] = useSearchParams()
+  useWorkspaceWatch(store.approvals.filter(a=>a.oppId===oppId).slice(0,90).map(a=>({entity:'approvals',id:a.id})))
   const opp = store.opportunities.find(o => o.id === oppId)
   const [recovery, setRecovery] = useState('idle')
   const [sharedRefreshError, setSharedRefreshError] = useState('')
@@ -500,7 +506,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
   const moveToMilestone = async (milestone, reason = '', tabOverride = '') => {
     const moved = store.setMilestone(opp.id, milestone, reason, { alreadyGated: true })
     if (!moved) return false
-    const saved = await store.flushPersistence()
+    const saved = await store.flushPersistence([{entity:'opportunities',id:opp.id},{entity:'proposals',id:opp.id}])
     if (saved === false) {
       setTransition({ kind: 'blocked', target: milestone, blockers: [{ key: 'persistence', severity: 'block', text: 'The workflow change could not be saved. Check your connection and try again.' }] })
       return false
@@ -578,7 +584,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
     if (alreadyCompleted) selectStep(step.slug)
     else advanceStep(step.slug)
   }
-  const exceptionApprovalFor = blocker => (store.approvals || []).find(a =>
+  const exceptionApprovalFor = blocker => (store.approvals || []).filter(a => !a.supersededBy).find(a =>
     a.type === 'Milestone exception' && a.oppId === opp.id
     && a.targetMilestone === transition?.target && a.blockerKey === blocker.key)
   // Diagram 02 §5 draws the layered approval as mandatory — its only "No" branch
@@ -613,7 +619,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
     if (transition?.kind === 'blocked' && transition.target === 'Proposal') return
     setTransition({ kind: 'blocked', target: 'Proposal', blockers: sourceBlockers })
   }, [opp.id, opp.route, viewTab, sourceBlockers.length, store.sparesLines, store.proposals])
-  const approvalRequestFor = blocker => (store.approvals || []).find(a =>
+  const approvalRequestFor = blocker => (store.approvals || []).filter(a => !a.supersededBy).find(a =>
     a.oppId === opp.id
     && a.status === 'Pending'
     && (a.type === blocker.approvalType
@@ -957,7 +963,7 @@ function CommercialDecisionPanel({ opp }) {
   const matchingTerms = deviations.filter(needsCommercialApproval)
   const currentApprovalDetails = commercialApprovalDetails(proposal.terms)
   const approvalDetailsMatch = approval => JSON.stringify(approval?.deviationDetails || []) === JSON.stringify(currentApprovalDetails)
-  const currentCommercialApproval = (store.approvals || [])
+  const currentCommercialApproval = (store.approvals || []).filter(a => !a.supersededBy)
     .filter(approval => approval.oppId === opp.id
       && approval.type === 'Commercial deviation'
       && ['Pending', 'Approved', 'Approved with conditions'].includes(approval.status)
@@ -2720,7 +2726,7 @@ function FollowUpPane({ opp, onRevision }) {
 // ---------------------------------------------------------------------------
 function ApprovalsTab({ opp }) {
   const store = useStore()
-  const rows = store.approvals.filter(a => a.oppId === opp.id)
+  const rows = store.approvals.filter(a => !a.supersededBy && a.oppId === opp.id)
   const pricingRowsFor = a => {
     if (a.type !== 'Pricing threshold exception' && !a.coversPricingThreshold) return a.pricingRows || []
     const current = pricingThresholdExceptions(opp, store.getProposal(opp.id), store).rows

@@ -179,14 +179,14 @@
 .opportunity-cell-error { display: block; color: var(--status-danger, #b42318); font-size: 11px; white-space: normal; }
 .opportunity-cell-products { width: 280px; max-height: min(260px, calc(100dvh - 16px)); overflow-y: auto; }
 .opportunity-cell-products .fitem { white-space: normal; overflow-wrap: anywhere; }
-.shell .opportunities-page .tracker-oppid-actions > a { overflow: visible; text-overflow: clip; overflow-wrap: anywhere; white-space: normal; }
+.shell .opportunities-page .tracker-oppid-actions > a { overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; white-space: nowrap; }
 
 .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet.cols-key {
   width: max(100%, 1200px);
   min-width: 1200px;
 }
-.shell .opportunities-page .tracker-oppid-actions { flex-wrap: wrap; justify-content: flex-start; }
-.shell .opportunities-page .tracker-oppid-actions > a { flex: 1 0 6ch; }
+.shell .opportunities-page .tracker-oppid-actions { flex-wrap: nowrap; justify-content: space-between; }
+.shell .opportunities-page .tracker-oppid-actions > a { flex: 1 1 auto; }
 .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet tr[data-editing] > td { background-color: var(--surface-sunken); }
 
 /* Stage and its optional workflow action occupy separate, predictable lines. */
@@ -240,6 +240,7 @@
 
 /* Leave room to read scrolled fields on phones; keep the row identity in reach. */
 @media (max-width: 600px) {
+  .shell .opportunities-page .tracker-oppid-actions { flex-wrap: wrap; }
   .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet :is(thead, tbody) tr > :is(:nth-child(1), :nth-child(3)) {
     position: static;
     left: auto;

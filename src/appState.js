@@ -570,6 +570,9 @@ export function migrate(s) {
     ]))
   }
   s.approvals = s.approvals.map(a => {
+    // Connected rows are authoritative; migrations must not invent signatures,
+    // replace input snapshots, or reopen cancellations after a database pull.
+    if (datastore.dbEnabled() || a.status === 'Cancelled' || a.supersededBy) return a
     // Type-aware, deliberately. These gates are joint even when an older
     // persisted row was created with only `approver` or `anyOf`.
     const joint = a.type === 'Red customer clearance' || a.type === 'Final quote release'

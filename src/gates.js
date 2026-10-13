@@ -226,7 +226,7 @@ function pricingApprovers(state) {
 export function pricingApprovalFor(opp, proposal, approvals, pricingRows = []) {
   const rev = String(proposal?.revision ?? '')
   const signature = pricingExceptionSignature(pricingRows)
-  return (approvals || []).find(a => {
+  return (approvals || []).filter(a => !a.supersededBy).find(a => {
     const isPricingApproval = a.type === 'Pricing threshold exception'
       || (a.type === 'Final quote release' && a.coversPricingThreshold)
     if (a.status === 'Cancelled' || a.oppId !== opp.id || !isPricingApproval) return false
@@ -264,7 +264,7 @@ export function serviceMatrixExempt(opp, state) {
 // Opportunities raised before that decision carry a single 'Service offer
 // review' instead. They keep running on it rather than stranding mid-flight.
 export const legacyServiceReview = (opp, approvals) => (opp?.route === 'Service'
-  ? (approvals || []).find(a => a.oppId === opp.id && a.type === 'Service offer review' && a.status !== 'Cancelled') || null
+  ? (approvals || []).filter(a => !a.supersededBy).find(a => a.oppId === opp.id && a.type === 'Service offer review' && a.status !== 'Cancelled') || null
   : null)
 
 // Is this service offer cleared to go in front of the customer? Three regimes,
@@ -468,7 +468,7 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
   if (!opp) return []
   const b = []
   if (opp.status !== 'Closed' && classRule(config, opp.customerStatus)?.defaultAction === 'No Bid' && classRule(config, opp.customerStatus)?.verification?.requires !== 'jointApproval') b.push({ key: 'customer-no-bid', severity: 'block', text: 'No Bid — customer policy does not allow quoting' })
-  const mine = approvals.filter(a => a.oppId === opp.id)
+  const mine = approvals.filter(a => !a.supersededBy && a.oppId === opp.id)
   const currentApproval = (approval, type) => approval.approvalSnapshot
     ? !approvalAffectedByProposal(approval, type, proposal, opp)
     : true
@@ -634,7 +634,7 @@ const commercialApprovalCurrent = (approval, proposal) => {
 
 export function approvalForRev(type, proposal, approvals, oppId, opportunity) {
   const rev = String(proposal?.revision ?? '')
-  const mine = (approvals || []).filter(a =>
+  const mine = (approvals || []).filter(a => !a.supersededBy).filter(a =>
     a.oppId === oppId
     && (a.type === type || (type === APPROVAL_5B && a.type === COMMERCIAL_DEVIATION))
     // Final release has one deliberately simple identity: opportunity plus
@@ -673,7 +673,7 @@ export function releaseState(proposal, approvals, oppId, opportunity, config = {
 // exactly the confusion this exists to prevent.
 export function releaseVoidReason(proposal, approvals, oppId, opportunity) {
   const rev = String(proposal?.revision ?? '')
-  const all = (approvals || []).filter(a => a.oppId === oppId && a.type === APPROVAL_5C)
+  const all = (approvals || []).filter(a => !a.supersededBy).filter(a => a.oppId === oppId && a.type === APPROVAL_5C)
   const mine = all.filter(a => a.rev == null || String(a.rev) === rev)
   const pending = mine.find(a => a.status === 'Pending')
   if (pending) {
@@ -699,7 +699,7 @@ export function approvalSet(proposal, approvals, oppId, opportunity, config = {}
 }
 
 export function serviceApprovalSet(approvals, oppId, proposal, opportunity) {
-  const mine = (approvals || []).filter(a => a.oppId === oppId && a.type === 'Service offer review')
+  const mine = (approvals || []).filter(a => !a.supersededBy).filter(a => a.oppId === oppId && a.type === 'Service offer review')
     .filter(a => a.approvalSnapshot
       ? !approvalAffectedByProposal(a, 'Service offer review', proposal, opportunity)
       : true)
@@ -730,8 +730,8 @@ export function transitionBlockers(opp, target, proposal, state) {
     ]).filter(([field, text]) => field && text)
   required.forEach(([field, text]) => { if (!opp[field]) b.push({ key: `required-${field}`, severity: 'block', text }) })
 
-  const approvals = state.approvals || []
-  const mine = approvals.filter(a => a.oppId === opp.id)
+  const approvals = (state.approvals || []).filter(a => !a.supersededBy)
+  const mine = approvals.filter(a => !a.supersededBy && a.oppId === opp.id)
   const approved = type => mine.some(a => a.type === type && ['Approved', 'Approved with conditions'].includes(a.status))
   const pending = type => mine.some(a => a.type === type && a.status === 'Pending')
   // The customer-class gate, at whichever milestone its class declares.
@@ -933,7 +933,7 @@ export function transitionBlockers(opp, target, proposal, state) {
   // clears §5 at all: the diagram's layered approval has one "No" branch,
   // Return for Revision, so technical, commercial and release must be given,
   // not waived.
-  const exceptions = (state.approvals || []).filter(a =>
+  const exceptions = (state.approvals || []).filter(a => !a.supersededBy &&
     a.type === 'Milestone exception' && a.oppId === opp.id
     && a.targetMilestone === target
     && ['Approved', 'Approved with conditions'].includes(a.status))

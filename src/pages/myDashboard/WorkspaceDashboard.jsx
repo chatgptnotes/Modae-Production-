@@ -16,6 +16,9 @@ import { bookingReviewer } from '../../orderBookings.js'
 import TargetManagerDialog from './TargetManagerDialog.jsx'
 import './sculptedGlass.css'
 import './phoneWrapping.css'
+import './surfaceMotion.css'
+import './compactDashboard.css'
+import useSurfaceLight from './useSurfaceLight.js'
 import { DashboardDrilldownProvider, PipelineCounts } from './DashboardDrilldown.jsx'
 import { drillClick, useDashboardDrilldown } from './drillInteraction.js'
 export { TargetManagerDialog }
@@ -25,8 +28,9 @@ const scopeLabel = scope => scope === 'my' ? 'My' : 'Global'
 
 function Card({ label, value, hint, icon, tone, explanation, selection }) {
   const open = useDashboardDrilldown()
+  const light = useSurfaceLight()
   const action = () => open(selection)
-  return <article className={`reference-kpi reference-kpi--${tone}`} {...drillClick(action, `View ${label}`)} role="group" tabIndex={undefined}
+  return <article {...light} className={`reference-kpi reference-kpi--${tone}`} {...drillClick(action, `View ${label}`)} role="group" tabIndex={undefined}
     data-explain-title={label} data-explain={explanation}>
     <div><h2>{label}</h2><strong {...drillClick(action, `View ${label}`)}>{value}</strong><p>{hint}</p></div><span><Icon name={icon} size={34} /></span>
   </article>
@@ -115,7 +119,7 @@ export function Funnel({ model, showMoney, scope, title, onStageClick }) {
   const [view, setView] = useFunnelView()
   return <Section title={title || `${scopeLabel(scope)} Sales Pipeline Funnel`} accent="blue" className="reference-funnel"
     explanation={view === 'normal' ? 'Each opportunity appears at its current saved stage. Funnel widths represent stage order, not counts. Probability splits and totals reflect saved opportunities.' : "Each opportunity appears at its current saved stage. Curved stage widths vary with opportunity count within a 30%–80% display range for readability; they are not directly proportional to counts. Probability splits and totals reflect the current saved opportunities. Empty stages show zero counts and values."}
-    action={<><FunnelViewSwitch view={view} onChange={setView} /><span className="reference-funnel-metric">Opportunities{showMoney ? ' (and Value ₹ L)' : ''}</span><span className="reference-legend"><b className="high" />High <b className="medium" />Medium <b className="low" />Low</span></>}><p className="reference-analysis-subtitle">{view === 'normal' ? 'Current stage · Widths show stage order, not counts · Splits show probability · Grey = empty' : 'Current stage · Widths adjusted for readability · Splits show probability · Grey = empty'}</p><NormalFunnel view={view} rows={model.funnel} showMoney={showMoney} formatMoney={money} onStageClick={onStageClick || (open && (row => open({ kind: 'funnel', stageKey: row.key })))} onSegmentClick={open && ((row, probability) => open({ kind: 'funnel', stageKey: row.key, probability }))} /></Section>
+    action={<><FunnelViewSwitch view={view} onChange={setView} /><span className="reference-funnel-metric">Opportunities{showMoney ? ' (and Value ₹ L)' : ''}</span><span className="reference-legend"><b className="high" />High <b className="medium" />Medium <b className="low" />Low</span></>}><p className="reference-analysis-subtitle">{view === 'normal' ? 'Current stage · Widths show stage order, not counts · Splits show probability · Grey = empty' : 'Current stage · Widths adjusted for readability · Splits show probability · Grey = empty'}</p><NormalFunnel view={view} rows={model.funnel} animate showMoney={showMoney} formatMoney={money} onStageClick={onStageClick || (open && (row => open({ kind: 'funnel', stageKey: row.key })))} onSegmentClick={open && ((row, probability) => open({ kind: 'funnel', stageKey: row.key, probability }))} /></Section>
 }
 
 function WinLoss({ model, scope, nav, showMoney }) {
@@ -123,7 +127,7 @@ function WinLoss({ model, scope, nav, showMoney }) {
     explanation="All history. Win rate is Won ÷ (Won + Lost); missing reasons are Unspecified. Other closed outcomes are excluded from win rate."
     action={<button className="reference-analysis-button" data-explain-title="Detailed win/loss analysis" data-explain="Open detailed results." onClick={() => nav('/analytics')}>Open detailed analysis ↗</button>}>
     <p className="reference-analysis-subtitle">All history · Closed opportunities in this view</p>
-    <WinLossReport outcomes={model.outcomes} showMoney={showMoney} />
+    <WinLossReport outcomes={model.outcomes} showMoney={showMoney} animateDonut />
   </Section>
 }
 
@@ -137,7 +141,7 @@ export default function WorkspaceDashboard({ store, nav }) {
   const fy = store.sales?.fy || 'current FY'
   const wrap = children => <DashboardDrilldownProvider {...{ model, showMoney, period, scope, store, nav }} owner={effectiveOwner}>{children}</DashboardDrilldownProvider>
   if (phone && store.viewMode === 'tablet') return wrap(<PhoneDashboard {...{ model, showMoney, nav, store }} />)
-  return wrap(<main className="page dashboard-page dw-reference-dashboard" data-dashboard-depth="glass">
+  return wrap(<main className="page dashboard-page dw-reference-dashboard" data-dashboard-depth="glass" data-dashboard-density="compact">
     <section className="reference-kpis" aria-label="Dashboard summary">
       <Card label={`${scopeLabel(scope)} Pipeline`} value={showMoney ? money(model.headlinePipelineK) : model.headlineOpenCount}
         hint={<PipelineCounts model={model} />} selection={{ kind: 'pipeline' }} icon="chartGrowth" tone="neutral"

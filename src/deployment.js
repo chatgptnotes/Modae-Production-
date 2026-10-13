@@ -1,3 +1,4 @@
+import { workspaceSyncState } from './workspaceSyncState.js'
 import { clearSupabaseSession } from './supabase.js'
 import { clearLocalAll as clearLocalLeadBlobs } from './leadBlobs.js'
 import { DEPLOYMENT_MARKER_KEY, recordDeploymentMarker, shouldResetForDeployment } from './deploymentMarker.js'
@@ -10,9 +11,7 @@ export const DEPLOYMENT_ID = typeof __APP_DEPLOYMENT_ID__ === 'string'
   : 'local'
 
 const RESET_SIGNAL_KEY = 'wintrack-modae-deployment-reset'
-const CHECK_INTERVAL_MS = 60_000
 let resetInProgress = false
-let intervalId = null
 
 // The first deployment carrying this feature must also clean browsers that
 // predate the marker. A browser with no existing state is already clean.
@@ -89,20 +88,22 @@ export function watchDeployment() {
   const onStorage = event => {
     if (event.key === RESET_SIGNAL_KEY && event.newValue) void resetAndReload()
   }
-  const onWake = () => void check()
+  let scheduled=null
+  const onWake = () => {
+    if(workspaceSyncState.enabled||document.visibilityState==='hidden'||scheduled!==null)return
+    scheduled=window.setTimeout(()=>{scheduled=null;void check()},100)
+  }
   window.addEventListener('storage', onStorage)
   window.addEventListener('focus', onWake)
   document.addEventListener('visibilitychange', onWake)
   window.addEventListener('online', onWake)
-  intervalId = window.setInterval(check, CHECK_INTERVAL_MS)
   void check()
   return () => {
+    window.clearTimeout(scheduled)
     window.removeEventListener('storage', onStorage)
     window.removeEventListener('focus', onWake)
     document.removeEventListener('visibilitychange', onWake)
     window.removeEventListener('online', onWake)
-    window.clearInterval(intervalId)
-    intervalId = null
   }
 }
 

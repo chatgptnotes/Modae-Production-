@@ -39,8 +39,7 @@ export function usePresenceHeartbeat(enabled) {
     if (!enabled || !supabase) return undefined
     const send = () => { sendPresenceHeartbeat().catch(() => {}) }
     send()
-    const timer = window.setInterval(send, HEARTBEAT_INTERVAL_MS)
-    return () => window.clearInterval(timer)
+    return undefined
   }, [enabled])
 }
 
@@ -56,8 +55,7 @@ export function useOnlineUserCount(enabled) {
         .catch(() => { if (active) setOnlineUserCount(null) })
     }
     refresh()
-    const timer = window.setInterval(refresh, HEARTBEAT_INTERVAL_MS)
-    return () => { active = false; window.clearInterval(timer) }
+    return () => { active = false }
   }, [enabled])
 
   return onlineUserCount

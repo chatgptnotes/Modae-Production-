@@ -163,3 +163,12 @@ test('owner can receive a PO and edit handover checklist without approval author
   assert.throws(() => assertWorkspaceRowWrite(user,'state',{O:po},{O:{...po,acceptance:{LJS:new Date().toISOString(),AH:null}}},config,state,'poCompare'), /permission/)
   assert.throws(() => assertWorkspaceRowWrite(user,'state',{}, {O:{approved:true,approvedBy:'RS'}},config,state,'handover'), /permission/)
 })
+
+test('restricted approval projections retain supersession evidence', () => {
+  const state = { config, opportunities: [{ id: 'other', owner: 'AH' }], approvals: [{
+    id: 'old', oppId: 'other', requestedBy: 'RS', status: 'Approved', supersededBy: 'new', requestedValue: 900,
+  }] }
+  const [row] = projectWorkspace(state, user).approvals
+  assert.equal(row.supersededBy, 'new')
+  assert.equal(row.requestedValue, undefined)
+})

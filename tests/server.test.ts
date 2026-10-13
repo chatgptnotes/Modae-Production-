@@ -9,88 +9,34 @@ import * as workspace from '../src/server/workspace.ts'
 
 const app = createApp({ staticDir: '' })
 
-test('concurrent approval decisions are merged by approver role', () => {
-  const merge = (workspace as Record<string, unknown>).mergeConcurrentApprovalRows
-  assert.equal(typeof merge, 'function')
-  if (typeof merge !== 'function') return
-
-  const rows = merge([
-    {
-      id: 'AP-101', approvalKey: 'OP-1|Final quote release|01', status: 'Pending',
-      needed: ['LJS', 'AH'], decisions: { LJS: { d: 'Approved', when: '2026-09-27T10:00:00.000Z' } },
-      __sv: '2026-09-27T10:00:00.000Z',
-    },
-  ], [
-    {
-      id: 'AP-101', approvalKey: 'OP-1|Final quote release|01', status: 'Pending',
-      needed: ['LJS', 'AH'], decisions: { AH: { d: 'Approved', when: '2026-09-27T10:00:01.000Z' } },
-      __sv: '2026-09-27T10:00:01.000Z',
-    },
-  ]) as Array<Record<string, any>>
-
-  assert.equal(rows.length, 1)
-  assert.deepEqual(Object.keys(rows[0].decisions).sort(), ['AH', 'LJS'])
-  assert.equal(rows[0].status, 'Approved')
+test('generic snapshots cannot add a second signature or forge rejection', () => {
+  const row = { id: 'AP-1', status: 'Pending', needed: ['LJS', 'AH'], decisions: { LJS: { d: 'Approved' } } }
+  for (const d of ['Approved', 'Rejected']) {
+    assert.throws(() => workspace.mergeConcurrentApprovalRows([row], [{ ...row,
+      decisions: { ...row.decisions, AH: { d } } }]), (error: any) => error.status === 403)
+  }
 })
 
-test('a concurrent rejection remains authoritative', () => {
-  const merge = (workspace as Record<string, unknown>).mergeConcurrentApprovalRows
-  assert.equal(typeof merge, 'function')
-  if (typeof merge !== 'function') return
-
-  const rows = merge([
-    {
-      id: 'AP-102', approvalKey: 'OP-1|Final quote release|01', status: 'Pending',
-      needed: ['LJS', 'AH'], decisions: { LJS: { d: 'Rejected', when: '2026-09-27T10:00:00.000Z' } },
-    },
-  ], [
-    {
-      id: 'AP-102', approvalKey: 'OP-1|Final quote release|01', status: 'Pending',
-      needed: ['LJS', 'AH'], decisions: { AH: { d: 'Approved', when: '2026-09-27T10:00:01.000Z' } },
-    },
-  ]) as Array<Record<string, any>>
-
-  assert.equal(rows[0].status, 'Rejected')
-  assert.deepEqual(Object.keys(rows[0].decisions).sort(), ['AH', 'LJS'])
-})
-
-test('parallel requests for one approval key converge to one pending request', () => {
+test('separate requests retain their own IDs and evidence', () => {
   const rows = workspace.mergeConcurrentApprovalRows([], [
-    { id: 'AP-first', approvalKey: 'OP-1|Commercial deviation|01|payment', status: 'Pending', needed: ['AH'], ts: '2026-09-27T10:00:00.000Z' },
-    { id: 'AP-second', approvalKey: 'OP-1|Commercial deviation|01|payment', status: 'Pending', needed: ['AH'], ts: '2026-09-27T10:00:01.000Z' },
+    { id: 'AP-first', approvalKey: 'same', status: 'Pending' },
+    { id: 'AP-second', approvalKey: 'same', status: 'Pending' },
   ])
-
-  assert.equal(rows.length, 1)
-  assert.equal(rows[0].status, 'Pending')
-})
-
-test('approval requests from different proposal revisions stay separate', () => {
-  const rows = workspace.mergeConcurrentApprovalRows([], [
-    { id: 'AP-01', approvalKey: 'OP-1|Final quote release|01|', status: 'Pending', needed: ['LJS', 'AH'] },
-    { id: 'AP-02', approvalKey: 'OP-1|Final quote release|02|', status: 'Pending', needed: ['LJS', 'AH'] },
-  ])
-
   assert.equal(rows.length, 2)
+  assert.ok(rows.every(row => !Object.hasOwn(row, 'decisions')))
 })
 
-test('a stale pending copy cannot reopen an already approved request', () => {
-  const rows = workspace.mergeConcurrentApprovalRows([
-    {
-      id: 'AP-locked', approvalKey: 'OP-1|Final quote release|01|', status: 'Approved',
-      needed: ['LJS', 'AH'], decisions: {
-        LJS: { d: 'Approved', when: '2026-09-27T10:00:00.000Z' },
-        AH: { d: 'Approved', when: '2026-09-27T10:00:01.000Z' },
-      }, __sv: '2026-09-27T10:00:01.000Z',
-    },
-  ], [
-    {
-      id: 'AP-locked', approvalKey: 'OP-1|Final quote release|01|', status: 'Pending',
-      needed: ['LJS', 'AH'], decisions: {}, __sv: '2026-09-27T09:59:00.000Z',
-    },
-  ])
+test('a stale snapshot cannot reopen a committed approval', () => {
+  const row = { id: 'AP-1', status: 'Approved', decisions: { AH: { d: 'Approved' } } }
+  assert.throws(() => workspace.mergeConcurrentApprovalRows([row], [{ ...row, status: 'Pending' }]),
+    (error: any) => error.status === 403)
+})
 
-  assert.equal(rows.length, 1)
-  assert.equal(rows[0].status, 'Approved')
+test('unsigned cancellation does not synthesize decision evidence', () => {
+  const row = { id: 'AP-1', status: 'Pending' }
+  const [result] = workspace.mergeConcurrentApprovalRows([row], [{ ...row, status: 'Cancelled' }])
+  assert.equal(result.status, 'Cancelled')
+  assert.ok(!Object.hasOwn(result, 'decisions'))
 })
 
 test('health endpoint reports that the deployment service is ready', async () => {
@@ -271,4 +217,14 @@ test('workspace save authenticates and sends only changed collaborative slices t
     .send({ dirty: { leads: [{ id: 'L-2' }] } })
   assert.equal(response.status, 204)
   assert.deepEqual(writes, [{ leads: [{ id: 'L-2' }] }])
+})
+
+
+test('cancelling a partially signed request preserves its signature without reopening it', () => {
+  const original = { id: 'AP-partial', status: 'Pending', needed: ['LJS', 'AH'],
+    decisions: { LJS: { d: 'Approved', when: '2026-10-13T10:00:00Z' } }, __sv: '2026-10-13T10:00:00Z' }
+  const [row] = workspace.mergeConcurrentApprovalRows([original], [{ ...original,
+    status: 'Cancelled', supersededBy: 'AP-new', __sv: '2026-10-13T10:01:00Z' }])
+  assert.equal(row.status, 'Cancelled')
+  assert.deepEqual(row.decisions, original.decisions)
 })

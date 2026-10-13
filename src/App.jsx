@@ -12,6 +12,8 @@ import { WorkspaceViewProvider, useWorkspaceView } from './ui/WorkspaceViewConte
 import WorkspaceViewToggle from './ui/WorkspaceViewToggle.jsx'
 import { ThemeProvider, useWorkspaceTheme, WorkspaceThemeButton } from './ui/WorkspaceThemeContext.jsx'
 import HoverExplanationLayer from './ui/HoverExplanationLayer.jsx'
+import { WorkspaceFontProvider } from './ui/WorkspaceFontContext.jsx'
+import PersonalSettings from './pages/PersonalSettings.jsx'
 import { RequireAuth } from './pages/Login.jsx'
 import { topbarTitleFor } from './ui/workspaceTitles.js'
 import { lazyWithRecovery } from './lazyImport.js'
@@ -343,6 +345,7 @@ function AppShell() {
       <Route path="/pricelists" element={<PageGate page="pricelists"><PriceLists /></PageGate>} />
       <Route path="/dashboard" element={<Navigate to="/my-dashboard" replace />} />
       <Route path="/my-dashboard" element={<PageGate page="mydashboard"><MyDashboard /></PageGate>} />
+      <Route path="/personal-settings" element={<PersonalSettings />} />
       <Route path="/analytics" element={<PageGate page="analytics"><Analytics /></PageGate>} />
       <Route path="/customers" element={<PageGate page="customers"><Customers /></PageGate>} />
       <Route path="/users" element={<PageGate page="users"><Users /></PageGate>} />
@@ -391,6 +394,14 @@ function AppShell() {
               })}
             </div>
           })}
+          {store.auth?.user && <div className="side-nav-group">
+            <div className="side-nav-heading">Personal</div>
+            <NavLink to="/personal-settings"
+              className={({ isActive }) => `side-item workspace-personal-settings-trigger ${isActive ? 'active' : ''}`}
+              title={sidebarCompact ? 'Personal settings' : undefined}>
+              <Icon name="gear" size={17} /><span className="side-label">Personal settings</span>
+            </NavLink>
+          </div>}
         </nav>
         <div className="side-foot">
           {signedInName && <div className="side-user-chip"><span className="side-user-avatar">{userInitials}</span><span className="side-label"><b>{signedInName}</b><small>{displayRole(role)}</small></span></div>}
@@ -423,7 +434,9 @@ export default function App() {
   const store = useStore()
   const location = useLocation()
   return <ThemeProvider active={Boolean(store.auth?.user) && location.pathname !== '/showcase'}>
-    <WorkspaceViewProvider initialScope={dashboardDefaultScope(store.role)}><AppShell /></WorkspaceViewProvider>
+    <WorkspaceFontProvider auth={store.auth} active={Boolean(store.auth?.user) && location.pathname !== '/showcase'}>
+      <WorkspaceViewProvider initialScope={dashboardDefaultScope(store.role)}><AppShell /></WorkspaceViewProvider>
+    </WorkspaceFontProvider>
   </ThemeProvider>
 }
 // selectableRoles().map(([id, label]) => ({ id, label }))

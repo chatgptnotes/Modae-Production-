@@ -1,3 +1,6 @@
+import { workspaceSyncState } from '../workspaceSyncState.js'
+import { releaseWorkspaceElementInputs } from '../workspaceInputOwnership.js'
+import { WorkspaceRecordBoundary, useWorkspaceWatch } from '../ui/WorkspaceSync.jsx'
 import { REGISTRATION_FIELDS, registrationFields } from '../businessRules.js'
 import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
@@ -2151,7 +2154,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!decisionIsDirty || lead.status === 'Dropped') return undefined
+    if (workspaceSyncState.enabled || !decisionIsDirty || lead.status === 'Dropped') return undefined
     setDecisionSaved(false)
     setDecisionAutosaving(true)
     const timer = setTimeout(() => {
@@ -2165,12 +2168,13 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     // Navigation/unmount should not discard a draft that has not reached the
     // debounce timer yet. This remains a silent draft write, so audit history
     // still records only explicit completed saves.
-    if (decisionDirtyRef.current && lead.status !== 'Dropped') {
+    if (!workspaceSyncState.enabled && decisionDirtyRef.current && lead.status !== 'Dropped') {
       persistDecisionDraft(decisionDraftRef.current)
     }
   }, [lead.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saveDecisions = () => {
+  const saveDecisions = async event => {
+    const editor=event?.currentTarget?.closest('.lead-decision-card')
     setDecisionErr('')
     const missingIdentity = registrationFields(store.config)
       .filter(([key]) => !String(decisionDraft[key] || '').trim())
@@ -2192,6 +2196,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
       return
     }
     persistDecisionDraft(decisionDraft, { audit: true })
+    releaseWorkspaceElementInputs(editor)
+    if(workspaceSyncState.enabled){const saved=await store.flushPersistence([{entity:'leads',id:lead.id}]);setDecisionSaved(saved);if(!saved)setDecisionErr('Not saved. Review conflicts or retry.')}
   }
 
   const addResponseFiles = async picked => {
@@ -3661,9 +3667,10 @@ export default function Inbox() {
   const mailboxRows = rows.filter(lead => matchesInboxView(lead, activeInboxView)).sort(compareInboxRows)
   const { pageSize, pagerRef } = useViewportPageSize(mailboxRows.length, { enabled: !phone && !sel, listRef: mailboxListRef, rowSelector: ':scope > .mail-row', leadingSelector: ':scope > .mail-column-head', heightSource: 'list' })
   const { pagedRows: pageRows, pagination } = usePagedRows(mailboxRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF, activeInboxView, showArchive]), phone ? 10 : pageSize, pagerRef)
+  useWorkspaceWatch((sel ? [sel] : pageRows).map(r=>({entity:'leads',id:r.id})), sel ? [] : [{entity:'leads',page:0,pageSize:50}])
   if (sel) {
-    if (phone && sel.ai) return <StructuredLeadDetail key={sel.id} lead={sel} converted={sel.status === 'Converted'} phoneLayout />
-    if (phone) return <LegacyLeadDetail key={sel.id} lead={sel} phoneLayout />
+    if (phone && sel.ai) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><StructuredLeadDetail key={sel.id} lead={sel} converted={sel.status === 'Converted'} phoneLayout /></WorkspaceRecordBoundary>
+    if (phone) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><LegacyLeadDetail key={sel.id} lead={sel} phoneLayout /></WorkspaceRecordBoundary>
     const age = ageDays(sel.ts)
     return (
     <div className="lead-workspace">
@@ -3684,9 +3691,9 @@ export default function Inbox() {
           <span className={`pill ${PILL[sel.status] || 'Blue'}`}>{sel.status}</span>
       </div>
         {sel.ai
-          ? <StructuredLeadDetail lead={sel} converted={sel.status === 'Converted'} />
+          ? <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><StructuredLeadDetail lead={sel} converted={sel.status === 'Converted'} /></WorkspaceRecordBoundary>
           : <><LeadWorkflowBar lead={sel} /><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
-              <LegacyLeadDetail lead={sel} />
+              <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><LegacyLeadDetail lead={sel} /></WorkspaceRecordBoundary>
             </div></section></div></>}
       </div>
     )

@@ -24,6 +24,58 @@ configured deployment identifier so the client can invalidate browser sessions
 after a deployment. The application also accepts the legacy
 `SUPERBEES_GIT_COMMIT_SHA` and `VERCEL_GIT_COMMIT_SHA` names.
 
+## Atomic approval rollout
+
+Apply `supabase/migrations/20261013080111_atomic_approval_commands.sql` after
+migration 023 in staging, then deploy the matching application. Repeat that order
+for production after staging validation. Coordinate the change: the database
+rejects legacy snapshot-based Accept/Reject writes as soon as the migration is
+installed. Do not roll the application back to a version that writes decisions
+through generic saves while these guards are installed.
+
+Validate two simultaneous approvers, joint signatures, rejection, cancellation,
+proposal/customer effects, and retry after a lost response on desktop and mobile.
+See `supabase/README.md` for the disposable PostgreSQL integration runner and
+connection/timeout requirements. No environment variable or Realtime subscription
+is required for the command workflow.
+
+## Optional event-driven workspace synchronization
+
+Set server-only `WORKSPACE_SYNC_ENABLED=true` on staging to enable explicit
+record saves and event-driven synchronization. It stays disabled by default.
+There is no Supabase Realtime connection, polling fallback, or new migration
+for this layer. Atomic approvals still require their existing migration.
+
+After initial loading, idle screens and typing make no application requests.
+Supabase Auth token renewal remains enabled. Local draft debounce and request
+abort timers do not poll. Location suggestions use the local catalogue in this
+mode; arbitrary locations remain editable. Presence and deployment polling were
+removed in all modes. Deployment checks happen on activation; enabled workspace
+checks include the deployment identifier and mutations reject old deployments.
+
+Focus, visible restoration and reconnect coalesce into one bounded version
+check. Only changed records need body reads. Save/Approve and manual refresh are
+explicit network actions. A continuously focused device can display old data
+until its next check or commit; expected revisions protect commits regardless.
+
+BroadcastChannel delivers permitted committed snapshots and local editing
+indicators between same-account/generation/deployment tabs without fetching.
+Without it, tabs revalidate independently on activation. There are no live
+cross-device typing indicators. Railway presence/admission data is process-local
+and expiring; keep one replica until a shared coordinator is provided.
+
+Version requests still perform Supabase Auth and bounded database queries.
+Limits remain eight concurrent synchronization requests per process and thirty
+per actor per minute. A failed check waits for the next user/lifecycle event;
+there is no retry timer. Bulk revision conflicts return HTTP 409 with both
+accepted results and conflicts; do not drop partial successes in clients.
+
+Test desktop and phone Save, unsaved navigation, native Back/Forward, concurrent
+approvals, partial failures, inaccessible records, deployment changes and account
+switches before enabling production. Verify idle and typing network traces over
+several minutes, allowing authentication renewal only. Already-open clients keep
+draft protection if the server flag is switched off until logout/reload.
+
 ## Environment variables
 
 Set these in the Railway staging service variables; never commit

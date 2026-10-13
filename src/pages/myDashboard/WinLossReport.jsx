@@ -1,11 +1,22 @@
 import React, { useState } from 'react'
 import { drillClick, useDashboardDrilldown } from './drillInteraction.js'
+import WinLossDonut from './WinLossDonut.jsx'
 import OutcomeReasons from './OutcomeReasons.jsx'
 import CountAxis, { countScale } from './CountAxis.jsx'
 
-export default function WinLossReport({ outcomes, showMoney = false }) {
+export default function WinLossReport({ outcomes, showMoney = false, animateDonut = false }) {
   const open = useDashboardDrilldown()
+  const [hoveredOutcome, setHoveredOutcome] = useState(null)
   const { summary, byReason, closedOther = { count: 0, byStage: [] } } = outcomes
+  const legendHover = result => !animateDonut ? {} : {
+    onPointerEnter: event => {
+      if (event.pointerType === 'mouse' && window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+        setHoveredOutcome(summary[result] > 0 ? result : null)
+      }
+    },
+    onPointerLeave: () => setHoveredOutcome(null),
+    onPointerCancel: () => setHoveredOutcome(null),
+  }
   const closed = summary.total + closedOther.count
   const [showAll, setShowAll] = useState(false)
   const [selected, setSelected] = useState('all')
@@ -31,17 +42,14 @@ export default function WinLossReport({ outcomes, showMoney = false }) {
       <div className="winloss-summary">
         <h3 className="winloss-chart-heading">Win vs Lost</h3>
         <div className="winloss-summary-main">
-        <div className={`winloss-donut${summary.total ? '' : ' is-empty'}`}
-          style={{ '--win-share': `${summary.total ? summary.won / summary.total * 100 : 0}%` }}
-          {...drillClick(open && (() => open({ kind: 'outcomes' })), 'View win-rate calculation and opportunities')} role={open ? 'button' : 'img'} aria-label={summary.total ? `Win rate ${summary.winRate}%, ${summary.won} won and ${summary.lost} lost` : closed ? 'No won/lost decisions yet' : 'No closed opportunities yet'}>
-          <div><strong>{summary.total ? `${summary.winRate}%` : '—'}</strong><span>Overall win rate</span></div>
-        </div>
+        <WinLossDonut summary={summary} closed={closed} open={open} animated={animateDonut}
+          hovered={hoveredOutcome} onHover={setHoveredOutcome} />
         <div className="winloss-summary-content">
-          <div className="winloss-counts" role="group" aria-label="Filter reasons by outcome">
-            {['won', 'lost'].map(result => open ? <div key={result} data-result={result} className={`winloss-outcome-item${selected === result ? ' is-selected' : ''}`}>
+          <div className="winloss-counts" data-hovered={animateDonut && summary.total ? hoveredOutcome || undefined : undefined} role="group" aria-label="Filter reasons by outcome">
+            {['won', 'lost'].map(result => open ? <div key={result} {...legendHover(result)} data-result={result} className={`winloss-outcome-item${selected === result ? ' is-selected' : ''}`}>
               <button type="button" className="dashboard-text-action" aria-pressed={selected === result} onClick={() => select(result)} aria-label={`Filter reasons: ${result}`}><span className="winloss-count-label"><i aria-hidden="true" />{result === 'won' ? 'Won' : 'Lost'}</span></button>
               <button type="button" className="dashboard-text-action" onClick={() => open({ kind: 'outcomes', outcome: result })} aria-label={`${result === 'won' ? 'Won' : 'Lost'} ${summary[result]} (${shares[result] == null ? '—' : `${shares[result]}%`}), view opportunities`}><strong className="winloss-count-value">{summary[result]} <small>({shares[result] == null ? '—' : `${shares[result]}%`})</small></strong></button>
-            </div> : <button type="button" data-result={result} aria-pressed={selected === result}
+            </div> : <button type="button" {...legendHover(result)} data-result={result} aria-pressed={selected === result}
               aria-label={`${result === 'won' ? 'Won' : 'Lost'} ${summary[result]} (${shares[result] == null ? '—' : `${shares[result]}%`}), ${selected === result ? 'show both outcomes' : `show ${result} reasons`}`}
               key={result} onClick={() => select(result)}>
               <span className="winloss-count-label"><i aria-hidden="true" />{result === 'won' ? 'Won' : 'Lost'}</span>

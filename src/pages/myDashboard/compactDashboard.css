@@ -1,0 +1,27 @@
+/* Only the Full-site dashboard opts in; shared reports keep their own sizing. */
+@media (min-width: 701px) {
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-section { padding-block: 8px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-section > header { margin-bottom: 6px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-kpi { padding-block: 10px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-kpi::before { top: 10px; bottom: 10px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-kpi > div { gap: 4px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-performance { row-gap: 6px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-bar { min-height: 30px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-performance-chart > .hint { margin-block: 0 4px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-performance-chart > .hint p { margin-block: 4px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-target-note { margin-block: 0 2px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-gap-placeholder p { margin-block: 4px 0; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-table :is(th, td) { padding-block: 5px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .reference-analysis-subtitle { margin-block: 0 6px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .normal-funnel { padding-block: 6px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .winloss-chart-grid { padding-block: 4px 6px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .winloss-chart-heading { margin-bottom: 6px; }
+  .shell[data-theme] [data-dashboard-density="compact"] .winloss-summary > .winloss-chart-heading { margin-bottom: 0; }
+  .shell[data-theme] [data-dashboard-density="compact"] .winloss-summary { gap: 6px; }
+
+  /* Preserve the existing stacked funnel when its own container is narrow. */
+  @container (min-width: 701px) {
+    .shell[data-theme] [data-dashboard-density="compact"] .normal-funnel-chart { height: 48px; }
+    .shell[data-theme] [data-dashboard-density="compact"] .normal-funnel-number { font-size: 22px; }
+  }
+}

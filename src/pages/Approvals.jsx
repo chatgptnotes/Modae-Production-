@@ -1,3 +1,4 @@
+import { useWorkspaceWatch, WorkspaceEditingHint } from '../ui/WorkspaceSync.jsx'
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
@@ -234,9 +235,11 @@ function DecisionForm({ a, role, draft = {}, onDraftChange, onDecide }) {
       setErr('This comment appears to contain a condition. Choose Reject and explain what must be corrected.')
       return
     }
-    const saved = await onDecide({ d, comment: comment.trim(), commentReview: review })
-    setChecking(false)
-    if (!saved) setErr('Your decision could not be shared. Check your connection and try again.')
+    try {
+      const saved = await onDecide({ d, comment: comment.trim(), commentReview: review })
+      if (!saved) setErr('Your decision could not be shared. Check your connection and try again.')
+    } catch (error) { setErr(error.message || 'Decision confirmation is unavailable. Try again to check its status.') }
+    finally { setChecking(false) }
   }
 
   return (
@@ -292,6 +295,7 @@ function PendingCard({
   const opp = store.opportunities.find(o => o.id === a.oppId)
   return (
     <div className={cardClass(a, 'form-card approval-pending-card')}>
+      <WorkspaceEditingHint records={[{entity:'proposals',id:a.oppId},{entity:'opportunities',id:a.oppId},...(a.leadId?[{entity:'leads',id:a.leadId}]:[])]} />
       <div className="approval-card-top approval-card-top-redesigned">
         <div className="approval-card-identity">
           <b>{approvalTitle(opp)}</b>
@@ -653,6 +657,7 @@ export default function Approvals() {
   const { pagedRows: pageForMe, pagination: forMePagination } = usePagedRows(forMe, approvalResetKey, phone ? 10 : forMeFit.pageSize, forMeFit.pagerRef)
   const { pagedRows: pageOthers, pagination: othersPagination } = usePagedRows(others, approvalResetKey, phone ? 10 : othersFit.pageSize, othersFit.pagerRef)
   const { pagedRows: pageDecided, pagination: decidedPagination } = usePagedRows(decided, approvalResetKey, phone ? 10 : decidedFit.pageSize, decidedFit.pagerRef)
+  useWorkspaceWatch([...pageMine,...pageForMe,...pageOthers,...pageDecided].slice(0,30).flatMap(a=>[{entity:'approvals',id:a.id},...(a.oppId?[{entity:'proposals',id:a.oppId},{entity:'opportunities',id:a.oppId}]:a.leadId?[{entity:'leads',id:a.leadId}]:[])]),[{entity:'approvals',page:0,pageSize:50}])
   const filterBarProps = {
     q,
     statusF,
@@ -782,6 +787,7 @@ export default function Approvals() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <b>{a.id}</b>
             <span className={`pill ${pillFor(a.status)}`}>{a.status}</span>
+            {a.supersededBy && <span className="hint">Superseded by {a.supersededBy}</span>}
             <span style={{ fontSize: 12.5 }}>{a.type}</span>
             <span className="hint" style={{ marginLeft: 'auto' }}>Approved {stamp(a.decisionTs)}</span>
           </div>

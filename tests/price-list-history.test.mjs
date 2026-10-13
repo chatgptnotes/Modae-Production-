@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import { workspaceDrafts, SYNC_ENTITIES } from '../src/workspaceDrafts.js'
+import { workspaceSyncState, committedWorkspace } from '../src/workspaceSyncState.js'
 
 const source = fs.readFileSync('src/datastore.js', 'utf8')
 const extract = name => source.match(new RegExp(`(?:export )?async function ${name}\\([^]*?\\n\\}`))[0].replace('export ', '')
@@ -10,7 +12,7 @@ test('saving after hydration preserves unloaded archives, including cached archi
   const records = new Map([['price_list_versions|old', { data: archive, rev: 2 }]])
   const revisions = new Map([['price_list_versions|old', 2]])
   const writes = []
-  const save = new Function('supabase', 'normalizedRecords', 'normalizedRevisions', `
+  const save = new Function('supabase', 'normalizedRecords', 'normalizedRevisions', 'workspaceDrafts', 'SYNC_ENTITIES', 'workspaceSyncState', 'committedWorkspace', `
     const normalizedKey = (entity,id) => entity+'|'+id;
     const currentActorId = async () => 'qa';
     const annotateRpcError = (entity,error) => error;
@@ -23,7 +25,7 @@ test('saving after hydration preserves unloaded archives, including cached archi
     ${extract('saveNormalizedRowsNow')}
     ${extract('savePriceLists')}
     return savePriceLists;
-  `)({ rpc: async (name, payload) => { writes.push(payload); return { data: { conflicts: [] } } } }, records, revisions)
+  `)({ rpc: async (name, payload) => { writes.push(payload); return { data: { conflicts: [] } } } }, records, revisions, workspaceDrafts, SYNC_ENTITIES, workspaceSyncState, committedWorkspace)
   await save({ QA: {
     version: 'Revised', currency: 'EUR', activeVersionId: 'new',
     versions: [{ id: 'old', version: 'Original', parts: [] }, { id: 'new', version: 'Revised', parts: [{ pn: 'A', price: 20 }] }],

@@ -1,3 +1,6 @@
+import { WorkspaceRecordBoundary } from '../ui/WorkspaceSync.jsx'
+import { useWorkspaceRecordBuffer } from '../ui/useWorkspaceRecordBuffer.js'
+import { requireDocumentFont } from '../workspaceFonts.js'
 import { supabaseAuth } from '../supabase.js'
 import React, { useEffect, useRef, useState } from 'react'
 import XLSX from 'xlsx-js-style'
@@ -604,7 +607,8 @@ export default function Proposal(props) {
   const store = useStore()
   const opp = store.opportunities.find(o => o.id === (oppIdProp || routeOppId))
   if (opp && !isWorkflowAvailable(opp.oppType, store.config)) return <OpportunityComingSoon opp={opp} />
-  return <ProposalEditor {...props} />
+  if (props.embedded) return <ProposalEditor {...props} />
+  return <WorkspaceRecordBoundary records={[{entity:"proposals",id:oppIdProp || routeOppId},{entity:"opportunities",id:oppIdProp || routeOppId}]}><ProposalEditor {...props} /></WorkspaceRecordBoundary>
 }
 
 function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit Sheet' }) {
@@ -621,6 +625,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const [tab, setTab] = useState(initialTab)
   const [workbook, setWorkbook] = useState('proposal')
   const [printingModel, setPrintingModel] = useState(null)
+  const [printFontError, setPrintFontError] = useState('')
   const [pdfPreviewTarget, setPdfPreviewTarget] = useState(null)
   const [previewTarget, setPreviewTarget] = useState(null)
   const [previewWorkbook, setPreviewWorkbook] = useState(null)
@@ -649,7 +654,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
   const [conditionTarget, setConditionTarget] = useState(null)
   const [conditionNote, setConditionNote] = useState('')
   const [readinessOpen, setReadinessOpen] = useState(false)
-  const [p, setP] = useState(() => normalize(store.getProposal(oppId), opp))
+  const [p, setP] = useWorkspaceRecordBuffer('proposals', oppId, store.proposals?.[oppId],
+    source => normalize(source || store.getProposal(oppId), opp))
   // Ref mirror: deferred commits (formula bar) must patch the CURRENT proposal,
   // never a click-time snapshot — a stale snapshot would silently revert edits.
   const pRef = React.useRef(p)
@@ -723,8 +729,18 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
     const done = () => setPrintingModel(null)
     if (embedded) document.body.classList.add('proposal-printing')
     window.addEventListener('afterprint', done, { once: true })
-    const t = setTimeout(() => window.print(), 60)
+    let cancelled = false
+    setPrintFontError('')
+    const t = setTimeout(async () => {
+      try {
+        await requireDocumentFont()
+        if (!cancelled) window.print()
+      } catch (error) {
+        if (!cancelled) { setPrintFontError(error.message); setPrintingModel(null) }
+      }
+    }, 60)
     return () => {
+      cancelled = true
       clearTimeout(t)
       window.removeEventListener('afterprint', done)
       document.body.classList.remove('proposal-printing')
@@ -1739,6 +1755,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       {/* The opportunity summary header already names the opportunity, and there
           is no folder to go back to from inside it. */}
       {!embedded && <h2>{displayOpportunityId(oppId)} — {opp.sellTo} — Proposal Workbook</h2>}
+      {printFontError && <div className="errbox" role="alert">{printFontError}</div>}
       <header className="proposal-workspace-header">
         <div className="proposal-workspace-title">
           <span className="eyebrow">Customer proposal</span>

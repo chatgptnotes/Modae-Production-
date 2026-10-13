@@ -24,6 +24,24 @@ export const canReadPricing = (user, row, config, state) => canPerform(user, 'co
   || (canPerform(user, 'proposals.price', config) && linkedOwner(row, state) === user?.role)
 const seeAny = (user, config, pages) => pages.some(page => canAccessPage(user, page, config))
 
+// A projection can change without any business-row revision changing.
+export function workspaceProjectionVersion(user, config) {
+  const access = effectiveAccess(user, config)
+  return JSON.stringify([user.role, [...access.roles].sort(), [...access.pages].sort(), [...access.actions].sort()])
+}
+
+// Shared metadata visibility rules for bounded revision reads and full projection.
+export function canReadWorkspaceRecord(user, entity, row, config, state) {
+  if (effectiveAccess(user, config).isAdmin) return true
+  if (entity === 'leads') return seeAny(user, config, ['inbox', 'new', 'tender'])
+  if (entity === 'opportunities') return seeAny(user, config, ['mydashboard','tracker','my','analytics','folders','proposal','po','approvals'])
+  if (entity === 'spares_lines') return canAccessPage(user, 'proposal', config) && canReadPricing(user, row, config, state)
+  if (entity === 'clarifications') return seeAny(user, config, ['mydashboard','tracker','my','analytics','folders','proposal','po','approvals']) && (canPerform(user,'commercial.view',config) || linkedOwner(row,state)===user?.role)
+  if (entity === 'proposals') return canAccessPage(user, 'proposal', config) && canReadPricing(user, row, config, state)
+  if (entity === 'approvals') return canAccessPage(user, 'approvals', config) && (canPerform(user, 'commercial.view', config) || row.needed?.includes(user.role) || row.approver === user.role || row.requestedBy === user.role)
+  return false
+}
+
 export function projectWorkspace(state, user) {
   const config = state.config || {}
   const access = effectiveAccess(user, config)
@@ -39,7 +57,7 @@ export function projectWorkspace(state, user) {
     opportunities: opportunitiesVisible ? (state.opportunities || []).map(row => canReadPricing(user, row, config, state) ? row : { ...pick(row, PUBLIC_OPPORTUNITY), ...(row.booking ? { booking: projectBooking(row.booking) } : {}) }) : [],
     leads: leadVisible ? (state.leads || []).map(row => commercial || row.assignedOwner === user?.role ? row : pick(row, PUBLIC_LEAD)) : [],
     users: freshUsers.map(row => pick(row, ['id', 'name', 'email', 'role', 'roles', 'status', ...(row.id === user.id ? ['authId'] : [])])),
-    approvals: canAccessPage(user, 'approvals', config) ? (state.approvals || []).filter(row => commercial || row.needed?.includes(user?.role) || row.approver === user?.role || row.requestedBy === user?.role).map(row => canReadPricing(user,row,config,state) ? row : pick(row,['id','oppId','leadId','type','status','needed','approver','anyOf','requestedBy','ts','decisions','decisionTs','decisionNote','conditions','__sv'])) : [],
+    approvals: canAccessPage(user, 'approvals', config) ? (state.approvals || []).filter(row => commercial || row.needed?.includes(user?.role) || row.approver === user?.role || row.requestedBy === user?.role).map(row => canReadPricing(user,row,config,state) ? row : pick(row,['id','oppId','leadId','type','status','needed','approver','anyOf','requestedBy','ts','decisions','decisionTs','decisionNote','conditions','supersededBy','cancelledAt','cancelledBy','cancellationReason','__sv'])) : [],
     customers: canAccessPage(user, 'customers', config) || leadVisible ? state.customers || [] : [],
     proposals: canAccessPage(user, 'proposal', config) ? Object.fromEntries(Object.entries(state.proposals || {}).filter(([id, row]) => canReadPricing(user, { ...row, id }, config, state))) : {},
     sparesLines: canAccessPage(user, 'proposal', config) ? pricingRows(state.sparesLines) : [],
@@ -272,7 +290,7 @@ export function assertWorkspaceRowWrite(user, entity, previous, next, config, st
             }
           } else {
             const changed = changedKeys(before,customer)
-            const approved = (state.approvals || []).find(row => row.type === 'Customer master change' && row.status === 'Approved'
+            const approved = (state.approvals || []).find(row => !row.supersededBy && row.type === 'Customer master change' && row.status === 'Approved'
               && customerKey(row.customerName) === name && changed.every(key => same(row.patch?.[key],customer[key]))
               && (row.needed || [row.approver]).includes(user.role))
             const required = config.kycItems || []

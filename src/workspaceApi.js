@@ -1,3 +1,4 @@
+import { workspaceDeploymentHeaders } from './workspaceDeployment.js'
 import { supabaseAuth } from './supabase.js'
 
 let workspaceGeneration = ''
@@ -20,7 +21,7 @@ async function responseError(response, fallback) {
 
 export async function fetchWorkspace(token, fetcher = fetch) {
   const response = await fetcher('/api/workspace/bootstrap', {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: { ...workspaceDeploymentHeaders(), Authorization: `Bearer ${token}` },
   })
   rememberWorkspaceGeneration(response)
   if (!response.ok) throw await responseError(response, 'Workspace bootstrap failed')
@@ -29,7 +30,7 @@ export async function fetchWorkspace(token, fetcher = fetch) {
 }
 
 export async function saveWorkspace(token, dirty, fetcher = fetch) {
-  const headers = {
+  const headers = { ...workspaceDeploymentHeaders(),
     Authorization: `Bearer ${token}`,
     'Content-Type': 'application/json',
     ...(workspaceGeneration ? { 'x-workspace-generation': workspaceGeneration } : {}),
@@ -63,7 +64,7 @@ export async function importWorkspaceWorkbook(importData, { action = 'preview', 
   const token = data?.session?.access_token
   if (!token) throw new Error('A signed-in admin session is required.')
   const response = await fetcher('/api/workspace/import', {
-    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    method: 'POST', headers: { ...workspaceDeploymentHeaders(), Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ action, importData, reviewToken }),
   })
   if (!response.ok) throw await responseError(response, 'Workbook import failed')

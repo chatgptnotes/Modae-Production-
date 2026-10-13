@@ -96,7 +96,19 @@ test('no orphan font stylesheet ships alongside the real one', () => {
   const files = fs.readdirSync(path.join(root, 'public/fonts'))
   assert.deepEqual(files.sort(), [
     'inter-latin-ext.woff2', 'inter-latin.woff2',
-  ], 'two variable faces, one per subset')
+    'lora', 'merriweather', 'open-sans', 'roboto',
+  ], 'bundled Inter subsets and additional personal font families')
+  const fontCss = read('src/ui/additionalFonts.css')
+  for (const family of ['lora', 'merriweather', 'open-sans', 'roboto']) {
+    assert.match(read(`public/fonts/${family}/OFL.txt`), /SIL OPEN FONT LICENSE/i)
+    for (const style of ['normal', 'italic']) {
+      for (const subset of ['latin', 'latin-ext']) {
+        const file = `fonts/${family}/${style}-${subset}.woff2`
+        assert.ok(fontCss.includes(`url('/${file}')`) || fontCss.includes(`url(/${file})`))
+        assert.equal(fs.readFileSync(path.join(root, 'public', file)).subarray(0, 4).toString(), 'wOF2')
+      }
+    }
+  }
 })
 
 test('status colour is not brand colour', () => {

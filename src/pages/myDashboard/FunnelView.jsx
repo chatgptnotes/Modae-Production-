@@ -1,5 +1,8 @@
-import React, { useId, useSyncExternalStore } from 'react'
+import React, { useId, useState, useEffect, useSyncExternalStore } from 'react'
 import './funnelView.css'
+import './surfaceMotion.css'
+import AnimatedFunnelStage from './AnimatedFunnelStage.jsx'
+import useSurfaceLight, { canHoverSurface } from './useSurfaceLight.js'
 import { drillClick } from './drillInteraction.js'
 import { dynamicFunnelGeometry, funnelBandPath } from './funnelGeometry.js'
 
@@ -39,11 +42,21 @@ export function FunnelViewSwitch({ view, onChange }) {
   </div>
 }
 
-export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClick, onSegmentClick, view = 'normal' }) {
+export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClick, onSegmentClick, view = 'normal', animate = false }) {
+  const [hovered, setHovered] = useState(null)
+  const light = useSurfaceLight()
+  useEffect(() => {
+    if (!animate) return
+    const reset = () => setHovered(null)
+    const media = window.matchMedia('(hover: hover) and (pointer: fine)')
+    media.addEventListener('change', reset)
+    window.addEventListener('blur', reset)
+    return () => { media.removeEventListener('change', reset); window.removeEventListener('blur', reset) }
+  }, [animate])
   const id = useId().replaceAll(':', '')
   const dynamic = view === 'dynamic'
   const geometry = dynamic ? dynamicFunnelGeometry(rows) : []
-  return <div className={`normal-funnel${showMoney ? ' has-values' : ''}`} data-funnel-view={view}>
+  return <div className={`normal-funnel${showMoney ? ' has-values' : ''}`} data-funnel-view={view} data-animated={animate ? "" : undefined}>
     <div className="normal-funnel-head"><span /><span>Stage</span><span>Count</span>{showMoney && <span>Value (₹ L)</span>}</div>
     {rows.map((row, index) => {
       const top = 880 - index * 110
@@ -55,12 +68,20 @@ export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClic
         cumulative += segment.count
         return cumulative > row.count / 2
       })?.key
+      const active = hovered?.stage === row.key ? hovered.probability : null
+      const activate = probability => setHovered(probability ? { stage: row.key, probability } : null)
+      const detailHover = !animate || !row.count ? {} : {
+        onPointerEnter: event => { if (canHoverSurface(event)) activate('all') },
+        onPointerLeave: () => activate(null),
+        onFocus: () => activate('all'), onBlur: () => activate(null),
+      }
       let offset = left
       let fraction = 0
-      return <div className="normal-funnel-row" key={row.key} data-width={dynamic ? geometry[index].width : undefined}>
-        <div className="normal-funnel-chart">
+      return <div className="normal-funnel-row" key={row.key} data-highlighted={animate && active ? "" : undefined} data-width={dynamic ? geometry[index].width : undefined}>
+        <div className="normal-funnel-chart" {...(animate ? light : {})}>
           <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden={onSegmentClick || dynamic ? undefined : true} aria-label={dynamic ? `${row.label}: ${row.count} opportunities` : undefined}>
-            {dynamic ? <>
+            {animate ? <AnimatedFunnelStage row={row} index={index} geometry={dynamic ? geometry[index] : null}
+              id={clipId} active={active} setActive={activate} onSegmentClick={onSegmentClick} showMoney={showMoney} formatMoney={formatMoney} /> : dynamic ? <>
               <path d={funnelBandPath(geometry[index])} className="normal-funnel-empty" />
               {row.segments.filter(segment => segment.count > 0).map(segment => {
                 const from = fraction
@@ -87,7 +108,7 @@ export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClic
           </svg>
           <b style={onSegmentClick ? { pointerEvents: 'none' } : undefined} className={`normal-funnel-number${centerBand === 'high' || centerBand === 'low' ? ' on-dark' : ''}`}>{row.count}</b>
         </div>
-        <div className="normal-funnel-stage" data-explain-title={row.label}
+        <div {...detailHover} className="normal-funnel-stage" data-explain-title={row.label}
           data-explain={row.key === 'won' ? 'Only closed opportunities explicitly marked Won count.' : `Only open opportunities at ${row.stages?.join(', ') || row.label} count.`}>
           {onStageClick ? <button type="button" className={onSegmentClick ? 'dashboard-text-action' : undefined} onClick={() => onStageClick(row)}>{row.label}</button> : <strong>{row.label}</strong>}
           <span className="normal-funnel-bands" tabIndex={0} title={row.count ? row.segments.filter(segment => segment.count > 0).map(segment => `${segment.key}: ${segment.count}${showMoney ? ` · ${formatMoney(segment.valueK)}` : ''}`).join('\n') : 'No opportunities — empty stage'}>
@@ -95,8 +116,8 @@ export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClic
             <span aria-hidden="true">ⓘ</span>
           </span>
         </div>
-        <strong className="normal-funnel-count" {...drillClick(onStageClick && (() => onStageClick(row)), `View ${row.label} opportunities`)}>{row.count}<span className="normal-funnel-phone-unit"> opportunities</span></strong>
-        {showMoney && <strong className="normal-funnel-value" {...drillClick(onStageClick && (() => onStageClick(row)), `View ${row.label} value contributors`)}>{formatMoney(row.valueK)}</strong>}
+        <strong {...detailHover} className="normal-funnel-count" {...drillClick(onStageClick && (() => onStageClick(row)), `View ${row.label} opportunities`)}>{row.count}<span className="normal-funnel-phone-unit"> opportunities</span></strong>
+        {showMoney && <strong className="normal-funnel-value" {...detailHover} {...drillClick(onStageClick && (() => onStageClick(row)), `View ${row.label} value contributors`)}>{formatMoney(row.valueK)}</strong>}
       </div>
     })}
   </div>

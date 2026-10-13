@@ -25,13 +25,11 @@ async function currentProfile(client, token) {
   return isActiveUser(profile) ? { auth: authData.user, isAdmin: isAccountAdmin(profile) } : null
 }
 
-async function onlineUserCount(client) {
-  const cutoff = new Date(Date.now() - ONLINE_WINDOW_MS).toISOString()
-  const { count, error } = await client.from('user_presence')
-    .select('*', { count: 'exact', head: true })
-    .gte('last_seen_at', cutoff)
-  if (error) throw error
-  return count || 0
+const recentActivity = new Map()
+async function onlineUserCount() {
+  const cutoff=Date.now()-ONLINE_WINDOW_MS
+  for(const [id,at] of recentActivity)if(at<cutoff)recentActivity.delete(id)
+  return recentActivity.size
 }
 
 export default async function handler(req, res) {
@@ -53,16 +51,13 @@ export default async function handler(req, res) {
   const action = req.body?.action || 'heartbeat'
   try {
     if (action === 'heartbeat') {
-      const { error } = await client.from('user_presence').upsert({
-        user_id: profile.auth.id,
-        last_seen_at: new Date().toISOString(),
-      }, { onConflict: 'user_id' })
-      if (error) throw error
-      return res.status(200).json({ ok: true, ...(profile.isAdmin ? { onlineCount: await onlineUserCount(client) } : {}) })
+      await onlineUserCount()
+      if(recentActivity.size<2000 || recentActivity.has(profile.auth.id))recentActivity.set(profile.auth.id,Date.now())
+      return res.status(200).json({ ok: true, ...(profile.isAdmin ? { onlineCount: await onlineUserCount(client), activityLabel: 'Recently active' } : {}) })
     }
     if (action === 'status') {
       if (!profile.isAdmin) return res.status(403).json({ ok: false, error: 'Only application administrators can view user presence.' })
-      return res.status(200).json({ ok: true, onlineCount: await onlineUserCount(client) })
+      return res.status(200).json({ ok: true, onlineCount: await onlineUserCount(client), activityLabel: 'Recently active' })
     }
     return res.status(400).json({ ok: false, error: 'Unknown presence action.' })
   } catch (error) {

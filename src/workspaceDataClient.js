@@ -1,16 +1,18 @@
+import { workspaceDeploymentHeaders } from './workspaceDeployment.js'
 // A small query adapter for existing revision-aware datastore helpers. The server
 // accepts only the operations below; it never accepts arbitrary SQL or RPC names.
+import { sendApprovalCommand } from './approvalCommands.js'
 export function createWorkspaceDataClient(client, getGeneration = () => '', fetcher = fetch) {
   if (!client) return null
   const request = async payload => {
     const { data } = await client.auth.getSession()
     if (!data?.session?.access_token) return { data: null, error: { message: 'Sign in before accessing workspace data.', code: '42501' } }
-    const response = await fetcher('/api/workspace/data', { method: 'POST', headers: {
+    const response = await fetcher('/api/workspace/data', { method: 'POST', headers: { ...workspaceDeploymentHeaders(),
       Authorization: `Bearer ${data.session.access_token}`, 'Content-Type': 'application/json',
       'x-workspace-generation': getGeneration(),
     }, body: JSON.stringify(payload) })
     const body = await response.json()
-    return response.ok ? body : { data: null, error: { ...body, message: body.error || 'Workspace data request failed.', code: body.code || String(response.status) } }
+    return response.ok || response.status === 409 && body.code === 'REVISION_CONFLICT' && Array.isArray(body.data?.conflicts) ? {...body,status:response.status} : { data: null, error: { ...body, message: body.error || 'Workspace data request failed.', code: body.code || String(response.status) } }
   }
   let pendingReads = []
   let readTimer = null
@@ -37,6 +39,7 @@ export function createWorkspaceDataClient(client, getGeneration = () => '', fetc
   })
   return {
     auth: client.auth,
+    decideApproval: command => sendApprovalCommand(client, command, fetcher),
     rpc: (name, args) => request({ operation: 'rpc', name, args }),
     from(table) {
       const payload = { operation: 'select', table, filters: [] }

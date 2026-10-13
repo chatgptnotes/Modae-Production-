@@ -1,9 +1,12 @@
+import { workspaceSync, admitSync, admitSyncActor } from './_workspace-sync.js'
 import { assertReservedOpportunityIds } from './_opportunity-reservations.js'
 import { getAdminSupabaseClient } from './_supabase-client.js'
 import { activeProfile } from './_user-roster.js'
 import { canAccessPage, canPerform, effectiveAccess } from '../src/accessPolicy.js'
 import { assertWorkspaceRowWrite, projectWorkspace, canReadPricing } from '../src/workspaceAccess.js'
 import { createWorkspaceReader } from '../src/server/workspace.js'
+import { validateApprovalCommand, executeApprovalCommand, approvalErrorStatus, admitApprovalCommand } from './_approval-command.js'
+import { assertNoApprovalCommandWrite, publicAuditEvent } from '../src/approvalWriteGuard.js'
 
 const TABLES = ['records', 'leads', 'opportunities', 'approvals', 'settings', 'proposals', 'spares_lines', 'clarifications', 'audit', 'price_lists', 'price_list_versions']
 const keys = { spares_lines: 'sparesLines', price_lists: 'priceLists' }
@@ -31,6 +34,8 @@ async function selectRows(client, input, state, profile) {
 }
 
 export function projectedRows(table, records, state, profile) {
+  if (table === 'records') records = records.filter(row => row.entity === 'state')
+  if (table === 'audit') records = records.map(row => ({ ...row, data: publicAuditEvent(row.data) }))
   const config = state.config || {}
   const override = table === 'records' ? { ...state, ...Object.fromEntries(records.filter(row => row.entity === 'state').map(row => [row.id, row.data])) }
     : table === 'settings' ? state
@@ -55,13 +60,36 @@ export function projectedRows(table, records, state, profile) {
 export function createWorkspaceDataHandler({ getClient = getAdminSupabaseClient, getReader = createWorkspaceReader, invalidate = () => {} } = {}) {
   return async (req, res) => {
     if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' })
+    if (req.body?.operation === 'sync_capabilities') {
+      res.setHeader?.('Cache-Control','no-store')
+      return res.status(200).json({ enabled: process.env.WORKSPACE_SYNC_ENABLED === 'true', deploymentId: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || 'local' })
+    }
     const client = getClient()
     if (!client) return res.status(503).json({ error: 'Shared workspace data is not configured.' })
+    let releaseCommand
     try {
       const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim()
       if (!token) fail('Sign in to access workspace data.', 401)
+      if (['versions','read_records'].includes(req.body?.operation)) {
+        if (req.body.operation === 'versions' && process.env.WORKSPACE_SYNC_ENABLED !== 'true') return res.status(200).json({ enabled: false })
+        releaseCommand = admitSync(token)
+        res.setHeader?.('Cache-Control', 'no-store')
+      }
+      const deployment=process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || 'local'
+      if (process.env.WORKSPACE_SYNC_ENABLED==='true' && deployment!=='local' && ['rpc','delete','approval_decision'].includes(req.body?.operation) && req.headers?.['x-workspace-deployment']!==deployment) fail('The application was deployed again. Reload before saving.',409,'DEPLOYMENT_CHANGED')
+      if (req.body?.operation === 'approval_decision') releaseCommand = admitApprovalCommand(token)
       const auth = await client.auth.getUser(token)
       if (auth.error || !auth.data?.user) fail('Your session has expired.', 401)
+      if (req.body?.operation === 'approval_decision') {
+        const command = validateApprovalCommand(req.body.command, String(req.headers?.['x-workspace-generation'] ?? ''))
+        const data = await executeApprovalCommand(client, auth.data.user, command)
+        invalidate()
+        return res.status(200).json({ data, error: null })
+      }
+      if (['versions','read_records'].includes(req.body?.operation)) {
+        admitSyncActor(auth.data.user.id)
+        return res.status(200).json({...await workspaceSync(client, auth.data.user, req.body),deploymentId:process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || 'local'})
+      }
       const profile = await activeProfile(client, auth.data.user)
       if (!profile) fail('This account no longer has workspace access.', 403, 'WORKSPACE_ACCESS_REVOKED')
       const reader = getReader()
@@ -93,7 +121,7 @@ export function createWorkspaceDataHandler({ getClient = getAdminSupabaseClient,
         fail('Record identity must match its saved row ID.', 400)
       }
       const generation = String(req.headers?.['x-workspace-generation'] || '')
-      if (generation !== String(state.workspaceGeneration || 0)) fail('The workspace changed. Refresh before saving.', 409)
+      if (generation !== String(state.workspaceGeneration || 0)) fail('The workspace changed. Refresh before saving.', 409, 'WORKSPACE_PURGED')
       let currentQuery = client.from(table).select(table === 'records' ? 'entity,id,data,rev,deleted_at' : 'id,data,rev,deleted_at').in('id', requested.map(row => row.id))
       if (table === 'records') currentQuery = currentQuery.eq('entity', entity)
       const existing = new Map(rows(await currentQuery).map(row => [row.id, row]))
@@ -127,19 +155,28 @@ export function createWorkspaceDataHandler({ getClient = getAdminSupabaseClient,
           const visible = projectWorkspace({ ...state, opportunities: [previous.data] }, profile).opportunities[0] || {}
           for (const key of Object.keys(row.data || {})) if (!(key in visible) && !same(row.data[key], previous.data[key])) fail('You do not have permission to edit protected opportunity data.')
         }
+        assertNoApprovalCommandWrite(entity, previous?.data, next, row.id)
         assertWorkspaceRowWrite(profile, entity, previous?.data, next, config, state, row.id, row.deleted === true)
         return [{ ...row, data: next, by: auth.data.user.id }]
       })
-      if (!payload.length) return res.status(200).json({ data: { accepted: [], conflicts: [] }, error: null })
+      if (!payload.length) return res.status(200).json({ data: { accepted: [], conflicts: [], committed: projectedRows(table, [...existing.values()], state, profile).map(row=>({...row,entity,available:!row.deleted_at})) }, error: null })
       const result = await client.rpc('save_rows', { p_entity: entity, p_rows: payload })
       if (result.error) throw result.error
       invalidate()
-      const data = { ...result.data, conflicts: projectedRows(table, (result.data?.conflicts || []).map(row => ({ ...row, ...(table === 'records' ? { entity } : {}) })), state, profile) }
-      return res.status(200).json({ data, error: null })
+      const conflicts = result.data?.conflicts || []
+      const visibleConflicts = projectedRows(table, conflicts.filter(row=>row.data != null).map(row => ({ ...row, ...(table === 'records' ? { entity } : {}) })), state, profile)
+      // A hidden/missing conflict is still a failed write, never an acceptance.
+      const data = { ...result.data, conflicts: conflicts.map(row => visibleConflicts.find(item=>item.id===row.id) || { id:row.id, rev:0, data:null, unavailable:true }) }
+      const unchangedRows=[...existing.values()].filter(row=>requested.some(r=>r.id===row.id)&&!payload.some(r=>r.id===row.id))
+      const savedRows = payload.filter(row=>!conflicts.some(c=>c.id===row.id)).map(row=>({...row,rev:row.rev+1,deleted_at:row.deleted?new Date().toISOString():null}))
+      data.committed = projectedRows(table, [...unchangedRows,...savedRows.filter(row=>!row.deleted)], state, profile).map(row=>({...row,entity,available:true}))
+      data.committed.push(...savedRows.filter(row=>row.deleted).map(row=>({entity,id:row.id,rev:row.rev,available:false})))
+      return res.status(conflicts.length ? 409 : 200).json({ data, error: null, ...(conflicts.length ? {code:'REVISION_CONFLICT'} : {}) })
     } catch (error) {
-      const status = error.status || (error.code === '40001' ? 409 : error.code === '42501' ? 403 : 503)
+      const status = approvalErrorStatus(error)
+      if (status === 503 || status === 429) res.setHeader?.('Retry-After', status === 429 ? '60' : '1')
       return res.status(status).json({ error: status === 503 ? 'Workspace data is temporarily unavailable. Check the database migrations and retry.' : error.message, code: error.code || String(status) })
-    }
+    } finally { releaseCommand?.() }
   }
 }
 export default createWorkspaceDataHandler()

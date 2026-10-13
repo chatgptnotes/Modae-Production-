@@ -30,7 +30,7 @@ const approvedStatuses = (config, customerStatus = 'Red') =>
 export function redClearanceFor(approvals, leadId, config = null, customerStatus = 'Red') {
   const type = classRule(config, customerStatus)?.verification?.approvalType || RED_CLEARANCE
   const ok = approvedStatuses(config, customerStatus)
-  const mine = (approvals || []).filter(a => a.leadId === leadId && a.type === type)
+  const mine = (approvals || []).filter(a => !a.supersededBy).filter(a => a.leadId === leadId && a.type === type)
   if (!mine.length) return null
   return mine.find(a => ok.includes(a.status))
     || [...mine].sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')))[0]

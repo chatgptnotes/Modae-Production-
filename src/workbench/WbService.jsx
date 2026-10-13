@@ -12,7 +12,7 @@ export default function WbService({ opp, focus = 'offer', onConfirmSent }) {
   const offerMode = serviceUsesStandardRates(opp, store) ? 'Standard Rate Sheet' : (est.offerMode || 'Standard Rate Sheet')
   const legacyReview = !!legacyServiceReview(opp, store.approvals)
   const reviewApproval = legacyReview
-    ? (store.approvals || []).find(a => a.oppId === opp.id && a.type === 'Service offer review' && ['Pending', 'Approved', 'Approved with conditions'].includes(a.status))
+    ? (store.approvals || []).filter(a => !a.supersededBy).find(a => a.oppId === opp.id && a.type === 'Service offer review' && ['Pending', 'Approved', 'Approved with conditions'].includes(a.status))
     : null
   const survey = (store.surveys || []).find(v => v.oppId === opp.id)
   const reviewReady = !!est.travelConfirmed && (!est.surveyRequired || !!survey?.report)

@@ -1,5 +1,42 @@
 # Supabase production schema
 
+## Atomic approval commands
+
+After migration 023, apply
+`migrations/20261013080111_atomic_approval_commands.sql` before deploying the
+matching application. This repository's earlier migrations are manually ordered
+root-level SQL files; do not use `db push` as a substitute for that existing
+history. The new CLI-generated migration remains in `migrations/`.
+
+The service-only context RPC reads a consistent dependency snapshot. The commit
+RPC locks scope markers, checks revisions/generation, derives the decision and
+saves all effects plus a receipt in one transaction. Internal scope rows live in
+`records`, and receipts live in `audit`; no new application tables are introduced.
+Ordinary database writes update scope revisions through triggers. Do not disable
+these triggers for imports or add a gate dependency without extending context
+selection and scope coverage. Historical decisions remain readable; new decisions
+must use the command API. Direct decision imports must be separately reviewed.
+
+For integration tests, start an isolated local PostgreSQL server, then run:
+
+```bash
+APPROVAL_TEST_ADMIN_URL=postgresql://postgres@localhost:55439/postgres \
+PSQL_BIN=/Applications/Postgres.app/Contents/Versions/17/bin/psql \
+node scripts/test-approval-postgres.mjs
+```
+
+The runner creates a uniquely named synthetic database, exercises concurrent
+sessions and rollbacks, then drops that test database. It rejects nonlocal hosts.
+`PSQL_BIN` defaults to `psql`. Ordinary `npm test` skips the database integration
+cases unless the runner supplies their isolated database URL.
+
+Before release, verify Accept/Reject from desktop and mobile sessions, an all-of
+approval, a lost-response retry, cancelled requests, and proposal/customer effects.
+Keep one Railway replica: command admission is process-wide (16 in flight,
+30 attempts per bearer token per minute); scale-out requires a shared limiter and
+coordinated cache invalidation. Configure database/API statement timeouts before
+execution; the command sets a 1-second lock timeout and the browser waits 12 seconds.
+
 For project setup and the complete application architecture, start with the
 [root README](../README.md) and [agent/developer guide](../AGENTS.md).
 
@@ -30,7 +67,7 @@ The active repository migrations are `007_live_workspace_sync.sql`,
 migration: it removes anonymous business-data access and adds small active-row
 indexes for the shared server workspace cache.
 `014_user_presence.sql` adds the isolated, service-role-only heartbeat table
-used by the administrator Users online dashboard card.
+retained for migration compatibility; runtime activity indicators now use Railway memory.
 Migration 008 moves large JSONB entities out of `records`; migration 009 adds
 typed relational business tables and indexes while keeping legacy rows as a
 rollback copy. Historical setup and
@@ -120,3 +157,18 @@ Standard account cannot access blocked pages/data or write denied actions; verif
 Management and Admin defaults, concurrent ID creation, policy revision conflicts
 and proposal release checks. SQL rollback alone is insufficient after deploying
 the new client; roll back the application and database contract together.
+
+## Personal font preferences
+
+`/api/user-preferences` uses `records.entity = user_preferences`, with the
+Supabase Auth UUID as row ID and `{font}` as data. Reads and writes are server-only
+and tied to an active authenticated profile, with `save_rows` revision checks.
+The existing records schema and migration 022 access boundary are reused; no new
+migration is required. These rows are excluded from shared state projections.
+
+## Active-screen version checks
+
+The optional Railway `WORKSPACE_SYNC_ENABLED` flag adds bounded authenticated
+metadata reads for visible screens. It does not enable Realtime, add application
+tables, or persist typing heartbeats. Row commits still use existing revision-aware
+RPCs. Checks run on activation, never an idle timer. See `DEPLOYMENT.md` for explicit-save limits and staging verification.

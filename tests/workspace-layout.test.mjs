@@ -31,12 +31,12 @@ test('approval request cards and summary expand with the page in both themes', (
   assert.match(rule, /min-width:\s*0/)
 })
 
-test('dark opportunity classes retain semantic background tints', () => {
-  for (const [name, token] of [['Green', 'success'], ['Blue', 'info'], ['Amber', 'warning'], ['Red', 'danger']]) {
-    const selector = `.shell[data-theme="dark"] .tracker-page table.sheet td.oppid.${name}`
+test('opportunity classifications share light palette roles across themes', () => {
+  for (const [name, token] of [['Green', 'green'], ['Blue', 'blue'], ['Amber', 'amber'], ['Red', 'red']]) {
+    const selector = `.shell .tracker-page table.sheet td.oppid.${name}`
     const start = styles.indexOf(selector)
     assert.ok(start >= 0, `${name} tint must exist`)
-    assert.ok(styles.slice(start, styles.indexOf('}', start)).includes(`var(--status-${token}-bg)`))
+    assert.ok(styles.slice(start, styles.indexOf('}', start)).includes(`var(--register-id-${token}-bg)`))
   }
 })
 

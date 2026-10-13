@@ -96,7 +96,7 @@ export default function WbProject({ opp, openBuilder, readOnly = false }) {
           if (!canEdit || JSON.stringify(store.getProposal(opp.id)) !== baseline) return { ok: false, error: 'The proposal changed or is read-only. Review the latest values before saving.' }
           save(next)
           await new Promise(resolve => setTimeout(resolve, 0))
-          try { return { ok: true, synced: await store.flushPersistence() } } catch { return { ok: true, synced: false } }
+          try { return { ok: true, synced: await store.flushPersistence([{entity:'opportunities',id:opp.id},{entity:'proposals',id:opp.id}]) } } catch { return { ok: true, synced: false } }
         }} /> : <div className="sheet-wrap">
           <table className="sheet">
             <thead><tr><th>Part number</th><th>Scope description</th><th>Quantity / Unit</th><th>Common</th><th>Spares</th><th>Compliance</th></tr></thead>
