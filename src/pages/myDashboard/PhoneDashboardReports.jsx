@@ -3,6 +3,7 @@ import QuarterPeriodControl from './QuarterPeriodControl.jsx'
 import React from 'react'
 import { Icon } from '../../icons.jsx'
 import WinLossReport from './WinLossReport.jsx'
+import { drillClick, useDashboardDrilldown } from './drillInteraction.js'
 import { WonValueNotice } from '../../BookingReview.jsx'
 
 export const phoneMoney = value => `₹${((Number(value) || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`
@@ -17,6 +18,7 @@ export function DashboardSection({ title, subtitle, icon, defaultOpen = false, c
 }
 
 function Performance({ model, showMoney, nav, period, setPeriod, fy, canOpen }) {
+  const open = useDashboardDrilldown()
   const { perf, wonPerformance: won } = model
   const hasTarget = period !== 'all' && perf.targetConfigured && !perf.targetNeedsConfirmation
   const maximum = Math.max(1, won.valueK, hasTarget ? perf.annual : 0)
@@ -27,21 +29,24 @@ function Performance({ model, showMoney, nav, period, setPeriod, fy, canOpen }) 
     <div className="mobile-report-tabs" aria-label="Performance period"><button type="button" aria-pressed={period === 'all'} onClick={() => setPeriod('all')}>All history</button><button type="button" aria-pressed={period === 'fy'} onClick={() => setPeriod('fy')}>YTD</button><QuarterPeriodControl period={period} setPeriod={setPeriod} currentQuarter={model.currentQuarter} fy={fy} /></div>
     {showMoney ? <>
       <WonValueNotice won={won} perf={perf} period={period} />
-      <div className="mobile-performance-bars">{bars.map(([label, value, kind]) => <div className="mobile-performance-row" key={kind}><div><span>{label}</span><strong>{phoneMoney(value)}</strong></div><div className="mobile-performance-track" aria-label={`${label}: ${phoneMoney(value)}`}><i data-kind={kind} style={{ width: `${Math.max(0, value) / maximum * 100}%` }} /></div></div>)}</div>
-      {won.estimatedCount === 0 && hasTarget && perf.annual > 0 && <div className="mobile-performance-gap"><span>Remaining to target</span><strong>{phoneMoney(gap)}<small> · {Math.round(gap / perf.annual * 100)}%</small></strong></div>}
+      <div className="mobile-performance-bars">{bars.map(([label, value, kind]) => <div className="mobile-performance-row" key={kind} {...drillClick(open && (() => open({ kind })), `View ${label} details`)}><div><span>{label}</span><strong>{phoneMoney(value)}</strong></div><div className="mobile-performance-track" aria-label={`${label}: ${phoneMoney(value)}`}><i data-kind={kind} style={{ width: `${Math.max(0, value) / maximum * 100}%` }} /></div></div>)}</div>
+      {won.estimatedCount === 0 && hasTarget && perf.annual > 0 && <div className="mobile-performance-gap" {...drillClick(open && (() => open({ kind: 'gap' })), 'View remaining-to-target calculation')}><span>Remaining to target</span><strong>{phoneMoney(gap)}<small> · {Math.round(gap / perf.annual * 100)}%</small></strong></div>}
+      {open && !hasTarget && <p {...drillClick(() => open({ kind: 'target' }), 'View target details')}>Target · {period === 'all' ? 'Choose YTD or QTD' : perf.targetNeedsConfirmation ? 'Needs confirmation' : 'Not configured'}</p>}
+      {open && !(won.estimatedCount === 0 && hasTarget && perf.annual > 0) && <p {...drillClick(() => open({ kind: 'gap' }), 'Why the gap is unavailable')}>Gap · Unavailable</p>}
     </> : <p className="mobile-report-empty">Sales values and targets are restricted for your role.</p>}
     {canOpen('po') && <button type="button" className="mobile-report-link" onClick={() => nav('/order')}>View Orders<Icon name="chevronRight" size={16} /></button>}
   </DashboardSection>
 }
 
 function Funnel({ model, showMoney }) {
+  const open = useDashboardDrilldown()
   const [view, setView] = useFunnelView()
   return <DashboardSection title="Sales Pipeline Funnel" subtitle="Current stage · All history" icon="filter">
     <FunnelViewSwitch view={view} onChange={setView} />
     <p className="mobile-report-empty">{view === 'normal' ? 'Widths show stage order, not counts · Splits show probability · Grey = empty' : 'Widths adjusted for readability · Splits show probability · Grey = empty'}</p>
     <div className="mobile-funnel-legend">{['high', 'medium', 'low'].map(key => <span key={key}><i data-probability={key} />{key[0].toUpperCase() + key.slice(1)}</span>)}</div>
-    <NormalFunnel view={view} rows={model.funnel} showMoney={showMoney} formatMoney={phoneMoney} />
-    <div className="mobile-funnel-total"><span>Open Pipeline <small>(excl. Won)</small></span><strong>{model.headlineOpenCount} opportunities{showMoney && <span>{phoneMoney(model.headlinePipelineK)}</span>}</strong></div>
+    <NormalFunnel view={view} rows={model.funnel} showMoney={showMoney} formatMoney={phoneMoney} onStageClick={open && (row => open({ kind: 'funnel', stageKey: row.key }))} onSegmentClick={open && ((row, probability) => open({ kind: 'funnel', stageKey: row.key, probability }))} />
+    <div className="mobile-funnel-total" {...drillClick(open && (() => open({ kind: 'pipeline' })), 'View open pipeline')}><span>Open Pipeline <small>(excl. Won)</small></span><strong>{model.headlineOpenCount} opportunities{showMoney && <span>{phoneMoney(model.headlinePipelineK)}</span>}</strong></div>
   </DashboardSection>
 }
 

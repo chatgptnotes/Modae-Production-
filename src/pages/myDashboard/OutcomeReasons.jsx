@@ -1,8 +1,9 @@
 import React from 'react'
+import { drillClick } from './drillInteraction.js'
 import './outcomes.css'
 import CountAxis, { countScale } from './CountAxis.jsx'
 
-export default function OutcomeReasons({ reasons, result, limit = Infinity, heading }) {
+export default function OutcomeReasons({ reasons, result, limit = Infinity, heading, onReasonClick }) {
   const won = result === 'won'
   const rows = reasons.filter(row => row[result] > 0)
     .slice().sort((a, b) => b[result] - a[result] || a.reason.localeCompare(b.reason))
@@ -13,7 +14,7 @@ export default function OutcomeReasons({ reasons, result, limit = Infinity, head
     {rows.length ? <><p className="outcome-reasons-caption">Share of {total} {won ? total === 1 ? 'win' : 'wins' : total === 1 ? 'loss' : 'losses'}</p>
       <ul>{rows.slice(0, limit).map(row => {
         const share = row[result] / total * 100
-        return <li key={row.reason}>
+        return <li key={row.reason} {...drillClick(onReasonClick && (() => onReasonClick(row.reason, result)), `View ${result}: ${row.reason}`)}>
           <span>{row.reason}</span>
           <div className="outcome-reason-plot">
             <span className="outcome-reason-track" aria-hidden="true"><span data-result={result} style={{ width: `${row[result] / scale.maximum * 100}%` }} /></span>

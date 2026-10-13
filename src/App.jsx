@@ -177,7 +177,7 @@ function WorkspaceTopbar({ store, role, location, nav }) {
   const pageItem = NAV.filter(item => location.pathname.startsWith(item.to)).sort((a, b) => b.to.length - a.to.length)[0]
   const isDashboardRoute = pageItem?.page === 'mydashboard'
   const topbarTitle = topbarTitleFor(location.pathname, role)
-  const hasLocalSearch = ['/inbox', '/opportunities', '/approvals', '/proposal-sent', '/audit', '/pricelists']
+  const hasLocalSearch = ['/inbox', '/opportunities', '/approvals', '/proposal-sent', '/audit', '/pricelists', '/folders']
     .some(path => location.pathname.startsWith(path))
   const canManageDashboardScope = isApprover(role)
   const roleDescriptor = String(ROLES[role]?.label || '').split('—').slice(1).join('—').trim() || displayRole(role)

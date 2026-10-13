@@ -486,9 +486,13 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
     if (openFilter) setOpenFilter(null)
   }
 
+  // Imported serials can repeat across workbook tabs. Use the current combined
+  // register position for unique inspection addresses, without changing records.
+  const inspectionRows = new Map(rows.map((o, index) => [o.id, index + 3]))
+
   // Formula-bar selection is a read-only inspection; pencils activate editing.
   const selectCell = (o, col) => () => {
-    const r = o.sl + 2
+    const r = inspectionRows.get(o.id)
     let formula = String(cellVal(o, col.key))
     let kind = 'text'
     if (col.key === 'gmK') { formula = `=Q${r}-R${r}`; kind = 'number' }
@@ -496,7 +500,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
     else if (col.key === 'gmPct') { formula = `=S${r}/Q${r}`; kind = 'number' }
     fb.select({ ref: `${col.letter}${r}`, formula, commit: null, kind })
   }
-  const isSel = (o, col) => fb.sel.ref === `${col.letter}${o.sl + 2}`
+  const isSel = (o, col) => fb.sel.ref === `${col.letter}${inspectionRows.get(o.id)}`
 
   const exportCols = PIPELINE_COLUMNS
   // A real .xlsx rather than CSV: CSV carries no formatting, so long text
@@ -505,7 +509,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
     'Sales_Pipeline_Report.xlsx',
     'Pipeline',
     ['Sl.', ...exportCols.map(col => col.label)],
-    rows.map((o, index) => [o.sl ?? index + 1, ...exportCols.map(col => {
+    rows.map((o, index) => [index + 1, ...exportCols.map(col => {
       switch (col.key) {
         case 'customerStatus': return customerStatusFor(o)
       case 'product': return Array.isArray(o.product) ? o.product.join(', ') : o.product || ''
@@ -734,7 +738,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
           <tbody ref={pageListRef}>
             {pageRows.map((o, index) => (
               <EditableOpportunityRow key={o.id}>
-                <td className="rowhead">{o.sl ?? firstRow + index}</td>
+                <td className="rowhead">{firstRow + index}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <span className="tracker-oppid-actions" title={`Customer class: ${customerStatusFor(o)}`}>
                     <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{displayOpportunityId(o.id)}</Link>

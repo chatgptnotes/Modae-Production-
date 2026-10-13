@@ -1,0 +1,113 @@
+/* Shared by narrow Full site and the selected phone-workspace container. */
+@media (max-width: 600px) {
+  .shell[data-theme] [data-dashboard-depth="glass"] {
+    word-break: normal;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] :is(h2, h3, .normal-funnel-stage, .winloss-chart-heading) {
+    overflow-wrap: normal;
+    word-break: normal;
+    white-space: normal;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi {
+    grid-template-columns: minmax(0, 1fr) 28px;
+    gap: 8px;
+    padding: 14px 12px 14px 20px;
+    container-type: inline-size;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi > div { display: contents; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi h2 {
+    grid-column: 1; grid-row: 1; align-self: center;
+    font-size: 13px; line-height: 1.4;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi > span {
+    grid-column: 2; grid-row: 1; width: 28px; height: 28px;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi > span svg { width: 28px; height: 28px; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi strong {
+    grid-column: 1 / -1; grid-row: 2;
+    font-size: clamp(20px, 5vw, 24px); letter-spacing: -.5px;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi p { grid-column: 1 / -1; grid-row: 3; }
+  .shell[data-theme] [data-dashboard-depth="glass"] :is(.reference-kpi strong, .mobile-kpi strong) {
+    min-width: 0; max-width: 100%; white-space: nowrap; overflow-wrap: normal;
+    overflow-x: auto; scrollbar-width: thin; line-height: 1.4;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .mobile-kpi strong { font-size: clamp(20px, 5vw, 24px); }
+  .shell[data-theme] [data-dashboard-depth="glass"] .mobile-filter-chip b {
+    flex: 0 0 auto; white-space: nowrap; word-break: normal; overflow-wrap: normal;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] :is(.reference-kpi p, .mobile-kpi small) [data-drill-click] {
+    display: inline-block; white-space: nowrap; overflow-wrap: normal;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-section > header {
+    display: flex; flex-direction: column; align-items: stretch; gap: 12px;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-section > header h2 {
+    align-self: stretch; justify-content: flex-start; text-align: left;
+    margin: 0; font-size: 16px; line-height: 1.4;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-performance-actions {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; width: 100%;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-performance-actions > * { min-width: 0; width: 100%; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-performance-actions button {
+    width: 100%; min-height: 44px; white-space: normal; overflow-wrap: normal; padding: 8px;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-quarter { align-self: flex-start; max-width: 100%; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-quarter select { max-width: 100%; min-height: 44px; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-bar {
+    grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; margin-block: 12px;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-bar > span { grid-column: 1; grid-row: 1; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-bar > strong {
+    grid-column: 2; grid-row: 1; white-space: nowrap; overflow-wrap: normal;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-bar--pending > strong { white-space: normal; max-width: 24ch; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-bar > i { grid-column: 1 / -1; grid-row: 2; }
+  .shell[data-theme] [data-dashboard-depth="glass"] :is(.mobile-performance-row strong, .reference-gap strong, .mobile-performance-gap strong, .normal-funnel-value) {
+    white-space: nowrap; overflow-wrap: normal; max-width: 100%; overflow-x: auto;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-table-wrap { min-width: 0; max-width: 100%; overflow-x: auto; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-table {
+    min-width: 960px; table-layout: auto;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-table :is(th, td) {
+    word-break: normal; overflow-wrap: normal; white-space: normal;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-table th { min-width: 110px; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-top-opportunities th:first-child { min-width: 48px; width: 48px; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-top-opportunities th:nth-child(3) { min-width: 220px; width: 220px; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-top-opportunities th:nth-child(4) { min-width: 130px; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-table td:first-child,
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-top-opportunities td:nth-child(2),
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-top-opportunities td:nth-child(4) { white-space: nowrap; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-action-queue .reference-table { min-width: 860px; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-action-queue th:first-child { min-width: 230px; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-action-queue th:nth-child(2) { min-width: 280px; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .reference-action-queue td:first-child { white-space: normal; }
+  .shell[data-theme] [data-dashboard-depth="glass"] :is(.reference-legend, .mobile-funnel-legend) { justify-content: flex-start; flex-wrap: wrap; gap: 8px; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .funnel-view-switch { align-self: flex-start; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .normal-funnel-stage { align-items: flex-start; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .normal-funnel-stage :is(button, strong) {
+    min-width: 0; white-space: normal; overflow-wrap: normal; text-align: left; line-height: 1.4;
+  }
+  .shell[data-theme] [data-dashboard-depth="glass"] .normal-funnel-bands { flex: 0 0 auto; }
+  .shell[data-theme] [data-dashboard-depth="glass"] :is(.winloss-comparison li > span, .outcome-reasons li > span) { overflow-wrap: normal; word-break: normal; }
+  .shell[data-theme] [data-dashboard-depth="glass"] .winloss-summary-totals { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .shell[data-theme] [data-dashboard-depth="glass"] .winloss-summary-totals > div { padding-left: 0; border-left: 0; }
+  .dashboard-drilldown-summary > span { white-space: nowrap; }
+  .dashboard-drilldown-records td[data-label="Value"],
+  .dashboard-drilldown-records td[data-label="Contribution"] { white-space: nowrap; overflow-wrap: normal; }
+}
+@media (min-width: 360px) and (max-width: 600px) {
+  html[data-workspace-theme] .shell.tablet-mode[data-theme] .wintrack-mobile-dashboard[data-dashboard-depth="glass"] .mobile-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 359px) {
+  .shell[data-theme] [data-dashboard-depth="glass"] :is(.reference-kpis, .mobile-kpi-grid) { grid-template-columns: minmax(0, 1fr); }
+  .shell[data-theme] [data-dashboard-depth="glass"] :is(.reference-kpi, .mobile-kpi):nth-child(n+2) { border-top: 1px solid var(--border-subtle) !important; border-left: 0 !important; }
+}

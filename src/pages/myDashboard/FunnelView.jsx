@@ -1,5 +1,6 @@
 import React, { useId, useSyncExternalStore } from 'react'
 import './funnelView.css'
+import { drillClick } from './drillInteraction.js'
 import { dynamicFunnelGeometry, funnelBandPath } from './funnelGeometry.js'
 
 const storageKey = 'wintrack-funnel-view'
@@ -38,7 +39,7 @@ export function FunnelViewSwitch({ view, onChange }) {
   </div>
 }
 
-export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClick, view = 'normal' }) {
+export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClick, onSegmentClick, view = 'normal' }) {
   const id = useId().replaceAll(':', '')
   const dynamic = view === 'dynamic'
   const geometry = dynamic ? dynamicFunnelGeometry(rows) : []
@@ -58,7 +59,7 @@ export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClic
       let fraction = 0
       return <div className="normal-funnel-row" key={row.key} data-width={dynamic ? geometry[index].width : undefined}>
         <div className="normal-funnel-chart">
-          <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden={dynamic ? undefined : true} aria-label={dynamic ? `${row.label}: ${row.count} opportunities` : undefined}>
+          <svg viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden={onSegmentClick || dynamic ? undefined : true} aria-label={dynamic ? `${row.label}: ${row.count} opportunities` : undefined}>
             {dynamic ? <>
               <path d={funnelBandPath(geometry[index])} className="normal-funnel-empty" />
               {row.segments.filter(segment => segment.count > 0).map(segment => {
@@ -66,7 +67,7 @@ export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClic
                 fraction += row.count ? segment.count / row.count : 0
                 const description = `${segment.count} ${segment.key} probability opportunities${showMoney ? ` · ${formatMoney(segment.valueK)}` : ''}`
                 return <path key={segment.key} d={funnelBandPath(geometry[index], from, fraction)}
-                  className={`normal-funnel-${segment.key}`} tabIndex={0} role="img" aria-label={description}>
+                  className={`normal-funnel-${segment.key}`} tabIndex={0} role="img" aria-label={description} {...drillClick(onSegmentClick && (() => onSegmentClick(row, segment.key)), `View ${row.label}: ${description}`)}>
                   <title>{description}</title>
                 </path>
               })}
@@ -78,24 +79,24 @@ export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClic
                 const width = row.count ? top * segment.count / row.count : 0
                 const x = offset
                 offset += width
-                return <rect key={segment.key} x={x} y="0" width={width} height="100" className={`normal-funnel-${segment.key}`} />
+                return <rect key={segment.key} x={x} y="0" width={width} height="100" className={`normal-funnel-${segment.key}`} {...drillClick(onSegmentClick && (() => onSegmentClick(row, segment.key)), `View ${row.label}: ${segment.count} ${segment.key} probability opportunities`)} />
               })}
             </g>
             </>}
             <line x1={dynamic ? 448 + geometry[index].center / 2 : left + top - 20} y1="50" x2="995" y2="50" />
           </svg>
-          <b className={`normal-funnel-number${centerBand === 'high' || centerBand === 'low' ? ' on-dark' : ''}`}>{row.count}</b>
+          <b style={onSegmentClick ? { pointerEvents: 'none' } : undefined} className={`normal-funnel-number${centerBand === 'high' || centerBand === 'low' ? ' on-dark' : ''}`}>{row.count}</b>
         </div>
         <div className="normal-funnel-stage" data-explain-title={row.label}
           data-explain={row.key === 'won' ? 'Only closed opportunities explicitly marked Won count.' : `Only open opportunities at ${row.stages?.join(', ') || row.label} count.`}>
-          {onStageClick ? <button type="button" onClick={() => onStageClick(row)}>{row.label}</button> : <strong>{row.label}</strong>}
+          {onStageClick ? <button type="button" className={onSegmentClick ? 'dashboard-text-action' : undefined} onClick={() => onStageClick(row)}>{row.label}</button> : <strong>{row.label}</strong>}
           <span className="normal-funnel-bands" tabIndex={0} title={row.count ? row.segments.filter(segment => segment.count > 0).map(segment => `${segment.key}: ${segment.count}${showMoney ? ` · ${formatMoney(segment.valueK)}` : ''}`).join('\n') : 'No opportunities — empty stage'}>
             <span className="sr-only">{row.count ? row.segments.filter(segment => segment.count > 0).map(segment => `${segment.key}: ${segment.count}`).join(', ') : 'No opportunities'}</span>
             <span aria-hidden="true">ⓘ</span>
           </span>
         </div>
-        <strong className="normal-funnel-count">{row.count}<span className="normal-funnel-phone-unit"> opportunities</span></strong>
-        {showMoney && <strong className="normal-funnel-value">{formatMoney(row.valueK)}</strong>}
+        <strong className="normal-funnel-count" {...drillClick(onStageClick && (() => onStageClick(row)), `View ${row.label} opportunities`)}>{row.count}<span className="normal-funnel-phone-unit"> opportunities</span></strong>
+        {showMoney && <strong className="normal-funnel-value" {...drillClick(onStageClick && (() => onStageClick(row)), `View ${row.label} value contributors`)}>{formatMoney(row.valueK)}</strong>}
       </div>
     })}
   </div>

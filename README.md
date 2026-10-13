@@ -6,6 +6,14 @@ submission, and follow-up.
 
 ## What the application does
 
+- Dashboard KPIs, pipeline counts, performance figures, funnel stages/probability
+  bands, and outcome reasons open matching-record popups without changing register
+  filters. Target and Gap show calculation details. Won/Lost labels filter reasons;
+  their numbers open records. Top 5 and action rows open their existing workspaces.
+  Popups retain My/Global scope, period and value permissions on desktop and phone.
+  At phone widths, amounts stay together, performance controls form two columns,
+  and Full site tables scroll within readable columns. Below 360px, KPIs stack.
+
 - Opportunities uses the same Filters panel and matching logic in full site
   and phone mode. Combine owner, status, stage, type, probability, and dates;
   preview the matching count before Apply. Column filters remain visible and
@@ -160,7 +168,12 @@ submission, and follow-up.
   access limits.
 - Main record lists use consistent 10-row pagination that follows search,
   filters, and sorting. Price Lists shows all matching rows without pagination;
-  Documents shows all opportunity folders together within their status groups.
+  Documents offers a searchable folder grid and list view with customer/ID sorting
+  and Open, Won, and Closed filters, preserving the shared My/Global scope.
+  Compact tiles, collapsible groups, and a sticky toolbar keep large libraries
+  easy to scan. View/sort choices are remembered per user on this device;
+  filters and return positions are remembered within the tab and view scope.
+  Nested folders and files share breadcrumbs and keyboard-accessible navigation.
 - LJS and ADMIN can edit supplier price lists as new saved versions and edit
   India/International service rates directly from Price Lists. Pricing edits,
   uploads, restores, and currency-rate changes are read-only for other roles.
@@ -219,6 +232,8 @@ submission, and follow-up.
   fiscal-period filters. Existing role reports and target tools remain under
   the register menu → “More reports & settings.” The configured FY is selected
   by default; task dates appear only when a real workflow deadline exists.
+- The opportunity register and Excel export use continuous display row numbers;
+  imported serials from the workbook tabs remain source metadata.
 - Matches the Betser pipeline’s 32 columns and order in All Columns, with K₹
   amounts, calculated margins and April–March financial quarters. Admins can
   preview and merge Current Opps and Old Closed Opps, including won history.

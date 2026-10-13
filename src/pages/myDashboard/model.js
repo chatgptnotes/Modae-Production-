@@ -56,7 +56,7 @@ export function approvalNeedsRole(approval, role) {
     && !approval.decisions?.[role]
 }
 
-const probabilityKey = value => ['high', 'medium', 'low'].includes(String(value || '').toLowerCase())
+export const probabilityKey = value => ['high', 'medium', 'low'].includes(String(value || '').toLowerCase())
   ? String(value).toLowerCase()
   : 'low'
 
@@ -157,7 +157,7 @@ export function dashboardModel(store, { scope = 'global', owner = 'all', period 
   const wonRows = pipeline.filter(o => o.status === 'Closed' && fieldBase(store.config, 'stage', o.stage) === 'Won')
     .map(opp => {
       const booking = confirmedByOpportunity.get(opp.id)
-      return { valueK: booking ? booking.valueK : Number(opp.valueK) || 0,
+      return { opp, valueK: booking ? booking.valueK : Number(opp.valueK) || 0,
         date: booking?.booked || opp.orderDate, estimated: !booking }
     })
     .filter(row => period === 'all' || (dateInPeriod(row.date, range) && row.date <= today))
@@ -205,13 +205,16 @@ export function dashboardModel(store, { scope = 'global', owner = 'all', period 
   const headlinePipelineK = open.reduce((sum, o) => sum + (+o.valueK || 0), 0)
   const outcomes = winLossAnalysis(pipeline.filter(o => o.status === 'Closed')
     .map(o => ({ ...o, stage: fieldBase(store.config, 'stage', o.stage) })), store.competitors, { commercial: canPriceProposal(role) })
-  return { pipeline, open, pending, decisions: pending.filter(a => approvalNeedsRole(a, role)), work, blocked, followups, stale, queue,
+  return { pipeline, open, pending, visible, performanceRows: wonRows, decisions: pending.filter(a => approvalNeedsRole(a, role)), work, blocked, followups, stale, queue,
     funnel, topOpportunities, topOpportunityCandidates, topOpportunitiesEmptyMessage,
     opportunityCounts, opportunitySummary, headlineOpenCount, headlinePipelineK, perf, wonPerformance, team,
     workbookOnly: String(store.importedWorkbook || '').startsWith('betser-sales-pipeline-usage-'),
     pipelineK: open.reduce((sum, o) => sum + (+o.valueK || 0), 0),
     weightedK: open.reduce((sum, o) => sum + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0),
     outcomes,
+    otherClosedRows: pipeline.filter(o => o.status === 'Closed')
+      .map(o => ({ ...o, stage: fieldBase(store.config, 'stage', o.stage) }))
+      .filter(o => o.stage !== 'Won' && o.stage !== 'Lost'),
     periodLabel: topPeriodLabel,
     currentQuarter,
     reportStore: { ...store, opportunities: scope === 'my' ? opportunities.filter(o => o.owner === role || work.some(row => row.opp.id === o.id)) : pipeline,

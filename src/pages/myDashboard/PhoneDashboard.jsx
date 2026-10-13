@@ -7,10 +7,13 @@ import { FY_QUARTERS } from '../../kpi.js'
 import { isQualified, isProposal, phoneTopOpportunities } from './phoneDashboard.js'
 import { DashboardSection, PhoneReports, phoneMoney } from './PhoneDashboardReports.jsx'
 import './mobileDashboard.css'
+import { PipelineCounts } from './DashboardDrilldown.jsx'
+import { drillClick, useDashboardDrilldown } from './drillInteraction.js'
 
 const initialsFor = name => String(name || 'M').split(/\s+/).filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase()
 
 export default function PhoneDashboard({ model, showMoney, nav, store }) {
+  const open = useDashboardDrilldown()
   const [filter, setFilter] = useState('all')
   const [query, setQuery] = useState('')
   const { period, setPeriod, topPeriod, setTopPeriod } = useWorkspaceView()
@@ -24,10 +27,10 @@ export default function PhoneDashboard({ model, showMoney, nav, store }) {
   const chips = [['all', 'All', candidates.length], ['qualified', 'Qualified', candidates.filter(isQualified).length],
     ['proposal', 'Proposal Sent', candidates.filter(isProposal).length], ['blocked', 'Blocked', candidates.filter(opp => blockedByOpp.has(opp.id)).length]]
   const kpis = [
-    ['Open Pipeline', showMoney ? phoneMoney(model.headlinePipelineK) : model.headlineOpenCount, model.opportunitySummary, ''],
-    ['Follow-ups Due', model.followups.length, 'Needs your attention', 'is-warning'],
-    ['Pending Approvals', model.pending.length, 'Across this view', 'is-warning'],
-    ['Blocked Work', model.blocked.length, 'Requires resolution', 'is-urgent'],
+    ['Open Pipeline', showMoney ? phoneMoney(model.headlinePipelineK) : model.headlineOpenCount, <PipelineCounts model={model} />, '', 'pipeline'],
+    ['Follow-ups Due', model.followups.length, 'Needs your attention', 'is-warning', 'followups'],
+    ['Pending Approvals', model.pending.length, 'Across this view', 'is-warning', 'pending'],
+    ['Blocked Work', model.blocked.length, 'Requires resolution', 'is-urgent', 'blocked'],
   ]
   const actionFor = opp => {
     if (approvalByOpp.has(opp.id) && canOpen('approvals')) return { label: 'Review Approval', path: '/approvals' }
@@ -41,7 +44,7 @@ export default function PhoneDashboard({ model, showMoney, nav, store }) {
     <h1 className="visually-hidden">Dashboard</h1>
     <label className="mobile-search"><Icon name="search" size={20} /><span className="visually-hidden">Search opportunities</span><input id="mobile-opportunity-search" type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search customers, opportunities or IDs…" /></label>
     <div className="mobile-filter-row" aria-label="Opportunity filters">{chips.map(([key, label, count]) => <button key={key} type="button" className={`mobile-filter-chip${filter === key ? ' is-active' : ''}`} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label}<b>{count}</b></button>)}</div>
-    <section className="mobile-kpi-grid" aria-label="Dashboard summary">{kpis.map(([label, value, hint, tone]) => <article key={label} className={`mobile-kpi ${tone}`}><span>{label}<Icon name="chevronRight" size={14} /></span><strong>{value}</strong><small>{hint}</small></article>)}</section>
+    <section className="mobile-kpi-grid" aria-label="Dashboard summary">{kpis.map(([label, value, hint, tone, kind]) => <article key={label} className={`mobile-kpi ${tone}`} {...drillClick(open && (() => open({ kind })), `View ${label}`)} role="group" tabIndex={undefined}><span>{label}<Icon name="chevronRight" size={14} /></span><strong {...drillClick(open && (() => open({ kind })), `View ${label}`)}>{value}</strong><small>{hint}</small></article>)}</section>
     <DashboardSection title="Top 5 Opportunities" subtitle="Nearest expected order date" icon="folder" defaultOpen>
       <label className="mobile-period-label">Expected order period<select aria-label="Top 5 fiscal period" value={topPeriod} onChange={event => setTopPeriod(event.target.value)}><option value="fy">{fy}</option><option value="all">All dates</option>{FY_QUARTERS.map((label, index) => <option key={label} value={`q${index + 1}`}>{label} · {fy}</option>)}</select></label>
       <div className="mobile-opportunity-feed">{top.map((opp, index) => {
@@ -51,7 +54,7 @@ export default function PhoneDashboard({ model, showMoney, nav, store }) {
         const status = approval ? 'Pending Approval' : blocked ? 'Blocked' : isProposal(opp) ? 'Proposal Sent' : opp.stage || 'No stage'
         const tone = approval ? 'warning' : blocked ? 'danger' : isProposal(opp) ? 'warning' : 'neutral'
         const blocker = blocked?.blockers?.find(row => row.severity === 'block' || row.severity === 'wait')
-        return <article className="mobile-opportunity-card" key={opp.id}>
+        return <article className="mobile-opportunity-card" key={opp.id} {...drillClick(canOpen('tracker') && (() => nav(`/opp/${opp.id}`)), `Open opportunity ${displayOpportunityId(opp.id)}`, { row: true })}>
           <div className="mobile-customer-line"><span className="mobile-rank">{index + 1}</span><span className={`mobile-customer-avatar mobile-customer-avatar--${index % 4}`}>{initialsFor(opp.sellTo || opp.oppName)}</span><div className="mobile-customer-name"><h3>{opp.sellTo || opp.oppName || 'Untitled opportunity'}</h3><span>{displayOpportunityId(opp.id)}</span></div></div>
           <span className="mobile-stage-badge" data-tone={tone}>{status}</span>
           {blocker && <p className="mobile-blocker-note"><Icon name="alert" size={15} />{blocker.text}</p>}
@@ -67,7 +70,7 @@ export default function PhoneDashboard({ model, showMoney, nav, store }) {
         const approval = task.rank === 1
         const allowed = canOpen(approval ? 'approvals' : 'tracker')
         const label = approval ? 'Review Approval' : task.rank === 2 ? 'Resolve Blocker' : task.rank === 3 ? 'Follow Up' : 'View Details'
-        return <article className="mobile-priority-action" key={task.id}><span className="mobile-priority-icon"><Icon name={approval ? 'fileText' : task.rank === 3 ? 'clock' : 'alert'} size={22} /></span><div><h3>{task.text}</h3><p>{task.opp?.sellTo || task.opp?.oppName || 'Workspace request'}</p><small>{task.timing}</small></div>{allowed && <button type="button" className="mobile-card-action" onClick={() => nav(task.path)}>{label}</button>}</article>
+        return <article className="mobile-priority-action" key={task.id} {...drillClick(allowed && (() => nav(task.path)), `Open ${task.text}`, { row: true })}><span className="mobile-priority-icon"><Icon name={approval ? 'fileText' : task.rank === 3 ? 'clock' : 'alert'} size={22} /></span><div><h3>{task.text}</h3><p>{task.opp?.sellTo || task.opp?.oppName || 'Workspace request'}</p><small>{task.timing}</small></div>{allowed && <button type="button" className="mobile-card-action" onClick={() => nav(task.path)}>{label}</button>}</article>
       })}</div>
       {!tasks.length && <p className="mobile-empty-state">Nothing needs your attention.</p>}
     </DashboardSection>

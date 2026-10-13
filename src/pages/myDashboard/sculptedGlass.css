@@ -99,10 +99,18 @@
   text-shadow: 0 1px 0 var(--glass-light), 0 2px 1px var(--glass-edge), 0 4px 5px var(--glass-shadow);
 }
 .shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi p { margin: 0; line-height: 1.5; }
-.shell[data-theme] [data-dashboard-depth="glass"] :is(.reference-kpi > span, .mobile-section-icon, .mobile-customer-avatar, .mobile-priority-icon) {
+.shell[data-theme] [data-dashboard-depth="glass"] :is(.mobile-section-icon, .mobile-customer-avatar, .mobile-priority-icon) {
   box-shadow: inset 1px 2px 2px var(--glass-light), inset -1px -2px 3px var(--glass-shadow), 0 3px 0 var(--glass-edge), 0 6px 8px var(--glass-shadow);
 }
-.shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi > span { width: 40px; height: 40px; }
+.shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi > span {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.shell[data-theme] [data-dashboard-depth="glass"] .reference-kpi--neutral > span { color: var(--text-primary); }
 
 /* Recessed tracks and shaded faces preserve exact live bar widths. */
 .shell[data-theme] [data-dashboard-depth="glass"] .reference-performance { grid-template-columns: minmax(0, 1fr) minmax(150px, .24fr); gap: 10px 16px; }

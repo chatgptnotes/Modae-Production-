@@ -29,7 +29,7 @@ test('desktop dashboard renders saved opportunity totals and explains an empty F
   ], config: {}, approvals: [], proposals: {}, customers: [], clarifications: [],
   sales: { fy: 'FY 2026-27', targets: {}, orders: [] } }
   const html = renderToStaticMarkup(React.createElement(module.exports.Desktop, { store, nav() {} }))
-  assert.match(html, /3 total · 1 open · 2 closed/)
+  assert.match(html.replace(/<[^>]*>/g, ''), /3 total · 1 open · 2 closed/)
   assert.match(html, /1 open opportunity.*outside this period or has no expected order date/)
   assert.match(html, /<option value="all">All dates<\/option>/)
 })
@@ -148,10 +148,17 @@ for (const phone of [false, true]) {
     assert.match(thirds, /aria-label="Won 1 \(33%\)/)
     assert.match(thirds, /aria-label="Lost 2 \(67%\)/)
   })
-  test(`${viewport} existing outcome counts are accessible reason-filter buttons`, () => {
+  test(`${viewport} outcome labels filter reasons and dashboard counts open records`, () => {
     const html = render(phone)
-    assert.match(html, /<button type="button" data-result="won" aria-pressed="false" aria-label="Won 1[^\"]*"/)
-    assert.match(html, /<button type="button" data-result="lost" aria-pressed="false" aria-label="Lost 1[^\"]*"/)
+    if (phone) {
+      assert.match(html, /<button type="button" data-result="won" aria-pressed="false" aria-label="Won 1[^"]*"/)
+      assert.match(html, /<button type="button" data-result="lost" aria-pressed="false" aria-label="Lost 1[^"]*"/)
+    } else {
+      assert.match(html, /aria-pressed="false" aria-label="Filter reasons: won"/)
+      assert.match(html, /aria-pressed="false" aria-label="Filter reasons: lost"/)
+      assert.match(html, /aria-label="Won 1 \(50%\), view opportunities"/)
+      assert.match(html, /aria-label="Lost 1 \(50%\), view opportunities"/)
+    }
     assert.match(html, /Overall win rate/)
     assert.match(html, /data-result="won"[^>]*>[\s\S]*?class="winloss-count-label"[^>]*>[\s\S]*?Won<\/span>[\s\S]*?class="winloss-count-value">1 /)
     assert.match(html, /data-result="lost"[^>]*>[\s\S]*?class="winloss-count-label"[^>]*>[\s\S]*?Lost<\/span>[\s\S]*?class="winloss-count-value">1 /)
@@ -197,8 +204,8 @@ for (const phone of [false, true]) {
     assert.match(html, /Won vs Lost by Reason/)
     assert.match(html, /Top Loss Reasons \(by count\)/)
     assert.match(html, /All history/)
-    assert.equal((html.match(/Relationship/g) || []).length, 1)
-    assert.equal((html.match(/Capability/g) || []).length, 2)
+    assert.equal((html.replace(/<[^>]*>/g, '').match(/Relationship/g) || []).length, 1)
+    assert.equal((html.replace(/<[^>]*>/g, '').match(/Capability/g) || []).length, 2)
     assert.match(html, /class="winloss-chart-grid"/)
     assert.match(html, /data-result="won"/)
     assert.match(html, /data-result="lost"/)
@@ -218,8 +225,8 @@ for (const phone of [false, true]) {
     assert.equal((html.match(/class="winloss-comparison-track"/g) || []).length, 2)
     assert.match(html, /class="winloss-comparison-track"[^>]*>[\s\S]*?data-result="won"[^>]*style="width:66\.66666666666666%"[\s\S]*?data-result="lost"[^>]*style="width:33\.33333333333333%"/)
     assert.match(html, /aria-label="2 won, 1 lost"/)
-    assert.match(html, /data-result="won"><span class="visually-hidden">Won <\/span>2<\/b>/)
-    assert.match(html, /data-result="lost"><span class="visually-hidden">Lost <\/span>1<\/b>/)
+    assert.match(html, /data-result="won"[^>]*><span class="visually-hidden">Won <\/span>2<\/b>/)
+    assert.match(html, /data-result="lost"[^>]*><span class="visually-hidden">Lost <\/span>1<\/b>/)
     assert.match(html, /aria-label="0 won, 1 lost"/)
     assert.match(html, /class="winloss-count-axis"/)
     assert.doesNotMatch(html, /winloss-diverging-track/)
@@ -244,9 +251,9 @@ for (const phone of [false, true]) {
     ] })
     assert.match(html, /aria-label="2 won, 0 lost"/)
     assert.match(html, /aria-label="1 won, 0 lost"/)
-    assert.match(html, /data-result="won" style="width:66\.66666666666666%"/)
+    assert.match(html, /data-result="won"[^>]*style="width:66\.66666666666666%"/)
     assert.match(html, /aria-label="1 of 1 losses \(100%\)"/)
-    assert.match(html, /data-result="lost" style="width:33\.33333333333333%"/)
+    assert.match(html, /data-result="lost"[^>]*style="width:33\.33333333333333%"/)
   })
   test(`${viewport} reference charts show top five without changing the outcome totals`, () => {
     const html = render(phone, { ...state, opportunities: Array.from({ length: 6 }, (_, i) => ({

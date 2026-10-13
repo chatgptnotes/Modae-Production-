@@ -1,3 +1,51 @@
+## 2026-10-13 — Dashboard phone wrapping
+
+- Give KPI amounts full card width and keep amounts, units and summary counts
+  together in narrow Full site and dedicated Phone mode.
+- Align performance controls in two columns, place labels and values above bars,
+  and wrap section, funnel and outcome labels at word boundaries.
+- Retain readable scrolling tables within the dashboard; stack KPIs below 360px
+  and apply the same responsive rules to the selected 440px Phone workspace.
+
+## 2026-10-13 — Continuous opportunity row numbers
+
+- Number the combined opportunity register and Excel export sequentially, rather
+  than repeating source-tab serial numbers. Pagination, filtering, and sorting
+  follow the displayed sequence; source records and opportunity IDs stay intact.
+- Give formula inspection a distinct row address for each displayed opportunity,
+  even when imported serial numbers match.
+
+## 2026-10-13 — Dashboard record drill-downs
+
+- Open matching records from KPI cards, pipeline counts, performance figures,
+  funnel stages and probability bands, and Win/Loss totals and reasons.
+- Keep dashboard styling with subtle interactive cues; use shared paginated
+  popups on desktop and phone without changing Opportunities filters.
+- Show Actual contributions using confirmed PO values or labelled estimates;
+  Target and Gap show scoped, period-aware calculation details.
+- Preserve Won/Lost label filtering while counts open records, and make Top 5
+  and action rows open their existing destinations.
+
+## 2026-10-13 — Documents navigation polish
+
+- Compact folder tiles, collapsible status groups, and sticky search/view controls.
+- Remember user-specific view/sort preferences and tab-local filters, collapsed
+  groups, and route scroll positions separately for My and Global scope.
+- Align subfolders and file tables with the explorer; provide keyboard links and
+  readable path context, and label opportunity-backed creation accurately.
+- Keep preferences outside shared state, with guarded browser storage and existing
+  deployment cleanup. Render the existing mock-upload prompt in file views.
+
+## 2026-10-13 — Documents explorer refresh
+
+- Give opportunity documents a OneDrive-inspired folder grid, readable customer
+  labels, breadcrumbs, status filters, folder search, sorting, and a list view.
+- Restyle nested folders with consistent spacing and responsive light/dark surfaces.
+- Use filled, layered SharePoint-style folder icons with stable amber, green, red,
+  and blue status colours in both themes; ordinary subfolders use amber.
+- Retain opportunity-backed folder creation, existing file actions, shared view scope,
+  and preserved SharePoint folders.
+
 ## 2026-10-12 — Keep sessions when changing layout
 
 - Remove the duplicate Phone mode shortcut from the desktop sidebar; retain topbar access.

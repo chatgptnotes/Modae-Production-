@@ -499,3 +499,16 @@ test('Excel table uses original date labels', () => {
   assert.equal(PIPELINE_COLUMNS.find(c => c.key === 'invoiceDate').label, 'Invoice Date*')
   assert.equal(PIPELINE_COLUMNS.findIndex(c => c.key === 'fqFy') + 1, PIPELINE_COLUMNS.findIndex(c => c.key === 'invoiceDate'))
 })
+
+test('combined opportunity register numbers displayed and exported rows independently of imported serials', () => {
+  assert.match(tracker, /<td className="rowhead">\{firstRow \+ index\}<\/td>/)
+  assert.match(tracker, /rows\.map\(\(o, index\) => \[index \+ 1,/)
+  assert.doesNotMatch(tracker, /o\.sl \?\?/)
+})
+
+test('formula inspection addresses distinguish rows sharing an imported serial number', () => {
+  assert.match(tracker, /const inspectionRows = new Map\(rows\.map\(\(o, index\) => \[o\.id, index \+ 3\]\)\)/)
+  assert.match(tracker, /const r = inspectionRows\.get\(o\.id\)/)
+  assert.match(tracker, /col\.letter\}\$\{inspectionRows\.get\(o\.id\)\}/)
+  assert.doesNotMatch(tracker, /o\.sl \+ 2/)
+})
