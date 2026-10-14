@@ -262,7 +262,7 @@ function DecisionForm({ a, role, draft = {}, onDraftChange, onDecide }) {
           value={comment} onChange={e => onDraftChange({ comment: e.target.value })}
           placeholder="Decision note (required)"
           aria-label="Decision note (required)"
-          className="approval-decision-input"
+          className="approval-decision-input" name="approvals-decision-note-required"
         />}
       {err && <div className="errbox approval-decision-error">{err}</div>}
       <div className="approval-decision-submit">
@@ -373,10 +373,10 @@ function FilterBar({
     <div className="approval-filters" role="search">
       <label className="approval-search">
         <Icon name="search" size={14} />
-        <input aria-label="Search approvals" placeholder="Search by request, opportunity, customer or type" value={q} onChange={onQueryChange} />
+        <input aria-label="Search approvals" placeholder="Search by request, opportunity, customer or type" value={q} onChange={onQueryChange} name="approvals-search-approvals" />
       </label>
-      {phone ? <button type="button" className="approval-phone-filter" aria-label={`Filter approvals${statusF || typeF ? ` (${[statusF, typeF].filter(Boolean).length} active)` : ''}`} onClick={() => setOpen(true)}><Icon name="filter" size={20} /><span>Filters{statusF || typeF ? ` (${[statusF, typeF].filter(Boolean).length})` : ''}</span></button> : <><select aria-label="Filter by status" value={statusF} onChange={onStatusChange}><option value="">All statuses</option>{['Pending', 'Approved', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select>
-      <select aria-label="Filter by type" value={typeF} onChange={onTypeChange}><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select></>}
+      {phone ? <button type="button" className="approval-phone-filter" aria-label={`Filter approvals${statusF || typeF ? ` (${[statusF, typeF].filter(Boolean).length} active)` : ''}`} onClick={() => setOpen(true)}><Icon name="filter" size={20} /><span>Filters{statusF || typeF ? ` (${[statusF, typeF].filter(Boolean).length})` : ''}</span></button> : <><select aria-label="Filter by status" value={statusF} onChange={onStatusChange} name="approvals-filter-by-status"><option value="">All statuses</option>{['Pending', 'Approved', 'Rejected'].map(s => <option key={s}>{s}</option>)}</select>
+      <select aria-label="Filter by type" value={typeF} onChange={onTypeChange} name="approvals-filter-by-type"><option value="">All types</option>{typeOptions.map(t => <option key={t}>{t}</option>)}</select></>}
       {open && <PhoneFilters title="Filter approvals" onClose={() => setOpen(false)} fields={[
         { key: 'status', label: 'Status', value: statusF, options: [['', 'All statuses'], 'Pending', 'Approved', 'Rejected'] },
         { key: 'type', label: 'Request type', value: typeF, options: [['', 'All types'], ...typeOptions] },

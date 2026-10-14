@@ -377,15 +377,15 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
     ...extraFiles.map(f => f.filename),
   ]
   const rows = [
-    ['From', <input type="email" value={emailFrom} disabled={mailboxLocked} onChange={e => setEmailFrom(e.target.value)} placeholder="sales@company.com" />],
+    ['From', <input type="email" value={emailFrom} disabled={mailboxLocked} onChange={e => setEmailFrom(e.target.value)} placeholder="sales@company.com" name="submission-panel-email-from" />],
     ['To', <input id="customer-email-to" type="text" value={emailTo} disabled={mailboxLocked} onChange={e => setEmailTo(e.target.value)} placeholder="customer@company.com, second@company.com" />],
-    ['CC', <input type="text" value={emailCc} disabled={mailboxLocked} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" />],
-    ['Subject', <input type="text" value={emailSubject} disabled={mailboxLocked} onChange={e => setEmailSubject(e.target.value)} placeholder="Proposal subject" />],
+    ['CC', <input type="text" value={emailCc} disabled={mailboxLocked} onChange={e => setEmailCc(e.target.value)} placeholder="name@company.com" name="submission-panel-email-cc" />],
+    ['Subject', <input type="text" value={emailSubject} disabled={mailboxLocked} onChange={e => setEmailSubject(e.target.value)} placeholder="Proposal subject" name="submission-panel-email-subject" />],
     ['Attachments', <div className="submission-attachment-editor">
       {attachProposal && <label className="submission-attachment-name">
         <span>Proposal workbook filename</span>
         <input type="text" value={proposalFilename} disabled={mailboxLocked} onChange={event => setProposalFilename(event.target.value)}
-          aria-invalid={!filenameValid} aria-describedby={!filenameValid ? 'proposal-filename-error' : undefined} />
+          aria-invalid={!filenameValid} aria-describedby={!filenameValid ? 'proposal-filename-error' : undefined} name="submission-panel-proposal-filename" />
       </label>}
       {!filenameValid && <span id="proposal-filename-error" className="err-text">Use a valid filename ending in .xlsx.</span>}
       {supportingAttachmentNames.length > 0 && (
@@ -441,12 +441,12 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
         </button>
         <span className="hint">Optional professional review</span>
       </div>
-      <textarea className="submission-message-draft" value={emailBody} disabled={mailboxLocked} onChange={e => { aiRequestRef.current += 1; setEmailBody(e.target.value) }} rows={7} />
+      <textarea className="submission-message-draft" value={emailBody} disabled={mailboxLocked} onChange={e => { aiRequestRef.current += 1; setEmailBody(e.target.value) }} rows={7} name="submission-panel-email-body" />
       {messageNotice && <WarnBox>{messageNotice}</WarnBox>}
       {proofreadError && <ErrBox>{proofreadError}</ErrBox>}
 
       <div className="check-row" style={{ marginTop: 8 }}>
-        <input type="checkbox" checked={attachProposal} disabled={mailboxLocked} onChange={e => setAttachProposal(e.target.checked)} />
+        <input type="checkbox" checked={attachProposal} disabled={mailboxLocked} onChange={e => setAttachProposal(e.target.checked)} name="submission-panel-checkbox" />
         <span><b>Attach validated proposal</b><span className="hint"> — generated Rev {p.revision} workbook</span></span>
       </div>
       {attachProposal && !proposalValidated && (
@@ -458,7 +458,7 @@ export default function SubmissionPanel({ opp, onSubmitted, readOnly = false }) 
 
       <div className="submission-actions">
         <div className="submission-action-buttons">
-          <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFilesPicked} />
+          <input ref={fileInputRef} type="file" multiple style={{ display: 'none' }} onChange={onFilesPicked} name="submission-panel-file" />
           <button className="secondary" type="button" disabled={mailboxLocked || readingFiles}
             onClick={() => fileInputRef.current?.click()}>
             <Icon name="upload" size={13} /> {readingFiles ? 'Reading files…' : `Attach files${extraFiles.length ? ` (${extraFiles.length})` : ''}`}

@@ -30,7 +30,7 @@ export default function ServiceInvoicePanel({ opp }) {
     <div className="ana-title">Invoice {est.invoiceStatus === 'Invoiced' && <Chip tone="state-Accepted">Invoiced</Chip>}</div>
     {!ready && <div className="warnbox">Submit the Service Report before preparing the invoice.</div>}
     <label className="service-form-field service-invoice-field">Billing basis
-      <select className="service-form-control" disabled={!ready} value={basis} onChange={e => update({ invoiceBasis: e.target.value })}>
+      <select className="service-form-control" disabled={!ready} value={basis} onChange={e => update({ invoiceBasis: e.target.value })} name="service-invoice-panel-basis">
         <option>Actual engineer days</option><option>Approved scope / BOQ / lump sum</option>
       </select>
     </label>
@@ -60,7 +60,7 @@ export default function ServiceInvoicePanel({ opp }) {
     )}
 
     <label className="service-form-field service-invoice-field">Invoice status
-      <select className="service-form-control" disabled={!ready} value={est.invoiceStatus || 'Not ready'} onChange={e => update({ invoiceStatus: e.target.value })}><option>Not ready</option><option>Ready for invoice</option><option>Invoiced</option></select>
+      <select className="service-form-control" disabled={!ready} value={est.invoiceStatus || 'Not ready'} onChange={e => update({ invoiceStatus: e.target.value })} name="service-invoice-panel-select"><option>Not ready</option><option>Ready for invoice</option><option>Invoiced</option></select>
     </label>
     <p className="hint">Standard Rate Sheet services bill on actual engineer days, with weekend and overtime premiums applied from the rate sheet. Customised work bills on the approved scope, BOQ, lump sum, or agreed rate structure.</p>
   </div></div>

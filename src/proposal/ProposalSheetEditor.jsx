@@ -17,7 +17,7 @@ export default function ProposalSheetEditor({
   const [sheet, setSheet] = useState('BOQ')
   const field = (label, key, type = 'text') => (
     <label className="proposal-sheet-field">{label}
-      <input type={type} value={p[key] || ''} onChange={e => save({ ...p, [key]: e.target.value })} />
+      <input type={type} value={p[key] || ''} onChange={e => save({ ...p, [key]: e.target.value })} name="proposal-sheet-editor-input" />
     </label>
   )
 
@@ -54,10 +54,10 @@ export default function ProposalSheetEditor({
             <thead><tr><th>Term</th><th>Customer ask</th><th>Our response</th><th>Status</th><th /></tr></thead>
             <tbody>{(p.terms || []).map((t, i) => (
               <tr key={i}>
-                <td><input value={t.term || ''} onChange={updTerm(i, 'term')} /></td>
-                <td><input value={t.customerAsk || ''} onChange={updTerm(i, 'customerAsk')} /></td>
-                <td><input value={t.ourResponse || ''} onChange={updTerm(i, 'ourResponse')} /></td>
-                <td><select value={t.status || 'Comply'} onChange={updTerm(i, 'status')}><option>Comply</option><option>Deviation</option></select></td>
+                <td><input value={t.term || ''} onChange={updTerm(i, 'term')} name="proposal-sheet-editor-input-2" /></td>
+                <td><input value={t.customerAsk || ''} onChange={updTerm(i, 'customerAsk')} name="proposal-sheet-editor-input-3" /></td>
+                <td><input value={t.ourResponse || ''} onChange={updTerm(i, 'ourResponse')} name="proposal-sheet-editor-input-4" /></td>
+                <td><select value={t.status || 'Comply'} onChange={updTerm(i, 'status')} name="proposal-sheet-editor-select"><option>Comply</option><option>Deviation</option></select></td>
                 <td><button className="proposal-row-minus" onClick={removeTerm(i)} title="Remove term" aria-label="Remove term">−</button></td>
               </tr>
             ))}</tbody>
@@ -136,8 +136,8 @@ export default function ProposalSheetEditor({
 
       {show('Document') && <section className="form-card wide">
         <div className="section-title">Document text</div>
-        <label>Executive summary<textarea rows={5} value={p.execSummary ?? doc.execSummary ?? ''} onChange={e => save({ ...p, execSummary: e.target.value })} /></label>
-        <label>Commercial note<textarea rows={3} value={p.commercialNote ?? doc.commercialNote ?? ''} onChange={e => save({ ...p, commercialNote: e.target.value })} /></label>
+        <label>Executive summary<textarea rows={5} value={p.execSummary ?? doc.execSummary ?? ''} onChange={e => save({ ...p, execSummary: e.target.value })} name="proposal-sheet-editor-textarea" /></label>
+        <label>Commercial note<textarea rows={3} value={p.commercialNote ?? doc.commercialNote ?? ''} onChange={e => save({ ...p, commercialNote: e.target.value })} name="proposal-sheet-editor-textarea-2" /></label>
       </section>}
       </fieldset>
     </div>

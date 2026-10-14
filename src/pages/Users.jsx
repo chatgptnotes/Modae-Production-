@@ -350,11 +350,11 @@ export default function Users() {
             <button type="button" onClick={closeCreate} disabled={createBusy}>Cancel</button>
           </div>
           <div className="users-create-grid">
-            <label>Full name<input autoFocus value={createDraft.name} onChange={e => setCreateDraft(d => ({ ...d, name: e.target.value }))} placeholder="First and last name" /></label>
-            <label>User ID / email<input type="email" value={createDraft.email} onChange={e => setCreateDraft(d => ({ ...d, email: e.target.value }))} placeholder="person@company.com" /></label>
-            <label>Password<input type="password" autoComplete="new-password" value={createDraft.password} onChange={e => setCreateDraft(d => ({ ...d, password: e.target.value }))} placeholder="At least 8 characters" /></label>
-            <label>Confirm password<input type="password" autoComplete="new-password" value={createDraft.confirmPassword} onChange={e => setCreateDraft(d => ({ ...d, confirmPassword: e.target.value }))} placeholder="Repeat password" /></label>
-            <label>Role<select value={createDraft.applicationRole} onChange={e => setCreateDraft(d => ({ ...d, applicationRole: e.target.value }))} aria-label="Application role">
+            <label>Full name<input autoFocus value={createDraft.name} onChange={e => setCreateDraft(d => ({ ...d, name: e.target.value }))} placeholder="First and last name" name="users-name" /></label>
+            <label>User ID / email<input type="email" value={createDraft.email} onChange={e => setCreateDraft(d => ({ ...d, email: e.target.value }))} placeholder="person@company.com" name="users-email" /></label>
+            <label>Password<input type="password" autoComplete="new-password" value={createDraft.password} onChange={e => setCreateDraft(d => ({ ...d, password: e.target.value }))} placeholder="At least 8 characters" name="users-password" /></label>
+            <label>Confirm password<input type="password" autoComplete="new-password" value={createDraft.confirmPassword} onChange={e => setCreateDraft(d => ({ ...d, confirmPassword: e.target.value }))} placeholder="Repeat password" name="users-confirm-password" /></label>
+            <label>Role<select value={createDraft.applicationRole} onChange={e => setCreateDraft(d => ({ ...d, applicationRole: e.target.value }))} aria-label="Application role" name="users-application-role">
               {LEVEL3_ROLE_IDS.map(id => <option key={id} value={id}>{LEVEL3_ROLES[id].name}</option>)}
             </select></label>
           </div>
@@ -402,9 +402,9 @@ export default function Users() {
       )}
       <div className="users-summary" aria-label="Account totals">{['Active', 'Pending', 'Suspended'].map(status => <button key={status} onClick={() => setStatusFilter(status)} aria-pressed={statusFilter === status}><strong>{roster.filter(u => u.status === status).length}</strong> {status}</button>)}</div>
       <div className="users-filters">
-        <label>Search accounts<input type="search" placeholder="Name or email" value={query} onChange={e => setQuery(e.target.value)} /></label>
-        <label>Status<select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>{['All', 'Active', 'Pending', 'Suspended'].map(status => <option key={status}>{status}</option>)}</select></label>
-        <label>Access role<select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}><option value="All">All roles</option>{LEVEL3_ROLE_IDS.map(role => <option key={role} value={role}>{LEVEL3_ROLES[role].name}</option>)}</select></label>
+        <label>Search accounts<input type="search" placeholder="Name or email" value={query} onChange={e => setQuery(e.target.value)} name="users-query" /></label>
+        <label>Status<select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} name="users-status-filter">{['All', 'Active', 'Pending', 'Suspended'].map(status => <option key={status}>{status}</option>)}</select></label>
+        <label>Access role<select value={roleFilter} onChange={e => setRoleFilter(e.target.value)} name="users-role-filter"><option value="All">All roles</option>{LEVEL3_ROLE_IDS.map(role => <option key={role} value={role}>{LEVEL3_ROLES[role].name}</option>)}</select></label>
         <button onClick={() => { setQuery(''); setStatusFilter('All'); setRoleFilter('All') }}>Clear filters</button>
       </div>
       {actionError && <div role="alert" className="err-text">{actionError}</div>}
@@ -441,18 +441,18 @@ export default function Users() {
                         value={userDraft.name}
                         onChange={e => { setUserDraft(d => ({ ...d, name: e.target.value })); setUserErr('') }}
                         autoFocus
-                        aria-label={`Name for ${u.name}`}
+                        aria-label={`Name for ${u.name}`} name="users-name-2"
                       />
                       {matchesAccount(u, store.auth?.user) && <span className="pill you"> You</span>}
                     </td>
-                    <td><input className="user-field-input" type="email" disabled={userBusy} value={userDraft.email} onChange={e => { setUserDraft(d => ({ ...d, email: e.target.value })); setUserErr('') }} aria-label={`Email for ${u.name}`} /></td>
+                    <td><input className="user-field-input" type="email" disabled={userBusy} value={userDraft.email} onChange={e => { setUserDraft(d => ({ ...d, email: e.target.value })); setUserErr('') }} aria-label={`Email for ${u.name}`} name="users-email-2" /></td>
                     <td>
-                      <select value={userDraft.applicationRole} disabled={u.role === 'SUPER' || userBusy} onChange={e => { setUserDraft(d => ({ ...d, applicationRole: e.target.value })); setUserErr('') }} aria-label={`Role for ${u.name}`}>
+                      <select value={userDraft.applicationRole} disabled={u.role === 'SUPER' || userBusy} onChange={e => { setUserDraft(d => ({ ...d, applicationRole: e.target.value })); setUserErr('') }} aria-label={`Role for ${u.name}`} name="users-application-role-2">
                         {!LEVEL3_ROLE_IDS.includes(userDraft.applicationRole) && <option value={userDraft.applicationRole} disabled>Legacy role — choose Standard or Management User</option>}
                         {LEVEL3_ROLE_IDS.map(r => <option key={r} value={r}>{LEVEL3_ROLES[r].name}</option>)}
                       </select>
                     </td>
-                    <td><select disabled={userBusy} value={userDraft.status} onChange={e => { setUserDraft(d => ({ ...d, status: e.target.value })); setUserErr('') }} aria-label={`Status for ${u.name}`}>
+                    <td><select disabled={userBusy} value={userDraft.status} onChange={e => { setUserDraft(d => ({ ...d, status: e.target.value })); setUserErr('') }} aria-label={`Status for ${u.name}`} name="users-status">
                       {['Active', 'Pending', 'Suspended'].map(status => <option key={status} value={status}>{status}</option>)}
                     </select></td>
                   </>
@@ -512,8 +512,8 @@ export default function Users() {
                   <td colSpan={canManage ? (editingUserId ? 8 : 7) : 6}>
                     <div className="users-reset-panel">
                       <strong>Reset password for {u.name}</strong>
-                      <input type="password" autoFocus autoComplete="new-password" value={resetDraft.password} onChange={e => setResetDraft(d => ({ ...d, password: e.target.value }))} placeholder="New password" aria-label={`New password for ${u.name}`} />
-                      <input type="password" autoComplete="new-password" value={resetDraft.confirmPassword} onChange={e => setResetDraft(d => ({ ...d, confirmPassword: e.target.value }))} placeholder="Confirm password" aria-label={`Confirm password for ${u.name}`} />
+                      <input type="password" autoFocus autoComplete="new-password" value={resetDraft.password} onChange={e => setResetDraft(d => ({ ...d, password: e.target.value }))} placeholder="New password" aria-label={`New password for ${u.name}`} name="users-password-2" />
+                      <input type="password" autoComplete="new-password" value={resetDraft.confirmPassword} onChange={e => setResetDraft(d => ({ ...d, confirmPassword: e.target.value }))} placeholder="Confirm password" aria-label={`Confirm password for ${u.name}`} name="users-confirm-password-2" />
                       {resetErr && <span className="err-text" role="alert">{resetErr}</span>}
                       <button type="button" className="primary" disabled={resetBusy} onClick={() => resetPassword(u)}>{resetBusy ? 'Saving…' : 'Save password'}</button>
                       <button type="button" disabled={resetBusy} onClick={cancelPasswordReset}>Cancel</button>
@@ -541,7 +541,7 @@ export default function Users() {
               <span className="role-id">{id}</span>
               <input type="text" value={roleNameDraft[id] ?? roleDef.name}
                 onChange={e => { setRoleNameDraft(d => ({ ...d, [id]: e.target.value })); setRoleNameError(''); setRoleNameSaved(false) }}
-                aria-label={`Display name for ${id}`} />
+                aria-label={`Display name for ${id}`} name="users-text" />
             </label>
           ))}
         </div>

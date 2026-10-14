@@ -19,13 +19,14 @@ async function responseError(response, fallback) {
   return error
 }
 
-export async function fetchWorkspace(token, fetcher = fetch) {
+export async function fetchWorkspace(token, fetcher = fetch, { isCurrent = () => true } = {}) {
   const response = await fetcher('/api/workspace/bootstrap', {
     headers: { ...workspaceDeploymentHeaders(), Authorization: `Bearer ${token}` },
   })
-  rememberWorkspaceGeneration(response)
   if (!response.ok) throw await responseError(response, 'Workspace bootstrap failed')
   const body = await response.json()
+  if (!isCurrent()) throw new Error('Session changed.')
+  rememberWorkspaceGeneration(response)
   return body.data || {}
 }
 

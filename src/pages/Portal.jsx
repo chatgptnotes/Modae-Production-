@@ -87,7 +87,7 @@ export default function Portal() {
               <div className="hint" style={{ marginBottom: 4 }}>Requested by {ddMmmYY(c.due)}</div>
               <textarea rows={2} style={{ width: '100%' }} placeholder="Type your answer…"
                 value={answers[c.id] || ''}
-                onChange={e => setAnswers(a => ({ ...a, [c.id]: e.target.value }))} />
+                onChange={e => setAnswers(a => ({ ...a, [c.id]: e.target.value }))} name="portal-type-your-answer" />
               <button style={{ marginTop: 4 }} disabled={!(answers[c.id] || '').trim()} onClick={() => sendAnswer(c)}>
                 <Icon name="send" size={12} /> Submit information
               </button>
@@ -104,7 +104,7 @@ export default function Portal() {
           {custNames.length > 1 && (
             <div style={{ marginBottom: 8 }}>
               <label className="hint" style={{ marginRight: 6 }}>Company</label>
-              <select value={kycCust} onChange={e => setKycCust(e.target.value)}>
+              <select value={kycCust} onChange={e => setKycCust(e.target.value)} name="portal-kyc-cust">
                 {custNames.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>

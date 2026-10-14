@@ -29,7 +29,7 @@ export default function ServiceDecisionPanel({ opp, onContinue, onChangesRequest
       {!standardRateOffer && !review && <div className="warnbox">Issue the standard rate schedule before recording the customer’s response.</div>}
       <p className="hint">Record the customer’s response to the issued rate schedule. Changes create a revision and return to the rate schedule.</p>
       <label className="service-form-field">Customer response
-        <textarea className="service-form-control service-decision-note" rows={5} value={note} onChange={e => setNote(e.target.value)} placeholder="Record acceptance, requested changes, or rejection reason" />
+        <textarea className="service-form-control service-decision-note" rows={5} value={note} onChange={e => setNote(e.target.value)} placeholder="Record acceptance, requested changes, or rejection reason" name="service-decision-panel-note" />
       </label>
       <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {['Accepted', 'Changes requested', 'Rejected'].map(decision => <button key={decision} className={decision === 'Accepted' ? 'primary' : ''} disabled={!review || (decision === 'Rejected' && !note.trim())} onClick={() => record(decision)}>{decision}</button>)}
@@ -48,7 +48,7 @@ export default function ServiceDecisionPanel({ opp, onContinue, onChangesRequest
           <label className="service-form-field service-discount-field">Discount requested by customer (%)
             <input className="service-form-control" type="number" min="0" max="100" value={Number(est.rateDiscountPct) === 0 ? '' : (est.rateDiscountPct ?? '')} placeholder="0"
               onChange={e => store.updateServiceFlow(opp.id, { rateDiscountPct: e.target.value === '' ? '' : Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
-              onBlur={() => { if (est.rateDiscountPct === '') store.updateServiceFlow(opp.id, { rateDiscountPct: 0 }) }} />
+              onBlur={() => { if (est.rateDiscountPct === '') store.updateServiceFlow(opp.id, { rateDiscountPct: 0 }) }} name="service-decision-panel-0" />
           </label>
           <p className="hint">
             {Number(est.rateDiscountPct) > discountLimit

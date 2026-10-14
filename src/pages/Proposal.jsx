@@ -291,10 +291,10 @@ function ProposalDatasheets({ opp, p, save, store }) {
       <p className="hint">Add manufacturer datasheets that should travel with this customer proposal.</p>
       <label className="btn-secondary proposal-upload-button">
         <Icon name="upload" size={13} /> {busy ? 'Uploading…' : 'Add datasheet'}
-        <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" multiple disabled={busy} onChange={upload} />
+        <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg" multiple disabled={busy} onChange={upload} name="proposal-file" />
       </label>
       {library.length > 0 && <label style={{ display: 'inline-flex', marginLeft: 8 }}>Add from Admin library
-        <select defaultValue="" onChange={addFromLibrary} style={{ marginLeft: 6 }}>
+        <select defaultValue="" onChange={addFromLibrary} style={{ marginLeft: 6 }} name="proposal-select">
           <option value="">Choose datasheet</option>
           {library.map(file => <option key={file.name} value={file.name}>{file.name}</option>)}
         </select>
@@ -1707,14 +1707,14 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         <table>
           <thead><tr><th colSpan={2}>Imported Items Pricing &amp; Costing Factors</th></tr></thead>
           <tbody>
-            <tr onClick={selCosting('O3', p.costing.baseRate, 'baseRate')}><td>Euro-₹ Base</td><td className="num"><input type="number" step="0.01" min="0" value={p.costing.baseRate} onChange={setCosting('baseRate')} /></td></tr>
-            <tr onClick={selCosting('P3', p.costing.usdBase, 'usdBase')}><td>USD-₹ Base</td><td className="num"><input type="number" step="0.01" min="0" value={p.costing.usdBase} onChange={setCosting('usdBase')} /></td></tr>
-            <tr onClick={selCosting('O4', p.costing.customsDutyPct ?? 8.5, 'customsDutyPct', 'pct')}><td>Customs Duty</td><td className="num"><input type="number" step="0.1" min="0" value={p.costing.customsDutyPct ?? 8.5} onChange={setCosting('customsDutyPct')} />%</td></tr>
-            <tr onClick={selCosting('O4', p.costing.ervPct ?? 2.5, 'ervPct', 'pct')}><td>ERV</td><td className="num"><input type="number" step="0.1" min="0" value={p.costing.ervPct ?? 2.5} onChange={setCosting('ervPct')} />%</td></tr>
-            <tr onClick={selCosting('O4', p.costing.handlingPct ?? 5, 'handlingPct', 'pct')}><td>Handling</td><td className="num"><input type="number" step="0.1" min="0" value={p.costing.handlingPct ?? 5} onChange={setCosting('handlingPct')} />%</td></tr>
-            <tr onClick={selCosting('O5', p.costing.bnkDiscPct, 'bnkDiscPct', 'pct')}><td>B&amp;K Disc%</td><td className="num"><input type="number" step="0.1" min="0" max="100" value={p.costing.bnkDiscPct} onChange={setCosting('bnkDiscPct')} />%</td></tr>
+            <tr onClick={selCosting('O3', p.costing.baseRate, 'baseRate')}><td>Euro-₹ Base</td><td className="num"><input type="number" step="0.01" min="0" value={p.costing.baseRate} onChange={setCosting('baseRate')} name="proposal-base-rate" /></td></tr>
+            <tr onClick={selCosting('P3', p.costing.usdBase, 'usdBase')}><td>USD-₹ Base</td><td className="num"><input type="number" step="0.01" min="0" value={p.costing.usdBase} onChange={setCosting('usdBase')} name="proposal-usd-base" /></td></tr>
+            <tr onClick={selCosting('O4', p.costing.customsDutyPct ?? 8.5, 'customsDutyPct', 'pct')}><td>Customs Duty</td><td className="num"><input type="number" step="0.1" min="0" value={p.costing.customsDutyPct ?? 8.5} onChange={setCosting('customsDutyPct')} name="proposal-number" />%</td></tr>
+            <tr onClick={selCosting('O4', p.costing.ervPct ?? 2.5, 'ervPct', 'pct')}><td>ERV</td><td className="num"><input type="number" step="0.1" min="0" value={p.costing.ervPct ?? 2.5} onChange={setCosting('ervPct')} name="proposal-number-2" />%</td></tr>
+            <tr onClick={selCosting('O4', p.costing.handlingPct ?? 5, 'handlingPct', 'pct')}><td>Handling</td><td className="num"><input type="number" step="0.1" min="0" value={p.costing.handlingPct ?? 5} onChange={setCosting('handlingPct')} name="proposal-number-3" />%</td></tr>
+            <tr onClick={selCosting('O5', p.costing.bnkDiscPct, 'bnkDiscPct', 'pct')}><td>B&amp;K Disc%</td><td className="num"><input type="number" step="0.1" min="0" max="100" value={p.costing.bnkDiscPct} onChange={setCosting('bnkDiscPct')} name="proposal-bnk-disc-pct" />%</td></tr>
             <tr onClick={selCosting('O6', '=ROUNDUP((O3*(1+O4)*(1-O5)),0)', null)}><td><b>Eff. Rate</b></td><td className="num"><b>₹ {fmt(effectiveRate(p.costing))} / €&nbsp;·&nbsp;₹ {fmt(effectiveRate(p.costing, 'USD', false))} / $</b></td></tr>
-            <tr onClick={selCosting('O7', p.costing.inputGMPct, 'inputGMPct', 'pct')}><td>Input GM%</td><td className="num"><input type="number" step="0.1" min="0" max={MAX_GM_PCT} value={p.costing.inputGMPct} onChange={setCosting('inputGMPct')} />%</td></tr>
+            <tr onClick={selCosting('O7', p.costing.inputGMPct, 'inputGMPct', 'pct')}><td>Input GM%</td><td className="num"><input type="number" step="0.1" min="0" max={MAX_GM_PCT} value={p.costing.inputGMPct} onChange={setCosting('inputGMPct')} name="proposal-input-gmpct" />%</td></tr>
           </tbody>
         </table>
         <table>
@@ -1722,7 +1722,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
           <tbody>
             <tr onClick={selCosting('Q3', '=SUM(Total Cost ₹)', null)}><td>ModAE Costs</td><td className="num">₹ {fmt(totals.cost)}</td></tr>
             <tr onClick={selCosting('Q4', '=SUM(Total Price ₹)', null)}><td>Target Price</td><td className="num">₹ {fmt(totals.target)}</td></tr>
-            <tr onClick={selCosting('Q5', p.costing.financeCostK, 'financeCostK')}><td>Finance Cost (K₹)</td><td className="num"><input type="number" step="1" min="0" value={p.costing.financeCostK} onChange={setCosting('financeCostK')} /></td></tr>
+            <tr onClick={selCosting('Q5', p.costing.financeCostK, 'financeCostK')}><td>Finance Cost (K₹)</td><td className="num"><input type="number" step="1" min="0" value={p.costing.financeCostK} onChange={setCosting('financeCostK')} name="proposal-finance-cost-k" /></td></tr>
             <tr onClick={selCosting('Q6', '=Q4-Q3-Q5*1000', null)}><td><b>Net GM ₹</b></td><td className="num"><b>₹ {fmt(netGM)}</b></td></tr>
             <tr onClick={selCosting('Q7', '=Q6/Q4', null)}><td><b>Net GM %</b></td><td className="num"><b>{totals.target ? ((netGM / totals.target) * 100).toFixed(2) + '%' : '—'}</b></td></tr>
           </tbody>
@@ -1730,7 +1730,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         <table>
           <thead><tr><th colSpan={2}>Project</th></tr></thead>
           <tbody>
-            <tr><td>№ of Units</td><td className="num"><input type="number" min="1" value={units} onChange={e => save({ ...p, units: +e.target.value || 1 })} /></td></tr>
+            <tr><td>№ of Units</td><td className="num"><input type="number" min="1" value={units} onChange={e => save({ ...p, units: +e.target.value || 1 })} name="proposal-units" /></td></tr>
           </tbody>
         </table>
       </div>
@@ -1809,7 +1809,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
         ref={uploadInputRef}
         onChange={uploadReviewedProposal}
         tabIndex={-1}
-        aria-hidden="true"
+        aria-hidden="true" name="proposal-file-2"
       />
 
       <section className={`proposal-review-strip proposal-review-strip-${reviewBanner.tone}`} aria-label="Human review checkpoint">
@@ -1955,15 +1955,15 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                   <div><b>ModAE standard</b><span>{term.standardTerm || term.ourResponse || 'Not recorded'}</span></div>
                 </div>
                 <label className="commercial-decision-choice">Decision
-                  <select value={term.decision || 'Decision pending'} onChange={e => setCommercialDecision(index, e.target.value)} disabled={!canEditProposal}>
+                  <select value={term.decision || 'Decision pending'} onChange={e => setCommercialDecision(index, e.target.value)} disabled={!canEditProposal} name="proposal-select-2">
                     {COMMERCIAL_DECISIONS.map(option => <option key={option}>{option}</option>)}
                   </select>
                   {term.decision === 'Match customer terms' && <span className="hint">AH approval requested — quotation submission remains blocked until approval.</span>}
                   {(!term.decision || term.decision === 'Decision pending') && <span className="err">Choose Match customer terms or Counter-offer with ModAE standard terms.</span>}
                 </label>
                 {term.decision === 'Counter-offer with ModAE standard terms' && <div className="commercial-decision-followup">
-                  <label>Counter offer <input value={term.proposedTerm || term.ourResponse || ''} onChange={e => setCounterOffer(index, e.target.value)} disabled={!canEditProposal} /></label>
-                  <label>Customer response <select value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => setCustomerConfirmation(index, e.target.value)} disabled={!canEditProposal}>
+                  <label>Counter offer <input value={term.proposedTerm || term.ourResponse || ''} onChange={e => setCounterOffer(index, e.target.value)} disabled={!canEditProposal} name="proposal-input" /></label>
+                  <label>Customer response <select value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => setCustomerConfirmation(index, e.target.value)} disabled={!canEditProposal} name="proposal-select-3">
                     {CUSTOMER_CONFIRMATION_STATUSES.filter(status => status !== 'Not required').map(status => <option key={status}>{status}</option>)}
                   </select></label>
                   <span className="hint">Customer confirmation is tracked in Follow-up.</span>
@@ -2051,27 +2051,27 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             <span className="tagline">{MODAE_COMPANY.tagline}</span>
           </div>
           <div className="cover-meta">
-            <div><b>Date:</b> <span className="cover-field"><input type="date" value={p.revisionDate} onChange={set('revisionDate')} /></span></div>
+            <div><b>Date:</b> <span className="cover-field"><input type="date" value={p.revisionDate} onChange={set('revisionDate')} name="proposal-revision-date" /></span></div>
             <div><b>Our Ref:</b> {p.ourRef}</div>
-            <div><b>Bid Stage:</b> <select value={p.bidStage} onChange={set('bidStage')}><option>Biding</option><option>Budgetary</option></select></div>
-            <div><b>Bid Type:</b> <select value={p.bidType} onChange={set('bidType')}><option>Priced</option><option>Unpriced (Technical)</option></select></div>
-            <div><b>Revision:</b> <select value={p.revision} onChange={set('revision')}>{['00','01','02','03','04'].map(r => <option key={r}>{r}</option>)}</select></div>
+            <div><b>Bid Stage:</b> <select value={p.bidStage} onChange={set('bidStage')} name="proposal-bid-stage"><option>Biding</option><option>Budgetary</option></select></div>
+            <div><b>Bid Type:</b> <select value={p.bidType} onChange={set('bidType')} name="proposal-bid-type"><option>Priced</option><option>Unpriced (Technical)</option></select></div>
+            <div><b>Revision:</b> <select value={p.revision} onChange={set('revision')} name="proposal-revision">{['00','01','02','03','04'].map(r => <option key={r}>{r}</option>)}</select></div>
           </div>
           <div className="cover-meta">
             <div><b>{p.addressee}</b></div>
-            <div>Kind Attn: <span className="cover-field"><input value={p.kindAttn} onChange={set('kindAttn')} /></span></div>
+            <div>Kind Attn: <span className="cover-field"><input value={p.kindAttn} onChange={set('kindAttn')} name="proposal-kind-attn" /></span></div>
             <div>Mobile: {p.attnPhone}</div>
           </div>
           <div className="cover-meta proposal-currency-meta" aria-label="Proposal currency conversion">
-            <div><b>Proposal currency:</b> <select value={p.sourceCurrency || 'INR'} onChange={e => save({ ...p, sourceCurrency: e.target.value, sourceRate: store.config?.currencyRates?.[e.target.value] || 1, sourceRateDate: new Date().toISOString().slice(0, 10) })}><option>INR</option><option>EUR</option><option>USD</option><option>GBP</option></select></div>
+            <div><b>Proposal currency:</b> <select value={p.sourceCurrency || 'INR'} onChange={e => save({ ...p, sourceCurrency: e.target.value, sourceRate: store.config?.currencyRates?.[e.target.value] || 1, sourceRateDate: new Date().toISOString().slice(0, 10) })} name="proposal-select-4"><option>INR</option><option>EUR</option><option>USD</option><option>GBP</option></select></div>
             <div>Customer value: {proposalSymbol} {fmt(fromInr(totals.target, proposalCurrency, proposalRate))}</div>
             <div>INR conversion: ₹ {fmt(totals.target)}</div>
             <div>Admin rate: ₹ {fmt(Number(p.sourceRate) || 1)} / {p.sourceCurrency || 'INR'} · rate date {p.sourceRateDate || '—'}</div>
           </div>
           <div className="cover-meta">
-            <div><b>Subject:</b> RFQ # <span className="cover-field"><input value={p.rfqNumber} onChange={set('rfqNumber')} placeholder="RFQ number & date" style={{ minWidth: 180 }} /></span></div>
+            <div><b>Subject:</b> RFQ # <span className="cover-field"><input value={p.rfqNumber} onChange={set('rfqNumber')} placeholder="RFQ number & date" style={{ minWidth: 180 }} name="proposal-rfq-number" /></span></div>
             <div style={{ marginLeft: 62 }}>{p.subject}</div>
-            <div><b>Project:</b> <span className="cover-field"><input value={p.project} onChange={set('project')} style={{ minWidth: 420 }} /></span></div>
+            <div><b>Project:</b> <span className="cover-field"><input value={p.project} onChange={set('project')} style={{ minWidth: 420 }} name="proposal-project" /></span></div>
           </div>
           <div className="cover-body">
             <p>Dear Sir,</p>
@@ -2087,11 +2087,11 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
             <tbody>
               {p.terms.map((t, i) => (
                 <tr key={i}>
-                  <td><input value={t.term} onChange={updTerm(i, 'term')} placeholder="e.g. Payment" /></td>
-                  <td><input value={t.customerAsk} onChange={updTerm(i, 'customerAsk')} /></td>
-                  <td><input value={t.ourResponse} onChange={updTerm(i, 'ourResponse')} /></td>
+                  <td><input value={t.term} onChange={updTerm(i, 'term')} placeholder="e.g. Payment" name="proposal-term" /></td>
+                  <td><input value={t.customerAsk} onChange={updTerm(i, 'customerAsk')} name="proposal-customer-ask" /></td>
+                  <td><input value={t.ourResponse} onChange={updTerm(i, 'ourResponse')} name="proposal-our-response" /></td>
                   <td className={t.status === 'Deviation' ? 'err' : ''}>
-                    <select value={t.status} onChange={updTerm(i, 'status')}>
+                    <select value={t.status} onChange={updTerm(i, 'status')} name="proposal-status">
                       <option>Comply</option><option>Deviation</option>
                     </select>
                   </td>
@@ -2108,9 +2108,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
               const selected = (p.clauseIds || []).includes(clause.id)
               const saved = (p.clauses || []).find(item => item.id === clause.id)
               return <div key={clause.id} className="check-row">
-                <input type="checkbox" checked={selected} onChange={() => toggleClause(clause.id)} />
+                <input type="checkbox" checked={selected} onChange={() => toggleClause(clause.id)} name="proposal-checkbox" />
                 <span style={{ flex: 1 }}><b>{clause.label}</b>{clause.required && <small className="hint"> · required</small>}
-                  {selected && <textarea value={saved?.text || clause.text} onChange={e => editClause(clause.id, e.target.value)} rows={2} style={{ display: 'block', width: '100%', marginTop: 4 }} />}</span>
+                  {selected && <textarea value={saved?.text || clause.text} onChange={e => editClause(clause.id, e.target.value)} rows={2} style={{ display: 'block', width: '100%', marginTop: 4 }} name="proposal-textarea" />}</span>
                 {selected && <span><button type="button" className="proposal-row-minus" title="Move clause up" onClick={() => moveClause(clause.id, -1)}>↑</button><button type="button" className="proposal-row-minus" title="Move clause down" onClick={() => moveClause(clause.id, 1)}>↓</button><button type="button" className="proposal-row-minus" title="Remove clause" onClick={() => toggleClause(clause.id)}>−</button></span>}
               </div>
             })}
@@ -2178,8 +2178,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
               {p.signals.map((s, i) => (
                 <tr key={i}>
                   <td>{s.signal}</td>
-                  <td className="num"><input type="number" min="0" value={s.perUnit} onChange={e => { const signals = p.signals.map((x, j) => j === i ? { ...x, perUnit: clampQty(e.target.value) } : x); save({ ...p, signals }) }} style={{ width: 60, textAlign: 'right' }} /></td>
-                  <td className="num"><input type="number" min="0" value={s.units} onChange={e => { const signals = p.signals.map((x, j) => j === i ? { ...x, units: clampQty(e.target.value) } : x); save({ ...p, signals }) }} style={{ width: 60, textAlign: 'right' }} /></td>
+                  <td className="num"><input type="number" min="0" value={s.perUnit} onChange={e => { const signals = p.signals.map((x, j) => j === i ? { ...x, perUnit: clampQty(e.target.value) } : x); save({ ...p, signals }) }} style={{ width: 60, textAlign: 'right' }} name="proposal-per-unit" /></td>
+                  <td className="num"><input type="number" min="0" value={s.units} onChange={e => { const signals = p.signals.map((x, j) => j === i ? { ...x, units: clampQty(e.target.value) } : x); save({ ...p, signals }) }} style={{ width: 60, textAlign: 'right' }} name="proposal-units-2" /></td>
                   <td className="num">{s.perUnit * s.units}</td>
                   <td className="num">{s.perUnit * s.units * 15}</td>
                 </tr>
@@ -2280,8 +2280,8 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                   return (
                     <tr key={i}>
                       <td className="rowhead">{i + 1}</td>
-                      <td><input value={l.itemCategory} onChange={updLine(i, 'itemCategory', false)} placeholder="e.g. Proximity Transducer" style={{ minWidth: 140 }} /></td>
-                      <td><textarea rows={2} value={l.desc} onChange={updLine(i, 'desc', false)} /></td>
+                      <td><input value={l.itemCategory} onChange={updLine(i, 'itemCategory', false)} placeholder="e.g. Proximity Transducer" style={{ minWidth: 140 }} name="proposal-item-category" /></td>
+                      <td><textarea rows={2} value={l.desc} onChange={updLine(i, 'desc', false)} name="proposal-desc" /></td>
                       <td>
                         {l.pn || l.custRef || <span className="hint">—</span>}
                         {l.custRef && l.pn && l.custRef.trim().toLowerCase() !== l.pn.trim().toLowerCase() && (
@@ -2292,7 +2292,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                         {(part?.adders || []).length
                           ? part.adders.map(a => (
                             <label key={a.code} style={{ marginRight: 10 }}>
-                              <input type="checkbox" checked={l.adders.includes(a.code)} onChange={toggleAdder(i, a)} />
+                              <input type="checkbox" checked={l.adders.includes(a.code)} onChange={toggleAdder(i, a)} name="proposal-checkbox-2" />
                               {' '}{a.desc} (+{l.currency === 'USD' ? '$' : l.currency === 'INR' ? '₹' : '€'}{a.price})
                             </label>
                           ))
@@ -2301,15 +2301,15 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
                       <td className="num">
                         <div className="quantity-stepper">
                           <button type="button" onClick={adjustLineQty(i, -1)} title="Decrease quantity" aria-label={`Decrease quantity for line ${i + 1}`}>−</button>
-                          <input type="number" min="0" value={l.qtyPerUnit || ''} onChange={updLine(i, 'qtyPerUnit')} placeholder="-" />
+                          <input type="number" min="0" value={l.qtyPerUnit || ''} onChange={updLine(i, 'qtyPerUnit')} placeholder="-" name="proposal-" />
                           <button type="button" onClick={adjustLineQty(i, 1)} title="Increase quantity" aria-label={`Increase quantity for line ${i + 1}`}>＋</button>
                         </div>
                       </td>
-                      <td className="num"><input type="number" min="0" value={l.common || ''} onChange={updLine(i, 'common')} style={{ width: 52, textAlign: 'right' }} placeholder="-" /></td>
-                      <td className="num"><input type="number" min="0" value={l.spares || ''} onChange={updLine(i, 'spares')} style={{ width: 52, textAlign: 'right' }} placeholder="-" /></td>
+                      <td className="num"><input type="number" min="0" value={l.common || ''} onChange={updLine(i, 'common')} style={{ width: 52, textAlign: 'right' }} placeholder="-" name="proposal--2" /></td>
+                      <td className="num"><input type="number" min="0" value={l.spares || ''} onChange={updLine(i, 'spares')} style={{ width: 52, textAlign: 'right' }} placeholder="-" name="proposal--3" /></td>
                       <td className="num"><b>{q}</b></td>
                       <td>{l.uom}</td>
-                      <td className="num"><input type="number" min="0" value={l.quoted} onChange={updLine(i, 'quoted', false)} placeholder={fmt(Math.round(lineComputed(l)))} style={{ width: 90, textAlign: 'right' }} title="Customer-facing (target) price — blank = computed price" /></td>
+                      <td className="num"><input type="number" min="0" value={l.quoted} onChange={updLine(i, 'quoted', false)} placeholder={fmt(Math.round(lineComputed(l)))} style={{ width: 90, textAlign: 'right' }} title="Customer-facing (target) price — blank = computed price" name="proposal-quoted" /></td>
                       <td className="num">{proposalSymbol} {fmt(lineQuoted(l) * q, 2)}</td>
                       <td className="num internal">₹ {fmt(lineCost(l))}</td>
                       <td className="num internal">₹ {fmt(lineCost(l) * q)}</td>
@@ -2390,9 +2390,9 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
               <thead><tr><th>Sr. No</th><th>Scope / Equipment Description</th><th>Quantity</th><th>Unit Price</th><th>Total Price</th></tr></thead>
               <tbody>{referenceRows.map((row, i) => <tr key={i}>
                 <td>{row.srNo}</td>
-                <td><textarea rows={2} value={row.description} onChange={e => updateReferenceRow(i, 'description', e.target.value)} style={{ width: '100%', resize: 'vertical' }} /></td>
-                <td><input value={row.quantityText ?? row.quantity} onChange={e => updateReferenceRow(i, 'quantityText', e.target.value)} style={{ width: '100%' }} /></td>
-                <td><input type="number" min="0" value={row.unitPrice} onChange={e => updateReferenceRow(i, 'unitPrice', e.target.value)} style={{ width: '100%' }} /></td>
+                <td><textarea rows={2} value={row.description} onChange={e => updateReferenceRow(i, 'description', e.target.value)} style={{ width: '100%', resize: 'vertical' }} name="proposal-description" /></td>
+                <td><input value={row.quantityText ?? row.quantity} onChange={e => updateReferenceRow(i, 'quantityText', e.target.value)} style={{ width: '100%' }} name="proposal-input-2" /></td>
+                <td><input type="number" min="0" value={row.unitPrice} onChange={e => updateReferenceRow(i, 'unitPrice', e.target.value)} style={{ width: '100%' }} name="proposal-unit-price" /></td>
                 <td className="num">{fmt((Number(row.quantity) || 0) * (Number(row.unitPrice) || 0))}</td>
               </tr>)}</tbody>
             </table>
@@ -2427,7 +2427,7 @@ function ProposalEditor({ oppId: oppIdProp, embedded = false, initialTab = 'Edit
       {conditionTarget && (
         <Modal title="Confirm approval condition incorporated" onClose={() => setConditionTarget(null)}>
           <p className="hint">Record how this condition was incorporated in the proposal before release.</p>
-          <textarea rows={4} value={conditionNote} onChange={e => setConditionNote(e.target.value)} placeholder="Describe the proposal change..." style={{ width: '100%' }} />
+          <textarea rows={4} value={conditionNote} onChange={e => setConditionNote(e.target.value)} placeholder="Describe the proposal change..." style={{ width: '100%' }} name="proposal-condition-note" />
           <div className="forms-actions">
             <button className="primary" disabled={!conditionNote.trim()} onClick={saveCondition}>Confirm incorporated</button>
             <button onClick={() => setConditionTarget(null)}>Cancel</button>

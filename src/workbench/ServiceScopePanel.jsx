@@ -51,7 +51,7 @@ export default function ServiceScopePanel({ opp, onContinue }) {
           <div className="service-field-label">Is a site visit needed?</div>
           <label className={`service-requirement-option ${siteVisitSelected ? 'is-selected' : ''}`}>
             <input type="checkbox" checked={siteVisitSelected}
-              onChange={event => updateSiteVisit(event.target.checked)} />
+              onChange={event => updateSiteVisit(event.target.checked)} name="service-scope-panel-checkbox" />
             <span>Site visit</span>
           </label>
           <p className="hint">This is the only place to decide whether a site visit is needed. The saved choice will be used by the rate schedule.</p>

@@ -42,13 +42,13 @@ export default function WorkflowAdmin() {
       <div className="workflow-stage-list">
         {stages.map((stage, index) => <div className={`workflow-stage-row ${stage.enabled === false ? 'retired' : ''}`} key={stage.id}>
           <span className="workflow-stage-order">{String(index + 1).padStart(2, '0')}</span>
-          <input aria-label={`Stage ${index + 1} label`} value={stage.label} disabled={!canEdit} onChange={e => patch(stage.id, { label: e.target.value })} />
+          <input aria-label={`Stage ${index + 1} label`} value={stage.label} disabled={!canEdit} onChange={e => patch(stage.id, { label: e.target.value })} name="workflow-admin-label" />
           <span className="workflow-stage-id">{stage.milestone || stage.id}</span>
-          <label className="check-row"><input type="checkbox" checked={stage.enabled !== false} disabled={!canEdit} onChange={e => patch(stage.id, { enabled: e.target.checked })} /> Active</label>
+          <label className="check-row"><input type="checkbox" checked={stage.enabled !== false} disabled={!canEdit} onChange={e => patch(stage.id, { enabled: e.target.checked })} name="workflow-admin-checkbox" /> Active</label>
           <span className="workflow-stage-actions"><button title="Move up" disabled={!canEdit || index === 0} onClick={() => move(index, -1)}>↑</button><button title="Move down" disabled={!canEdit || index === stages.length - 1} onClick={() => move(index, 1)}>↓</button></span>
         </div>)}
       </div>
-      {canEdit && <form className="admin-actions workflow-add-form" onSubmit={add}><input value={newLabel} placeholder="New stage name" onChange={e => setNewLabel(e.target.value)} /><button className="primary" type="submit"><Icon name="plus" size={11} /> Add stage</button></form>}
+      {canEdit && <form className="admin-actions workflow-add-form" onSubmit={add}><input value={newLabel} placeholder="New stage name" onChange={e => setNewLabel(e.target.value)} name="workflow-admin-new-label" /><button className="primary" type="submit"><Icon name="plus" size={11} /> Add stage</button></form>}
       <div className="workflow-protected-note"><Icon name="lock" size={12} /> Core security, approval authority, and costing arithmetic remain protected. Workflow changes cannot erase audit history.</div>
     </section>
   </div>

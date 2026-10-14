@@ -283,16 +283,16 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
       <div className="opportunity-details-group">Identity</div>
       <div className="dgrid2 opportunity-details-grid">
         <Field label="Opp ID"><div className="ro read-only-field">{displayOpportunityId(opp.id)} <span>(Sl {opp.sl})</span></div></Field>
-        <Field label="Owner"><select disabled={!canTransfer} title={!canTransfer ? "Ownership transfers require management permission" : undefined} value={draft.owner} onChange={e => set('owner', e.target.value)}>{OWNERS.map(x => <option key={x} value={x}>{labelFor('owner', x)}</option>)}</select></Field>
-        <Field label="RFQ Number"><input type="text" value={draft.rfqNumber} onChange={e => set('rfqNumber', e.target.value)} /></Field>
-        <Field label="RFQ Date"><input type="date" value={draft.rfqDate} onChange={e => set('rfqDate', e.target.value)} /></Field>
+        <Field label="Owner"><select disabled={!canTransfer} title={!canTransfer ? "Ownership transfers require management permission" : undefined} value={draft.owner} onChange={e => set('owner', e.target.value)} name="opportunity-details-editor-owner">{OWNERS.map(x => <option key={x} value={x}>{labelFor('owner', x)}</option>)}</select></Field>
+        <Field label="RFQ Number"><input type="text" value={draft.rfqNumber} onChange={e => set('rfqNumber', e.target.value)} name="opportunity-details-editor-rfq-number" /></Field>
+        <Field label="RFQ Date"><input type="date" value={draft.rfqDate} onChange={e => set('rfqDate', e.target.value)} name="opportunity-details-editor-rfq-date" /></Field>
         <div style={{ gridColumn: '1 / -1' }}>
           <label>Opportunity Name/Description</label>
-          <input className="editable-field" type="text" value={draft.oppName} onChange={e => set('oppName', e.target.value)} />
+          <input className="editable-field" type="text" value={draft.oppName} onChange={e => set('oppName', e.target.value)} name="opportunity-details-editor-opp-name" />
         </div>
         <div style={{ gridColumn: '1 / -1' }}>
           <label>Opportunity Scope</label>
-          <textarea className="editable-field" rows={2} value={draft.opportunityScope} onChange={e => set('opportunityScope', e.target.value)} />
+          <textarea className="editable-field" rows={2} value={draft.opportunityScope} onChange={e => set('opportunityScope', e.target.value)} name="opportunity-details-editor-opportunity-scope" />
         </div>
       </div>
 
@@ -309,23 +309,23 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
           }}
           label="Sell To Customer"
         />
-        <Field label="Category"><select value={draft.category} onChange={e => set('category', e.target.value)}>{[...new Set([CATEGORIES.includes(draft.category) ? null : draft.category, ...CATEGORIES])].filter(Boolean).map(x => <option key={x}>{x}</option>)}</select></Field>
-        <Field label="Sell To Customer Location"><input type="text" value={draft.sellToCustomerLocation} onChange={e => { set('sellToCustomerLocation', e.target.value); set('location', e.target.value) }} /></Field>
+        <Field label="Category"><select value={draft.category} onChange={e => set('category', e.target.value)} name="opportunity-details-editor-category">{[...new Set([CATEGORIES.includes(draft.category) ? null : draft.category, ...CATEGORIES])].filter(Boolean).map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="Sell To Customer Location"><input type="text" value={draft.sellToCustomerLocation} onChange={e => { set('sellToCustomerLocation', e.target.value); set('location', e.target.value) }} name="opportunity-details-editor-sell-to-customer-location" /></Field>
         <ReadOnlyField label="Customer Status · managed in Customer master" value={store.customers?.find(c => c.name === draft.sellTo)?.status || opp.customerStatus} />
         <CustomerPicker customers={store.customers} value={draft.eucName} onChange={value => set('eucName', value)} allowCreate={false} label="EUC Name" />
-        <Field label="EUC Location"><input type="text" value={draft.eucLocation} onChange={e => set('eucLocation', e.target.value)} /></Field>
+        <Field label="EUC Location"><input type="text" value={draft.eucLocation} onChange={e => set('eucLocation', e.target.value)} name="opportunity-details-editor-euc-location" /></Field>
         <div className="opportunity-details-wide">
-          <Field label="Additional customer information"><textarea rows={3} value={draft.additionalCustomerInformation} onChange={e => set('additionalCustomerInformation', e.target.value)} placeholder="Confirmed customer information that does not fit another field" /></Field>
+          <Field label="Additional customer information"><textarea rows={3} value={draft.additionalCustomerInformation} onChange={e => set('additionalCustomerInformation', e.target.value)} placeholder="Confirmed customer information that does not fit another field" name="opportunity-details-editor-additional-customer-information" /></Field>
         </div>
       </div>
 
       <div className="opportunity-details-group">Classification</div>
       <div className="dgrid2 opportunity-details-grid">
-        <Field label="Opp Type"><select value={draft.oppType} onChange={e => set('oppType', e.target.value)}>{[...new Set([OPP_TYPES.includes(draft.oppType) ? null : draft.oppType, ...OPP_TYPES])].filter(Boolean).map(x => <option key={x}>{x}</option>)}</select></Field>
-        <Field label="BU"><select value={draft.bu} onChange={e => set('bu', e.target.value)}>{[...new Set([BUS.includes(draft.bu) ? null : draft.bu, ...BUS])].filter(Boolean).map(x => <option key={x}>{x}</option>)}</select></Field>
-        <Field label="Segment"><select value={draft.segment} onChange={e => set('segment', e.target.value)}>{SEGMENTS.map(x => <option key={x} value={x}>{labelFor('segment', x)}</option>)}</select></Field>
-        {showValue && <Field label="Estimated Value (₹)"><input type="number" min="0" step="any" value={draft.valueK} onChange={e => set('valueK', e.target.value)} /></Field>}
-        {showCost && <Field label="COGS (₹)"><input type="number" min="0" step="any" value={draft.cogsK} onChange={e => set('cogsK', e.target.value)} /></Field>}
+        <Field label="Opp Type"><select value={draft.oppType} onChange={e => set('oppType', e.target.value)} name="opportunity-details-editor-opp-type">{[...new Set([OPP_TYPES.includes(draft.oppType) ? null : draft.oppType, ...OPP_TYPES])].filter(Boolean).map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="BU"><select value={draft.bu} onChange={e => set('bu', e.target.value)} name="opportunity-details-editor-bu">{[...new Set([BUS.includes(draft.bu) ? null : draft.bu, ...BUS])].filter(Boolean).map(x => <option key={x}>{x}</option>)}</select></Field>
+        <Field label="Segment"><select value={draft.segment} onChange={e => set('segment', e.target.value)} name="opportunity-details-editor-segment">{SEGMENTS.map(x => <option key={x} value={x}>{labelFor('segment', x)}</option>)}</select></Field>
+        {showValue && <Field label="Estimated Value (₹)"><input type="number" min="0" step="any" value={draft.valueK} onChange={e => set('valueK', e.target.value)} name="opportunity-details-editor-value-k" /></Field>}
+        {showCost && <Field label="COGS (₹)"><input type="number" min="0" step="any" value={draft.cogsK} onChange={e => set('cogsK', e.target.value)} name="opportunity-details-editor-cogs-k" /></Field>}
         {/* On the client's Field List but not a Sales Pipeline column, so it is
             captured here rather than on the tracker sheet. */}
         <Field label="Solution">
@@ -345,7 +345,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
                 <div className="compact-product-menu" role="listbox" aria-label="Solutions" aria-multiselectable="true" onClick={e => e.stopPropagation()}>
                   {SOLUTIONS.map(solution => (
                     <label key={solution} className="compact-product-option">
-                      <input type="checkbox" checked={draft.solution.includes(solution)} onChange={() => toggleSolution(solution)} />
+                      <input type="checkbox" checked={draft.solution.includes(solution)} onChange={() => toggleSolution(solution)} name="opportunity-details-editor-checkbox" />
                       <span>{solution}</span>
                     </label>
                   ))}
@@ -358,7 +358,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
             )}
           </div>
         </Field>
-        <Field label="Probability"><select value={draft.prob} onChange={e => set('prob', e.target.value)}><option value="">—</option>{PROB_LEVELS.map(x => <option key={x} value={x}>{labelFor('prob', x)}</option>)}</select></Field>
+        <Field label="Probability"><select value={draft.prob} onChange={e => set('prob', e.target.value)} name="opportunity-details-editor-prob"><option value="">—</option>{PROB_LEVELS.map(x => <option key={x} value={x}>{labelFor('prob', x)}</option>)}</select></Field>
         <Field label="Product">
           <div className="compact-product-picker">
             <button
@@ -376,7 +376,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
                 <div className="compact-product-menu" role="listbox" aria-label="Products" aria-multiselectable="true" onClick={e => e.stopPropagation()}>
                   {PRODUCTS.map(product => (
                     <label key={product} className="compact-product-option">
-                      <input type="checkbox" checked={draft.product.includes(product)} onChange={() => toggleProduct(product)} />
+                      <input type="checkbox" checked={draft.product.includes(product)} onChange={() => toggleProduct(product)} name="opportunity-details-editor-checkbox-2" />
                       <span>{product}</span>
                     </label>
                   ))}
@@ -394,30 +394,30 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
       <div className="opportunity-details-group">Dates and historical reference</div>
       <div className="dgrid2 opportunity-details-grid">
         <ReadOnlyField label="Opp. Ref. ID" value={opp.legacyOppRefId} />
-        <Field label="Offer Date"><input type="date" value={draft.offerDate} onChange={e => set('offerDate', e.target.value)} /></Field>
-        <Field label="EOD / Order Date"><input type="date" value={draft.orderDate} onChange={e => set('orderDate', e.target.value)} /></Field>
-        <Field label="EDD/ADD / Delivery Date"><input type="date" value={draft.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} /></Field>
-        <Field label="Invoice Date"><input type="date" value={draft.invoiceDate} onChange={e => set('invoiceDate', e.target.value)} /></Field>
+        <Field label="Offer Date"><input type="date" value={draft.offerDate} onChange={e => set('offerDate', e.target.value)} name="opportunity-details-editor-offer-date" /></Field>
+        <Field label="EOD / Order Date"><input type="date" value={draft.orderDate} onChange={e => set('orderDate', e.target.value)} name="opportunity-details-editor-order-date" /></Field>
+        <Field label="EDD/ADD / Delivery Date"><input type="date" value={draft.deliveryDate} onChange={e => set('deliveryDate', e.target.value)} name="opportunity-details-editor-delivery-date" /></Field>
+        <Field label="Invoice Date"><input type="date" value={draft.invoiceDate} onChange={e => set('invoiceDate', e.target.value)} name="opportunity-details-editor-invoice-date" /></Field>
         <ReadOnlyField label="FQ-FY" value={fiscalQuarter(draft.orderDate)} />
       </div>
 
       <div className="opportunity-details-group">Contact</div>
       <div className="dgrid2 opportunity-details-grid">
-        <Field label="Contact Person *"><input ref={contactPersonRef} type="text" value={draft.contactPerson} onChange={e => set('contactPerson', e.target.value)} placeholder="Enter contact name" /></Field>
-        <Field label="Contact Phone *"><input ref={contactPhoneRef} type="tel" value={draft.contactPhone} onChange={e => set('contactPhone', e.target.value)} placeholder="Enter contact phone" /></Field>
-        <Field label="Contact Email"><input type="email" value={draft.contactEmail} onChange={e => set('contactEmail', e.target.value)} placeholder="customer@example.com" /></Field>
+        <Field label="Contact Person *"><input ref={contactPersonRef} type="text" value={draft.contactPerson} onChange={e => set('contactPerson', e.target.value)} placeholder="Enter contact name" name="opportunity-details-editor-contact-person" /></Field>
+        <Field label="Contact Phone *"><input ref={contactPhoneRef} type="tel" value={draft.contactPhone} onChange={e => set('contactPhone', e.target.value)} placeholder="Enter contact phone" name="opportunity-details-editor-contact-phone" /></Field>
+        <Field label="Contact Email"><input type="email" value={draft.contactEmail} onChange={e => set('contactEmail', e.target.value)} placeholder="customer@example.com" name="opportunity-details-editor-contact-email" /></Field>
       </div>
 
       <div className="opportunity-details-group">Commercial information</div>
       <div className="dgrid2 opportunity-details-grid">
-        <Field label="Payment terms"><input value={draft.paymentTerms} onChange={e => set('paymentTerms', e.target.value)} /></Field>
-        <Field label="Delivery terms"><input value={draft.deliveryTerms} onChange={e => set('deliveryTerms', e.target.value)} /></Field>
-        <Field label="Incoterms"><input value={draft.incoterms} onChange={e => set('incoterms', e.target.value)} /></Field>
-        <div className="opportunity-details-wide"><Field label="Commercial notes"><textarea rows={3} value={draft.commercialNotes} onChange={e => set('commercialNotes', e.target.value)} /></Field></div>
+        <Field label="Payment terms"><input value={draft.paymentTerms} onChange={e => set('paymentTerms', e.target.value)} name="opportunity-details-editor-payment-terms" /></Field>
+        <Field label="Delivery terms"><input value={draft.deliveryTerms} onChange={e => set('deliveryTerms', e.target.value)} name="opportunity-details-editor-delivery-terms" /></Field>
+        <Field label="Incoterms"><input value={draft.incoterms} onChange={e => set('incoterms', e.target.value)} name="opportunity-details-editor-incoterms" /></Field>
+        <div className="opportunity-details-wide"><Field label="Commercial notes"><textarea rows={3} value={draft.commercialNotes} onChange={e => set('commercialNotes', e.target.value)} name="opportunity-details-editor-commercial-notes" /></Field></div>
       </div>
 
-      <Field label="Forecast"><input type="checkbox" checked={draft.forecast} onChange={e => set('forecast', e.target.checked)} /></Field>
-      <Field label="Remarks"><textarea rows={3} value={draft.remarks} onChange={e => set('remarks', e.target.value)} /></Field>
+      <Field label="Forecast"><input type="checkbox" checked={draft.forecast} onChange={e => set('forecast', e.target.checked)} name="opportunity-details-editor-checkbox-3" /></Field>
+      <Field label="Remarks"><textarea rows={3} value={draft.remarks} onChange={e => set('remarks', e.target.value)} name="opportunity-details-editor-remarks" /></Field>
       {error && <p role="alert" className="warnbox">{error}</p>}
       <div className="opportunity-details-actions">
         <button className="primary" disabled={!dirty} onClick={save}>Save changes</button>

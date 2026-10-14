@@ -131,17 +131,17 @@ export default function RateSheetPanel({ opp, est, readOnly = false, onConfirmSe
           <div className="service-form-stack">
             <label className="service-form-field">To
               <input className="service-form-control" type="text" value={emailTo} disabled={readOnly} onChange={e => setEmailTo(e.target.value)}
-                placeholder="customer@company.com" />
+                placeholder="customer@company.com" name="rate-sheet-panel-email-to" />
             </label>
             <label className="service-form-field">Subject
-              <input className="service-form-control" type="text" value={subject} disabled={readOnly} onChange={e => setSubject(e.target.value)} />
+              <input className="service-form-control" type="text" value={subject} disabled={readOnly} onChange={e => setSubject(e.target.value)} name="rate-sheet-panel-subject" />
             </label>
             <label className="service-form-field">CC
-              <input className="service-form-control" type="text" value={emailCc} disabled={readOnly} onChange={e => setEmailCc(e.target.value)} />
+              <input className="service-form-control" type="text" value={emailCc} disabled={readOnly} onChange={e => setEmailCc(e.target.value)} name="rate-sheet-panel-email-cc" />
             </label>
             <label className="service-form-field">Email body
               <textarea className="service-form-control service-rate-email-body" rows={14} value={emailBody} disabled={readOnly}
-                onChange={e => setEmailBody(e.target.value)} />
+                onChange={e => setEmailBody(e.target.value)} name="rate-sheet-panel-email-body" />
             </label>
           </div>
 

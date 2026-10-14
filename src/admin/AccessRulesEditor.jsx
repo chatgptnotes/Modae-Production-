@@ -82,7 +82,7 @@ export default function AccessRulesEditor({ store, canEdit }) {
         {[['pages', 'Page access', ACCESS_PAGES], ['actions', 'Allowed actions', ACCESS_ACTIONS]].map(([collection, title, entries]) => <table key={collection} className="access-rules-matrix">
           <caption>{title}</caption>
           <thead><tr><th scope="col">{collection === 'pages' ? 'Page' : 'Action'}</th>{ROLES.map(([role, label]) => <th scope="col" key={role}>{label}</th>)}</tr></thead>
-          <tbody>{entries.map(({ id, label }) => <tr key={id}><th scope="row">{label}</th>{ROLES.map(([role, roleLabel]) => <td key={role}><input type="checkbox" aria-label={`${roleLabel}: ${label}`} checked={draft.accessPolicy.roles[role][collection].includes(id)} onChange={event => toggle(role, collection, id, event.target.checked)} /></td>)}</tr>)}</tbody>
+          <tbody>{entries.map(({ id, label }) => <tr key={id}><th scope="row">{label}</th>{ROLES.map(([role, roleLabel]) => <td key={role}><input type="checkbox" aria-label={`${roleLabel}: ${label}`} checked={draft.accessPolicy.roles[role][collection].includes(id)} onChange={event => toggle(role, collection, id, event.target.checked)} name="access-rules-editor-checkbox" /></td>)}</tr>)}</tbody>
         </table>)}
       </div>
     </fieldset>
@@ -90,17 +90,17 @@ export default function AccessRulesEditor({ store, canEdit }) {
       <legend>Opportunity ID format</legend>
       <p className="hint">Applies to newly created opportunities. Existing IDs stay unchanged. Dates follow India Standard Time.</p>
       <div className="access-rules-numbering">
-        <label>Prefix<input value={draft.opportunityNumbering.prefix} maxLength={12} placeholder="Optional, e.g. OPP" onChange={event => edit({ opportunityNumbering: { ...draft.opportunityNumbering, prefix: event.target.value.toUpperCase() } })} /></label>
-        <label>Date format<select value={draft.opportunityNumbering.dateFormat} onChange={event => edit({ opportunityNumbering: { ...draft.opportunityNumbering, dateFormat: event.target.value } })}>{['YYMM', 'YYYYMM', 'YYYY', 'none'].map(value => <option value={value} key={value}>{value === 'none' ? 'No date' : value}</option>)}</select></label>
-        <label>Separator<select value={draft.opportunityNumbering.separator} onChange={event => edit({ opportunityNumbering: { ...draft.opportunityNumbering, separator: event.target.value } })}><option value="">None</option><option value="-">Hyphen (-)</option></select></label>
-        <label>Sequence digits<input type="number" min={3} max={8} value={draft.opportunityNumbering.sequenceWidth} onChange={event => edit({ opportunityNumbering: { ...draft.opportunityNumbering, sequenceWidth: event.target.value === '' ? '' : Number(event.target.value) } })} /></label>
-        <label>Sequence resets<select value={draft.opportunityNumbering.reset} onChange={event => edit({ opportunityNumbering: { ...draft.opportunityNumbering, reset: event.target.value } })}>{[['monthly', 'Monthly'], ['yearly', 'Yearly'], ['continuous', 'Never']].map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+        <label>Prefix<input value={draft.opportunityNumbering.prefix} maxLength={12} placeholder="Optional, e.g. OPP" onChange={event => edit({ opportunityNumbering: { ...draft.opportunityNumbering, prefix: event.target.value.toUpperCase() } })} name="access-rules-editor-prefix" /></label>
+        <label>Date format<select value={draft.opportunityNumbering.dateFormat} onChange={event => edit({ opportunityNumbering: { ...draft.opportunityNumbering, dateFormat: event.target.value } })} name="access-rules-editor-date-format">{['YYMM', 'YYYYMM', 'YYYY', 'none'].map(value => <option value={value} key={value}>{value === 'none' ? 'No date' : value}</option>)}</select></label>
+        <label>Separator<select value={draft.opportunityNumbering.separator} onChange={event => edit({ opportunityNumbering: { ...draft.opportunityNumbering, separator: event.target.value } })} name="access-rules-editor-separator"><option value="">None</option><option value="-">Hyphen (-)</option></select></label>
+        <label>Sequence digits<input type="number" min={3} max={8} value={draft.opportunityNumbering.sequenceWidth} onChange={event => edit({ opportunityNumbering: { ...draft.opportunityNumbering, sequenceWidth: event.target.value === '' ? '' : Number(event.target.value) } })} name="access-rules-editor-sequence-width" /></label>
+        <label>Sequence resets<select value={draft.opportunityNumbering.reset} onChange={event => edit({ opportunityNumbering: { ...draft.opportunityNumbering, reset: event.target.value } })} name="access-rules-editor-reset">{[['monthly', 'Monthly'], ['yearly', 'Yearly'], ['continuous', 'Never']].map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
       </div>
       <p className="access-rules-preview">Provisional preview: <output aria-live="polite">{preview || 'Choose a valid date and reset combination'}</output></p>
       <p className="hint">The final ID is reserved when an opportunity is created. Monthly resets require a month in the date; yearly resets require a year.</p>
     </fieldset>
     <div className="access-rules-save">
-      <label>Reason for change<input disabled={disabled} value={reason} maxLength={1000} placeholder="Describe why these rules are changing" onChange={event => setReason(event.target.value)} /></label>
+      <label>Reason for change<input disabled={disabled} value={reason} maxLength={1000} placeholder="Describe why these rules are changing" onChange={event => setReason(event.target.value)} name="access-rules-editor-reason" /></label>
       <div className="access-rules-buttons">
         <button type="button" className="primary" disabled={disabled || !dirty || !reason.trim()} onClick={save}>Save access rules</button>
         <button type="button" disabled={!canEdit || busy} onClick={load}>{dirty || stale ? 'Cancel and reload' : 'Reload rules'}</button>

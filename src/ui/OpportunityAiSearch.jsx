@@ -65,7 +65,7 @@ export default function OpportunityAiSearch({ value, onChange, identity, context
   return <div className="opportunity-ai-search" ref={root}>
     <label className="tracker-search" aria-label="Search all opportunities">
       <Icon name="search" size={14} />
-      <input ref={input} type="search" placeholder="Search opportunities or ask AI…" value={value} maxLength={1500}
+      <input ref={input} type="search" name="opportunity-search" placeholder="Search opportunities or ask AI…" value={value} maxLength={1500}
         aria-controls={open ? 'opportunity-ai-search-menu' : undefined} aria-expanded={open && !!value.trim()}
         onFocus={() => { if (!suppressFocusOpen.current) setOpen(true) }} onChange={event => { ticket.current++; onChange(event.target.value); setOpen(true); setState({ status: 'idle', answers: [] }) }}
         onKeyDown={event => { if (event.key === 'ArrowDown' && value.trim()) { event.preventDefault(); setOpen(true); requestAnimationFrame(() => popup.current?.querySelector('button')?.focus()) } }} />
@@ -74,7 +74,7 @@ export default function OpportunityAiSearch({ value, onChange, identity, context
       {state.status === 'loading' ? <p role="status">Interpreting your search…</p> : state.status === 'clarify' ? <>
         <strong>{state.question}</strong>
         <div className="opportunity-ai-choices">{state.choices.map(choice => <button key={choice} type="button" onClick={() => clarify(choice)}>{choice}</button>)}</div>
-        <form onSubmit={event => { event.preventDefault(); clarify(answer) }}><input type="text" aria-label="Search clarification" placeholder="Or type your answer" value={answer} maxLength={300} onChange={event=>setAnswer(event.target.value)} /><button type="submit" disabled={!answer.trim()}>Continue</button></form>
+        <form onSubmit={event => { event.preventDefault(); clarify(answer) }}><input type="text" name="opportunity-search-clarification" aria-label="Search clarification" placeholder="Or type your answer" value={answer} maxLength={300} onChange={event=>setAnswer(event.target.value)} /><button type="submit" disabled={!answer.trim()}>Continue</button></form>
       </> : <>
         {state.message && <p role={state.status === 'error' ? 'alert' : 'status'}>{state.message}</p>}
         <button type="button" className="opportunity-ai-action" onClick={() => run(state.answers)}><span aria-hidden="true">✦</span> {state.status === 'error' ? 'Retry AI search' : 'Search with AI'}</button>

@@ -15,7 +15,7 @@ export default function MobileMore() {
   const [query, setQuery] = useState('')
   const destinations = mobileDestinations(store, query)
   return <div className="page mobile-more">
-    <label className="mobile-menu-search"><span>Find a page</span><span className="mobile-menu-search-field"><Icon name="search" size={20} /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search pages and tools" /></span></label>
+    <label className="mobile-menu-search"><span>Find a page</span><span className="mobile-menu-search-field"><Icon name="search" size={20} /><input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search pages and tools" name="mobile-more-query" /></span></label>
     <nav className="mobile-destinations" aria-label="All workspace pages">
       {['Sales', 'Records', 'Administration'].map(group => {
         const records = ['/folders', '/customers', '/pricelists', '/audit']

@@ -194,7 +194,7 @@ function WrapInput({ value, onChange, title, label, disabled = false, onBlur, on
         // field the rest of the app renders as one line.
         e.target.value = e.target.value.replace(/\s*\n+\s*/g, ' ')
         onChange(e)
-      }} />
+      }} name="tracker-value" />
   )
 }
 
@@ -580,19 +580,19 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
           <ColumnCondition key={col.key} type={colType(col.key)} label={col.label} value={conditions[col.key]} onApply={condition => { setConditions(current => ({ ...current, [col.key]: condition })); close() }} />
           <div className="tracker-column-values">
           <input className="filter-search" type="search" autoFocus aria-label={`Search ${col.label} values`} placeholder={`Search ${col.label}`} value={filterSearch[col.key] || ''}
-            onChange={e => setFilterSearch({ ...filterSearch, [col.key]: e.target.value })} />
+            onChange={e => setFilterSearch({ ...filterSearch, [col.key]: e.target.value })} name="tracker-search" />
           <label className="fitem">
             <input type="checkbox" ref={el => { if (el) el.indeterminate = visibleValues.some(isChecked) && !visibleValues.every(isChecked) }} checked={visibleValues.length > 0 && visibleValues.every(v => !active || active.has(v))}
               onChange={() => setFilters(current => ({
                 ...current,
                 [col.key]: toggleSubsetIn(current[col.key], values, visibleValues),
-              }))} /> (Select All)
+              }))} name="tracker-checkbox" /> (Select All)
           </label>
           <div className="tracker-column-value-list">
           {!visibleValues.length && <p className="hint">No matching values</p>}
           {visibleValues.map(v => (
             <label className="fitem" key={filterValueKey(v)}>
-              <input type="checkbox" checked={isChecked(v)} onChange={() => toggle(v)} /> <span>{filterValueLabel(v)}</span>
+              <input type="checkbox" checked={isChecked(v)} onChange={() => toggle(v)} name="tracker-checkbox-2" /> <span>{filterValueLabel(v)}</span>
             </label>
           ))}
           </div></div>
@@ -657,7 +657,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
               </div>
             )}
           </div>
-          {phone && <select aria-label="Opportunity list view" value={sheet} onChange={event => setSheet(event.target.value)}><option>Opportunities</option><option>My Orders</option></select>}
+          {phone && <select name="opportunity-list-view" aria-label="Opportunity list view" value={sheet} onChange={event => setSheet(event.target.value)}><option>Opportunities</option><option>My Orders</option></select>}
           <button type="button" className="tracker-columns-toggle"
             onClick={() => { setColView(colView === 'key' ? 'all' : 'key'); setMobileTable(true) }}
             title={colView === 'key'
@@ -665,7 +665,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
               : `Show only the working columns: ${KEY_COLS.length} of ${COLS.length}`}>
             {colView === 'key' ? `All ${COLS.length + 1} columns` : 'Key columns'}
           </button>
-          <input ref={pipelineFileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onPipelineFile} />
+          <input ref={pipelineFileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onPipelineFile} name="tracker-file" />
           {store.canPerform?.('opportunities.create') !== false && (onCreateOpportunity || canSeePage(store.role, 'new')) && (onCreateOpportunity ? (
             <button
               className="tracker-create-logo"

@@ -146,7 +146,7 @@ export default function EditableOpportunityCell({ value, checked, onChange, as: 
     {editing && productsOpen && createPortal(<>
       <div className="filter-overlay" onClick={() => setProductsOpen(false)} />
       <div className="filter-pop opportunity-cell-products" role="dialog" aria-label={`Choose ${name}`} style={{ position: 'fixed', ...position }} onKeyDown={keyDown}>
-        {options.map(option => <label className="fitem" key={option.value}><input autoFocus={option === options[0]} type="checkbox" checked={(draft || []).includes(option.value)} onChange={() => immediate((draft || []).includes(option.value) ? draft.filter(item => item !== option.value) : [...(draft || []), option.value])} />{option.label}</label>)}
+        {options.map(option => <label className="fitem" key={option.value}><input autoFocus={option === options[0]} type="checkbox" checked={(draft || []).includes(option.value)} onChange={() => immediate((draft || []).includes(option.value) ? draft.filter(item => item !== option.value) : [...(draft || []), option.value])} name="editable-opportunity-cell-checkbox" />{option.label}</label>)}
         <button type="button" onClick={() => setProductsOpen(false)}>Done</button>
       </div>
     </>, document.body)}

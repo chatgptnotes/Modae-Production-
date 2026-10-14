@@ -28,10 +28,10 @@ export default function BookingReview({ store, opp, mode = 'history' }) {
     <h3>{mode === 'po' ? 'Verify customer PO booking details' : 'Confirm historical order booking'}</h3>
     <p className="hint">Verify the signed customer PO or contract. For historical Won opportunities, this is a review of an existing commitment. Enter the accepted net value excluding GST; convert foreign-currency orders to INR and record the exchange rate in the evidence note.</p>
     <div className="booking-review-fields" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'end' }}>
-      <label>Customer PO / contract reference<input required value={draft.po} onChange={field('po')} /></label>
-      <label>Actual booking date<input required type="date" max={businessDate()} value={draft.booked} onChange={field('booked')} /></label>
-      <label>Accepted net value (K₹)<input required type="number" min="0" step="any" value={draft.valueK} onChange={field('valueK')} /></label>
-      <label className="booking-review-evidence">Supporting document / evidence<input required value={draft.evidence} onChange={field('evidence')} placeholder="Document reference and verification notes" /></label>
+      <label>Customer PO / contract reference<input required value={draft.po} onChange={field('po')} name="booking-review-po" /></label>
+      <label>Actual booking date<input required type="date" max={businessDate()} value={draft.booked} onChange={field('booked')} name="booking-review-booked" /></label>
+      <label>Accepted net value (K₹)<input required type="number" min="0" step="any" value={draft.valueK} onChange={field('valueK')} name="booking-review-value-k" /></label>
+      <label className="booking-review-evidence">Supporting document / evidence<input required value={draft.evidence} onChange={field('evidence')} placeholder="Document reference and verification notes" name="booking-review-evidence" /></label>
       <button className="primary" type="submit">{mode === 'po' ? 'Save PO details for joint acceptance' : 'Confirm booking'}</button>
     </div>
     {error && <p role="alert">{error}</p>}

@@ -178,7 +178,7 @@ export default function WorkbookPreview({ workbook, editable = false, onChange, 
                       onKeyDown={event => { if (editableCell && (event.key === 'Enter' || event.key === 'F2')) { event.preventDefault(); beginEdit(sheet.name, rowIndex, cell.columnIndex, cell.value) } }}>
                       {isEditing ? <textarea autoFocus className="template-cell-editor" aria-label={`${sheet.name} row ${rowIndex + 1} column ${cell.columnIndex + 1}`} value={draft}
                         onChange={event => setDraft(event.target.value)} onBlur={() => finishEdit()}
-                        onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); finishEdit(true) } if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); finishEdit() } }} />
+                        onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); finishEdit(true) } if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); finishEdit() } }} name="workbook-preview-draft" />
                         : <span className="template-cell-value">{cell.value || '\u00a0'}</span>}
                     </td>
                   })}

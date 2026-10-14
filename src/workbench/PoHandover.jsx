@@ -91,7 +91,7 @@ export default function PoHandover({ opp }) {
                       <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                         <input placeholder="Deviation reason (LJS/AH)" value={reasons[i] || ''} style={{ width: 170 }}
                           disabled={!(role === 'LJS' || role === 'AH')}
-                          onChange={e => setReasons({ ...reasons, [i]: e.target.value })} />
+                          onChange={e => setReasons({ ...reasons, [i]: e.target.value })} name="po-handover-deviation-reason-ljs-ah" />
                         <button disabled={!(role === 'LJS' || role === 'AH') || !(reasons[i] || '').trim()}
                           title={role === 'LJS' || role === 'AH' ? '' : 'LJS / AH only'}
                           onClick={() => approveDeviation(i)}>
@@ -137,7 +137,7 @@ export default function PoHandover({ opp }) {
               {g.items.map((it, ii) => (
                 <div key={ii} className="check-row">
                   <input type="checkbox" checked={!!it.done} disabled={ho.approved}
-                    onChange={e => store.hoToggleItem(opp.id, gi, ii, e.target.checked)} />
+                    onChange={e => store.hoToggleItem(opp.id, gi, ii, e.target.checked)} name="po-handover-checkbox" />
                   <span>{it.n}</span>
                   <Chip tone="grey">{displayRole(it.owner)}</Chip>
                   {it.done ? <Chip tone="state-Accepted">Complete</Chip> : <Chip tone="state-Review">Pending</Chip>}

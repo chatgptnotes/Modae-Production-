@@ -189,7 +189,7 @@ export function WorkspaceSyncRuntime() {
       {review.entry.localOnly&&<p role="alert">This editor contains form inputs that are not included in this comparison. Merging is paused to protect them. Keep reviewing later to copy your inputs, or explicitly discard this editor’s drafts.</p>}
       {[...new Set([...Object.keys(review.entry.base.data||{}),...Object.keys(review.local),...Object.keys(review.remote.data||{})])].filter(k=>JSON.stringify(review.entry.base.data?.[k])!==JSON.stringify(review.local[k])||JSON.stringify(review.entry.base.data?.[k])!==JSON.stringify(review.remote.data?.[k])).map(k=><div className="workspace-sync-field" key={k}>
         <strong>{k}</strong><label>Saved elsewhere<pre>{JSON.stringify(review.remote.data?.[k],null,2)??'(removed)'}</pre></label><label>Your draft<pre>{JSON.stringify(review.local[k],null,2)??'(removed)'}</pre></label>
-        {JSON.stringify(review.entry.base.data?.[k])!==JSON.stringify(review.local[k])&&<label><input type="checkbox" checked={review.choices[k]==='mine'} onChange={e=>setReview({...review,choices:{...review.choices,[k]:e.target.checked?'mine':'server'}})} /> Keep my value</label>}
+        {JSON.stringify(review.entry.base.data?.[k])!==JSON.stringify(review.local[k])&&<label><input type="checkbox" checked={review.choices[k]==='mine'} onChange={e=>setReview({...review,choices:{...review.choices,[k]:e.target.checked?'mine':'server'}})} name="workspace-sync-checkbox" /> Keep my value</label>}
       </div>)}
       <button onClick={()=>setReview(null)}>Keep reviewing later</button>
       <button disabled={review.entry.localOnly||!review.remote.available||workspaceSyncState.suspended} onClick={()=>{

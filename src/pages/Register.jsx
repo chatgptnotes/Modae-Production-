@@ -323,19 +323,19 @@ export default function Register() {
               <CustomerPicker customers={store.customers} value={identityDraft.sellTo} onChange={value => updateIdentity('sellTo', value)} allowCreate={false} label="" />
             </label>
             <label className="afield">Sell To Customer Location {registrationRequired.has('sellToCustomerLocation') && <span className="required-mark">*</span>}
-              <input value={identityDraft.sellToCustomerLocation || ''} onChange={e => updateIdentity('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" />
+              <input value={identityDraft.sellToCustomerLocation || ''} onChange={e => updateIdentity('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" name="register-enter-customer-location" />
             </label>
             <label className="afield">EUC Name {registrationRequired.has('eucName') && <span className="required-mark">*</span>}
               <CustomerPicker customers={store.customers} value={identityDraft.eucName} onChange={value => updateIdentity('eucName', value)} allowCreate={false} label="" />
             </label>
             <label className="afield">EUC Location {registrationRequired.has('eucLocation') && <span className="required-mark">*</span>}
-              <input value={identityDraft.eucLocation} onChange={e => updateIdentity('eucLocation', e.target.value)} placeholder="Enter end user location" />
+              <input value={identityDraft.eucLocation} onChange={e => updateIdentity('eucLocation', e.target.value)} placeholder="Enter end user location" name="register-euc-location" />
             </label>
             <label className="afield">Contact Person {registrationRequired.has('contactPerson') && <span className="required-mark">*</span>}
-              <input value={identityDraft.contactPerson} onChange={e => updateIdentity('contactPerson', e.target.value)} placeholder="Enter contact person" />
+              <input value={identityDraft.contactPerson} onChange={e => updateIdentity('contactPerson', e.target.value)} placeholder="Enter contact person" name="register-contact-person" />
             </label>
             <label className="afield">Contact Phone {registrationRequired.has('contactPhone') && <span className="required-mark">*</span>}
-              <input type="tel" value={identityDraft.contactPhone} onChange={e => updateIdentity('contactPhone', e.target.value)} placeholder="Enter contact phone" />
+              <input type="tel" value={identityDraft.contactPhone} onChange={e => updateIdentity('contactPhone', e.target.value)} placeholder="Enter contact phone" name="register-contact-phone" />
             </label>
           </div>
           {missingIdentity.length > 0 && <div className="warnbox" style={{ marginTop: 8 }}>Complete: {missingIdentity.join(', ')}.</div>}
@@ -346,7 +346,7 @@ export default function Register() {
 
           <label className="afield" style={{ display: 'block', marginTop: 10 }}>
             Owner
-            <select value={owner} onChange={e => setOwner(e.target.value)} style={{ display: 'block', marginTop: 2 }}>
+            <select value={owner} onChange={e => setOwner(e.target.value)} style={{ display: 'block', marginTop: 2 }} name="register-owner">
               {OWNERS.map(o => <option key={o} value={o}>{labelFor('owner', o)}</option>)}
             </select>
           </label>
@@ -357,29 +357,29 @@ export default function Register() {
           {regionalOwner && owner !== regionalOwner && (
             <label className="afield" style={{ display: 'block', marginTop: 6 }}>
               Owner override reason
-              <textarea rows={2} value={ownerOverrideReason} onChange={e => setOwnerOverrideReason(e.target.value)} placeholder="Required for an LJS/AH override" />
+              <textarea rows={2} value={ownerOverrideReason} onChange={e => setOwnerOverrideReason(e.target.value)} placeholder="Required for an LJS/AH override" name="register-owner-override-reason" />
             </label>
           )}
 
           <div className="section-title" style={{ marginTop: 12 }}>Pipeline metadata</div>
           <div className="registration-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
             <label className="afield">Opportunity type
-              <select value={oppType} onChange={e => setOppType(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+              <select value={oppType} onChange={e => setOppType(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }} name="register-opp-type">
                 {OPP_TYPES.map(t => <option key={t} value={t}>{labelFor('oppType', t)}</option>)}
               </select>
             </label>
             <label className="afield">Business unit
-              <select value={bu} onChange={e => setBu(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+              <select value={bu} onChange={e => setBu(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }} name="register-bu">
                 {BUS.map(b => <option key={b} value={b}>{labelFor('bu', b)}</option>)}
               </select>
             </label>
             <label className="afield">Segment
-              <select value={segment} onChange={e => setSegment(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+              <select value={segment} onChange={e => setSegment(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }} name="register-segment">
                 {SEGMENTS.map(s => <option key={s} value={s}>{labelFor('segment', s)}</option>)}
               </select>
             </label>
             <label className="afield">Equipment / Product Family
-              <select value={product} onChange={e => setProduct(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }}>
+              <select value={product} onChange={e => setProduct(e.target.value)} style={{ display: 'block', marginTop: 2, width: '100%' }} name="register-product">
                 {PRODUCTS.map(p => <option key={p} value={p}>{p === 'Various' ? 'Multiple equipment items' : p}</option>)}
               </select>
             </label>

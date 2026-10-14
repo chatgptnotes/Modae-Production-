@@ -40,7 +40,7 @@ const fieldClass = (validation, field, aiMissing) => {
 function Select({ field, options, placeholder }) {
   const { f, set, validation, aiMissing, labelFor } = React.useContext(FormCtx)
   return (
-    <select value={f[field]} onChange={set(field)} className={fieldClass(validation, field, aiMissing)}>
+    <select value={f[field]} onChange={set(field)} className={fieldClass(validation, field, aiMissing)} name={`intake-form-${field}`}>
       <option value="">{placeholder}</option>
       {options.map(o => <option key={o} value={o}>{labelFor(field, o)}</option>)}
     </select>
@@ -70,7 +70,7 @@ function ProductDropdown({ options }) {
                   product: e.target.checked
                     ? [...selectedProducts, option]
                     : selectedProducts.filter(product => product !== option),
-                }))}
+                }))} name="intake-form-checkbox"
               />
               <span>{option === 'Various' ? 'Multiple equipment items' : labelFor('product', option)}</span>
             </label>
@@ -108,7 +108,7 @@ function Input({ field, type = 'text', placeholder, list }) {
   return (
     <input type={type} placeholder={placeholder} value={f[field]} onChange={set(field)}
       list={list} className={fieldClass(validation, field, aiMissing)}
-      title={aiMissing?.has(field) ? 'Not found in the uploaded document — please fill this in' : undefined} />
+      title={aiMissing?.has(field) ? 'Not found in the uploaded document — please fill this in' : undefined} name={`intake-form-${field}`} />
   )
 }
 
@@ -481,7 +481,7 @@ export default function IntakeForm({ destinationPicker = null }) {
                     type="file"
                     accept=".pdf,application/pdf,.eml,.msg,message/rfc822,.png,.jpg,.jpeg,.webp,image/*"
                     onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
-                    style={{ display: 'none' }}
+                    style={{ display: 'none' }} name="intake-form-file"
                   />
                 </div>
               ) : (

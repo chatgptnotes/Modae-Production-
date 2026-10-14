@@ -31,3 +31,10 @@ test('workspace API errors retain authentication status and server code', async 
     error => error.status === 401 && error.code === 'AUTH_INVALID',
   )
 })
+
+test('a previous-session bootstrap cannot replace the active workspace generation', async () => {
+  const { getWorkspaceGeneration } = await import('../src/workspaceApi.js')
+  await fetchWorkspace('current-token', async () => new Response(JSON.stringify({ data: {} }), { headers: { 'x-workspace-generation': '7' } }))
+  await assert.rejects(fetchWorkspace('old-token', async () => new Response(JSON.stringify({ data: {} }), { headers: { 'x-workspace-generation': '2' } }), { isCurrent: () => false }), /Session changed/)
+  assert.equal(getWorkspaceGeneration(), '7')
+})

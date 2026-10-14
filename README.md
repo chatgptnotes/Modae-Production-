@@ -331,6 +331,11 @@ cloud persistence. When running on localhost, seeded demo credentials may fall
 back to browser-only local auth if Supabase rejects them; deployed environments
 always require Supabase Auth.
 
+Connected sign-in and restored sessions verify the account's active workspace
+profile before showing business screens. “Loading your account” prevents stale
+browser roles from selecting the wrong owner scope; a failed check offers Retry
+or Back to sign in. Profile correction preserves same-account business drafts.
+
 ## Getting started
 
 ```bash

@@ -82,7 +82,7 @@ export default function MyOpps() {
         <Link className="btn primary" to="/new">Create Opportunity</Link>
       </div>
 
-      {phone && <label className="phone-status-search">Search opportunities<input type="search" placeholder="Customer, opportunity, ID or stage" value={query} onChange={event => setQuery(event.target.value)} /></label>}
+      {phone && <label className="phone-status-search">Search opportunities<input type="search" placeholder="Customer, opportunity, ID or stage" value={query} onChange={event => setQuery(event.target.value)} name="my-opps-query" /></label>}
       {phone && !table ? <section aria-label="Opportunities to update">
         {pageRows.map(o => <button type="button" className="phone-record" key={o.id} onClick={() => drawer.open({ type: 'opp', id: o.id })}>
           <strong>{o.sellTo || 'Customer not recorded'}</strong>

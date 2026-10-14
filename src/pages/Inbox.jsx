@@ -214,12 +214,12 @@ function ReasonBox({ title, categories, confirmLabel, tone = '', onConfirm, onCa
     <div className="reason-box">
       <div className="q-label">{title}</div>
       {categories && (
-        <select value={category} onChange={e => setCategory(e.target.value)}>
+        <select value={category} onChange={e => setCategory(e.target.value)} name="inbox-category">
           {categories.map(r => <option key={r}>{r}</option>)}
         </select>
       )}
       <textarea rows={2} value={note} onChange={e => setNote(e.target.value)}
-        placeholder="Why? This is recorded against the lead and shown in the audit trail." />
+        placeholder="Why? This is recorded against the lead and shown in the audit trail." name="inbox-note" />
       <div className="toolbar" style={{ margin: 0 }}>
         <button className={tone} disabled={!ready} title={ready ? undefined : 'A written reason is required'}
           onClick={() => onConfirm(category, note.trim())}>{confirmLabel}</button>
@@ -486,7 +486,7 @@ function KycReviewModal({ item, row, onClose, onDecision }) {
         {row?.scan?.warnings?.length > 0 && <span className="hint">{row.scan.warnings.join(' ')}</span>}
       </div>
       <label className="modal-prompt-field">Rejection reason <span className="hint">required only for Reject</span>
-        <textarea rows={3} value={reason} onChange={event => { setReason(event.target.value); setError('') }} placeholder="Explain what must be corrected" />
+        <textarea rows={3} value={reason} onChange={event => { setReason(event.target.value); setError('') }} placeholder="Explain what must be corrected" name="inbox-reason" />
       </label>
       {error && <ErrBox>{error}</ErrBox>}
       <div className="forms-actions modal-actions kyc-review-actions">
@@ -504,10 +504,10 @@ function KycRejectionEmailModal({ draft, busy, error, onChange, onSend, onClose 
       <p className="modal-message">AI drafted this message from the recorded rejection reason. Review it before opening your email composer.</p>
       {error && <ErrBox>{error}</ErrBox>}
       <div className="proposal-email-fields">
-        <label>To<input value={draft.to || ''} onChange={event => onChange({ ...draft, to: event.target.value })} /></label>
-        <label>CC<input value={draft.cc || ''} onChange={event => onChange({ ...draft, cc: event.target.value })} /></label>
-        <label>Subject<input value={draft.subject || ''} onChange={event => onChange({ ...draft, subject: event.target.value })} /></label>
-        <label>Message<textarea rows={14} value={draft.body || ''} onChange={event => onChange({ ...draft, body: event.target.value })} /></label>
+        <label>To<input value={draft.to || ''} onChange={event => onChange({ ...draft, to: event.target.value })} name="inbox-input" /></label>
+        <label>CC<input value={draft.cc || ''} onChange={event => onChange({ ...draft, cc: event.target.value })} name="inbox-input-2" /></label>
+        <label>Subject<input value={draft.subject || ''} onChange={event => onChange({ ...draft, subject: event.target.value })} name="inbox-input-3" /></label>
+        <label>Message<textarea rows={14} value={draft.body || ''} onChange={event => onChange({ ...draft, body: event.target.value })} name="inbox-textarea" /></label>
       </div>
       <div className="forms-actions modal-actions">
         <button type="button" onClick={onClose} disabled={busy}>Close</button>
@@ -786,7 +786,7 @@ function LeadVerification({ lead, customerStatus, store }) {
             <Icon name={kycItemApproved(row) ? 'check' : row.state === 'Rejected' ? 'alert' : 'fileText'} size={14} />
             <span style={{ flex: 1 }}>{item} — <b>{kycItemApproved(row) ? `Approved (${row.mode === 'simulated' ? 'simulated' : 'uploaded'})` : row.state}</b>
               {kycIdentityKey(item) && <input className="kyc-identity-value" value={kycValues[item] || ''} disabled={!editable || kycItemApproved(row)} placeholder={`Enter ${kycIdentityKey(item)}`} aria-label={`${item} value`}
-                onChange={e => setKycValues(values => ({ ...values, [item]: e.target.value.toUpperCase() }))} />}
+                onChange={e => setKycValues(values => ({ ...values, [item]: e.target.value.toUpperCase() }))} name="inbox-input-4" />}
             </span>
             {editable && verification.kycRequestStatus !== 'cancelled' && (
               kycItemApproved(row)
@@ -830,7 +830,7 @@ function LeadVerification({ lead, customerStatus, store }) {
                       }}><Icon name="download" size={12} /> Download template</button>
                       <label role="menuitem" tabIndex={0} className="kyc-upload-menu-item"><Icon name="upload" size={12} /> Upload document
                         <input type="file" disabled={busy === item} style={{ display: 'none' }}
-                          onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; setMenuFor(''); if (file) { setDownloadedFor(''); setPendingUpload({ item, file }) } }} />
+                          onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; setMenuFor(''); if (file) { setDownloadedFor(''); setPendingUpload({ item, file }) } }} name="inbox-file" />
                       </label>
                       <button type="button" role="menuitem" onClick={async () => { setMenuFor(''); await saveKyc(item, null, 'simulated') }}><Icon name="bot" size={12} /> Simulate verification</button>
                     </span>
@@ -1301,18 +1301,18 @@ function LeadSourceContext({ lead, canAct, phoneLayout = false }) {
             <p className="hint modal-intro">Paste the customer’s reply or attach a document. The saved response will be added to the lead context and sent through AI re-reading.</p>
             <div className="mail-header-fields">
               <label>From
-                <input value={responseFrom} onChange={event => setResponseFrom(event.target.value)} placeholder="customer@company.com" />
+                <input value={responseFrom} onChange={event => setResponseFrom(event.target.value)} placeholder="customer@company.com" name="inbox-response-from" />
               </label>
               <label>Subject
-                <input value={responseSubject} onChange={event => setResponseSubject(event.target.value)} placeholder="Re: Clarification request" />
+                <input value={responseSubject} onChange={event => setResponseSubject(event.target.value)} placeholder="Re: Clarification request" name="inbox-response-subject" />
               </label>
             </div>
             <label className="mail-body-field">Reply body
-              <textarea rows={7} value={responseBody} onChange={event => setResponseBody(event.target.value)} placeholder="Paste the customer's clarification reply" />
+              <textarea rows={7} value={responseBody} onChange={event => setResponseBody(event.target.value)} placeholder="Paste the customer's clarification reply" name="inbox-response-body" />
             </label>
             <div className="mail-attachments">
               <label>Reply attachments</label>
-              <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={event => { addResponseFiles(event.target.files); event.target.value = '' }} />
+              <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={event => { addResponseFiles(event.target.files); event.target.value = '' }} name="inbox-file-2" />
               <button type="button" onClick={() => responseInput.current?.click()}><Icon name="upload" size={12} /> Add files</button>
             </div>
             {responseFiles.length > 0 && <div className="clarification-response-files">
@@ -1794,15 +1794,15 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
         )}
         {editFor?.idx === idx && (
           <span className="decision-ai-inline-edit">
-            <input value={editFor.val} aria-label={`Edit ${field.k}`} onChange={e => setEditFor({ ...editFor, val: e.target.value })} />
-            <input placeholder="Edit note" aria-label={`Edit note for ${field.k}`} value={editFor.note} onChange={e => setEditFor({ ...editFor, note: e.target.value })} />
+            <input value={editFor.val} aria-label={`Edit ${field.k}`} onChange={e => setEditFor({ ...editFor, val: e.target.value })} name="inbox-val" />
+            <input placeholder="Edit note" aria-label={`Edit note for ${field.k}`} value={editFor.note} onChange={e => setEditFor({ ...editFor, note: e.target.value })} name="inbox-note-2" />
             <button type="button" className="icon-action act-accept" aria-label="Save field edit" title="Save field edit" onClick={saveEdit}><Icon name="check" size={12} /></button>
             <button type="button" className="icon-action" aria-label="Cancel field edit" title="Cancel field edit" onClick={() => setEditFor(null)}><Icon name="x" size={12} /></button>
           </span>
         )}
         {rejFor?.idx === idx && (
           <span className="decision-ai-inline-edit">
-            <input placeholder="Rejection note required" aria-label={`Rejection note for ${field.k}`} value={rejFor.note} onChange={e => setRejFor({ ...rejFor, note: e.target.value })} />
+            <input placeholder="Rejection note required" aria-label={`Rejection note for ${field.k}`} value={rejFor.note} onChange={e => setRejFor({ ...rejFor, note: e.target.value })} name="inbox-note-3" />
             <button type="button" className="icon-action act-reject" aria-label="Save rejection" title="Save rejection" disabled={!rejFor.note.trim()} onClick={saveReject}><Icon name="check" size={12} /></button>
             <button type="button" className="icon-action" aria-label="Cancel rejection" title="Cancel rejection" onClick={() => setRejFor(null)}><Icon name="x" size={12} /></button>
           </span>
@@ -1961,7 +1961,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                     onKeyDown={e => {
                       if (e.key === 'Enter' && fillFor.val.trim()) { addMissing(m, fillFor.val, m); setFillFor(null) }
                       if (e.key === 'Escape') setFillFor(null)
-                    }} />
+                    }} name="inbox-val-2" />
                   <button className="act-accept" disabled={!fillFor.val.trim()}
                     onClick={() => { addMissing(m, fillFor.val, m); setFillFor(null) }}>
                     <Icon name="check" size={11} /> Save
@@ -2295,7 +2295,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     {reassignOpen && <Modal title="Reassign lead" onClose={() => setReassignOpen(false)} className="reassign-modal">
       <p className="modal-intro">Choose the salesperson who should own this lead.</p>
       <label className="reassign-modal-field">Assigned owner
-        <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
+        <select value={reassignTo} onChange={e => setReassignTo(e.target.value)} name="inbox-reassign-to">
           {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
         </select>
       </label>
@@ -2396,7 +2396,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                 onDrop={e => { e.preventDefault(); setDocDrag(false); addDocuments(e.dataTransfer.files) }}
                 onClick={() => docInput.current?.click()}>
                 <input ref={docInput} type="file" multiple style={{ display: 'none' }}
-                  onChange={e => { addDocuments(e.target.files); e.target.value = '' }} />
+                  onChange={e => { addDocuments(e.target.files); e.target.value = '' }} name="inbox-file-3" />
                 <div className="tender-drop-icon"><Icon name="upload" size={20} /></div>
                 <b>{addingDocs ? 'Reading…' : 'Add a document'}</b>
                 <div className="hint">
@@ -2417,18 +2417,18 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                     <b>Customer clarification received</b>
                     <div className="mail-header-fields">
                       <label>From
-                        <input value={responseFrom} onChange={e => setResponseFrom(e.target.value)} placeholder="customer@company.com" />
+                        <input value={responseFrom} onChange={e => setResponseFrom(e.target.value)} placeholder="customer@company.com" name="inbox-response-from-2" />
                       </label>
                       <label>Subject
-                        <input value={responseSubject} onChange={e => setResponseSubject(e.target.value)} placeholder="Re: Clarification request" />
+                        <input value={responseSubject} onChange={e => setResponseSubject(e.target.value)} placeholder="Re: Clarification request" name="inbox-response-subject-2" />
                       </label>
                     </div>
                     <label className="mail-body-field">Reply body
-                      <textarea rows={6} value={responseBody} onChange={e => setResponseBody(e.target.value)} placeholder="Paste the customer's clarification reply" />
+                      <textarea rows={6} value={responseBody} onChange={e => setResponseBody(e.target.value)} placeholder="Paste the customer's clarification reply" name="inbox-response-body-2" />
                     </label>
                     <div className="mail-attachments">
                       <label>Reply attachments</label>
-                      <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={e => { addResponseFiles(e.target.files); e.target.value = '' }} />
+                      <input ref={responseInput} type="file" multiple style={{ display: 'none' }} onChange={e => { addResponseFiles(e.target.files); e.target.value = '' }} name="inbox-file-4" />
                       <button type="button" onClick={() => responseInput.current?.click()}><Icon name="upload" size={12} /> Add files</button>
                     </div>
                     {responseFiles.map((file, i) => <div className="attach-row" key={`${file.name}-${i}`}><Icon name="fileText" size={13} /><span className="attach-name" style={{ flex: 1 }}>{file.name}</span><button type="button" onClick={() => setResponseFiles(responseFiles.filter((_, j) => j !== i))}>×</button></div>)}
@@ -2473,9 +2473,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   </div>
                   {editFor?.idx === idx
                     ? <div className="af-edit">
-                        <input value={editFor.val} onChange={e => setEditFor({ ...editFor, val: e.target.value })} />
+                        <input value={editFor.val} onChange={e => setEditFor({ ...editFor, val: e.target.value })} name="inbox-val-3" />
                         <input placeholder="Edit note (why the value changed)" value={editFor.note}
-                          onChange={e => setEditFor({ ...editFor, note: e.target.value })} />
+                          onChange={e => setEditFor({ ...editFor, note: e.target.value })} name="inbox-note-4" />
                         <div className="af-edit-actions">
                           <button className="primary icon-action" type="button" aria-label="Save field edit" title="Save field edit" onClick={saveEdit}><Icon name="check" size={14} /></button>
                           <button className="icon-action" type="button" aria-label="Cancel field edit" title="Cancel field edit" onClick={() => setEditFor(null)}><Icon name="x" size={14} /></button>
@@ -2491,7 +2491,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   {rejFor?.idx === idx && (
                     <div className="af-reject">
                       <input placeholder="Rejection note (required)" value={rejFor.note}
-                        onChange={e => setRejFor({ ...rejFor, note: e.target.value })} />
+                        onChange={e => setRejFor({ ...rejFor, note: e.target.value })} name="inbox-note-5" />
                       <button className="primary icon-action" type="button" aria-label="Save rejection" title="Save rejection" disabled={!rejFor.note.trim()} onClick={saveReject}><Icon name="check" size={14} /></button>
                       <button className="icon-action" type="button" aria-label="Cancel rejection" title="Cancel rejection" onClick={() => setRejFor(null)}><Icon name="x" size={14} /></button>
                     </div>
@@ -2579,11 +2579,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             </div>
           <label data-phone-field="Sell-to customer location"><span className="decision-field-heading">Sell To Customer Location {registrationRequired.has('sellToCustomerLocation') && <span className="required-mark">*</span>}</span>
             <div className="decision-value-row"><input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" /></div>
+              onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" name="inbox-sell-to-customer-location" /></div>
           </label>
           <label><span className="decision-field-heading">Opportunity scope {decisionAiMeta('scope', false)}</span>
             <div className="decision-value-row"><textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />{decisionAiStatus('scope')}</div>
+              onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" name="inbox-scope" />{decisionAiStatus('scope')}</div>
             </label>
           <label><span className="decision-field-heading">EUC Name {registrationRequired.has('eucName') && <span className="required-mark">*</span>} {decisionAiMeta('eucName', false)}</span>
             <div className="decision-value-row"><CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
@@ -2592,7 +2592,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           <label><span className="decision-field-heading">EUC Location {registrationRequired.has('eucLocation') && <span className="required-mark">*</span>} {decisionAiMeta('eucLocation', false)}</span>
             <div className="euc-location-search">
               <div className="decision-value-row"><input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
-                onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" />{decisionAiStatus('eucLocation')}</div>
+                onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" name="inbox-search-euc-city-or-state" />{decisionAiStatus('eucLocation')}</div>
               {eucLocationOpen && eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
                 {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
                   onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{[item.state, item.country].filter(Boolean).join(' · ')}</span></button>)}
@@ -2603,38 +2603,38 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           </label>
           <label><span className="decision-field-heading">Contact Person {registrationRequired.has('contactPerson') && <span className="required-mark">*</span>} {decisionAiMeta('contactPerson', false)}</span>
             <div className="decision-value-row"><input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" />{decisionAiStatus('contactPerson')}</div>
+              onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" name="inbox-contact-person" />{decisionAiStatus('contactPerson')}</div>
             </label>
           <label><span className="decision-field-heading">Contact Phone {registrationRequired.has('contactPhone') && <span className="required-mark">*</span>} {decisionAiMeta('contactPhone', false)}</span>
             <div className="decision-value-row"><input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" />{decisionAiStatus('contactPhone')}</div>
+              onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" name="inbox-contact-phone" />{decisionAiStatus('contactPhone')}</div>
           </label>
           <div className="lead-decision-subsection">Routing and ownership</div>
           <label><span className="decision-field-heading">Assigned owner</span>
             <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
-              onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })}>
+              onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })} name="inbox-owner">
               {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
             </select>
           </label>
           <label><span className="decision-field-heading">Opportunity type {decisionAiMeta('oppType', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
-              onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })}>
+              onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })} name="inbox-opp-type">
               {OPP_TYPES.map(type => <option key={type} value={type}>{labelFor('oppType', type)}</option>)}
             </select>{decisionAiStatus('oppType')}</div>
           </label>
           <label><span className="decision-field-heading">Inquiry type <span className="required-mark">*</span></span>
             <select value={decisionDraft.inquiryType} disabled={lead.status === 'Dropped'}
-              onChange={e => setDecisionDraft({ ...decisionDraft, inquiryType: e.target.value })}>
+              onChange={e => setDecisionDraft({ ...decisionDraft, inquiryType: e.target.value })} name="inbox-inquiry-type">
               <option value="">Select inquiry type</option>
               <option value="Budgetary">Budgetary</option>
               <option value="Firm/RFQ">Firm/RFQ</option>
             </select>
           </label>
           <label><span className="decision-field-heading">RFQ number {decisionDraft.inquiryType === 'Firm/RFQ' && <span className="required-mark">*</span>}</span>
-            <input value={decisionDraft.rfqNumber || ''} disabled={lead.status === 'Dropped'} onChange={e => setDecisionDraft({ ...decisionDraft, rfqNumber: e.target.value })} placeholder="Enter RFQ number" />
+            <input value={decisionDraft.rfqNumber || ''} disabled={lead.status === 'Dropped'} onChange={e => setDecisionDraft({ ...decisionDraft, rfqNumber: e.target.value })} placeholder="Enter RFQ number" name="inbox-enter-rfq-number" />
           </label>
           <label><span className="decision-field-heading">RFQ date {decisionDraft.inquiryType === 'Firm/RFQ' && <span className="required-mark">*</span>}</span>
-            <input type="date" value={decisionDraft.rfqDate || ''} disabled={lead.status === 'Dropped'} onChange={e => setDecisionDraft({ ...decisionDraft, rfqDate: e.target.value })} />
+            <input type="date" value={decisionDraft.rfqDate || ''} disabled={lead.status === 'Dropped'} onChange={e => setDecisionDraft({ ...decisionDraft, rfqDate: e.target.value })} name="inbox-date" />
           </label>
           <label><span className="decision-field-heading">Customer class {decisionAiMeta('customerStatus', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.customerStatus} disabled={lead.status === 'Dropped'}
@@ -2642,28 +2642,28 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                 setDecisionDraft({ ...decisionDraft, customerStatus: e.target.value })
                 setDecisionErr('')
                 setDecisionSaved(false)
-              }}>
+              }} name="inbox-customer-status">
               {CUSTOMER_STATUSES.map(status => <option key={status} value={status}>{labelFor('customerStatus', status)}</option>)}
             </select>{decisionAiStatus('customerStatus')}</div>
           </label>
           <OptionalLeadFields phone={phoneLayout}>
           <label><span className="decision-field-heading">Business unit {decisionAiMeta('bu', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
-              onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
+              onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })} name="inbox-bu">
               <option value="">Not specified</option>
               {BUS.map(bu => <option key={bu} value={bu}>{labelFor('bu', bu)}</option>)}
             </select>{decisionAiStatus('bu')}</div>
           </label>
           <label><span className="decision-field-heading">Segment {decisionAiMeta('segment', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
-              onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })}>
+              onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })} name="inbox-segment">
               <option value="">Not specified</option>
               {SEGMENTS.map(segment => <option key={segment} value={segment}>{labelFor('segment', segment)}</option>)}
             </select>{decisionAiStatus('segment')}</div>
           </label>
           <label><span className="decision-field-heading">Equipment / Product Family {decisionAiMeta('product', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
-              onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })}>
+              onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })} name="inbox-product">
               <option value="">Not specified</option>
               {PRODUCTS.map(product => <option key={product} value={product}>{product === 'Various' ? 'Multiple equipment items' : product}</option>)}
             </select>{decisionAiStatus('product')}</div>
@@ -2685,7 +2685,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           <label className="afield" style={{ display: 'block', marginTop: 8 }}>Owner override reason
             <textarea rows={2} value={lead.ownerOverrideReason || ''} disabled={!canReassignOwner}
               onChange={e => store.updateLead(lead.id, { ownerOverrideReason: e.target.value }, 'Owner override reason updated')}
-              placeholder="Required for an LJS/AH owner override" />
+              placeholder="Required for an LJS/AH owner override" name="inbox-required-for-an-ljs-ah-owner-override" />
           </label>
         )}
         {isFastTrackLead(previewLead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
@@ -2849,22 +2849,22 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   <div className="clar-mail-form">
                     <div className="mail-header-fields">
                       <label className="afield">From
-                        <input readOnly value={clarDraft.from || ''} aria-readonly="true" />
+                        <input readOnly value={clarDraft.from || ''} aria-readonly="true" name="inbox-input-5" />
                       </label>
                       <label className="afield">To
-                        <input disabled={clarBusy} value={clarDraft.to} onChange={e => setClarDraft({ ...clarDraft, to: e.target.value })} />
+                        <input disabled={clarBusy} value={clarDraft.to} onChange={e => setClarDraft({ ...clarDraft, to: e.target.value })} name="inbox-to" />
                       </label>
                       <label className="afield">CC
-                        <input disabled={clarBusy} value={clarDraft.cc} onChange={e => setClarDraft({ ...clarDraft, cc: e.target.value })} />
+                        <input disabled={clarBusy} value={clarDraft.cc} onChange={e => setClarDraft({ ...clarDraft, cc: e.target.value })} name="inbox-cc" />
                       </label>
                       <label className="afield">Subject
-                        <input disabled={clarBusy} value={clarDraft.subject} onChange={e => setClarDraft({ ...clarDraft, subject: e.target.value })} />
+                        <input disabled={clarBusy} value={clarDraft.subject} onChange={e => setClarDraft({ ...clarDraft, subject: e.target.value })} name="inbox-subject" />
                       </label>
                     </div>
                     <label className="afield mail-body-field">Body
                       <textarea rows={14} value={clarDraft.body}
                         disabled={clarBusy}
-                        onChange={e => setClarDraft({ ...clarDraft, body: e.target.value })} />
+                        onChange={e => setClarDraft({ ...clarDraft, body: e.target.value })} name="inbox-body" />
                     </label>
                     <p className="hint">
                       {clarBusy ? 'AI is drafting the customer question…' : `Drafted by ${clarDraft.draftedBy === 'AI' ? 'the model' : 'the standard ModAE template'}.`}
@@ -2956,11 +2956,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               </label>
               <label>Sell To Customer Location {registrationRequired.has('sellToCustomerLocation') && <span className="required-mark">*</span>}
                 <input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
-                  onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" />
+                  onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" name="inbox-sell-to-customer-location-2" />
               </label>
               <label>Opportunity scope {decisionAiMeta('scope')}
                 <textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
-                  onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" />
+                  onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" name="inbox-scope-2" />
               </label>
               <label>EUC Name {registrationRequired.has('eucName') && <span className="required-mark">*</span>} {decisionAiMeta('eucName')}
                 <CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
@@ -2969,7 +2969,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               <label>EUC Location {registrationRequired.has('eucLocation') && <span className="required-mark">*</span>} {decisionAiMeta('eucLocation')}
                 <div className="euc-location-search">
                   <input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
-                    onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" />
+                    onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" name="inbox-search-euc-city-or-state-2" />
                   {eucLocationOpen && eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
                     {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
                       onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{[item.state, item.country].filter(Boolean).join(' · ')}</span></button>)}
@@ -2980,21 +2980,21 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               </label>
               <label>Contact Person {registrationRequired.has('contactPerson') && <span className="required-mark">*</span>} {decisionAiMeta('contactPerson')}
                 <input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
-                  onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" />
+                  onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" name="inbox-contact-person-2" />
               </label>
               <label>Contact Phone {registrationRequired.has('contactPhone') && <span className="required-mark">*</span>} {decisionAiMeta('contactPhone')}
                 <input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
-                  onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" />
+                  onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" name="inbox-contact-phone-2" />
               </label>
               <label><span className="decision-field-heading">Assigned owner</span>
                 <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
-                  onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })}>
+                  onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })} name="inbox-owner-2">
                   {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
                 </select>
               </label>
               <label>Opportunity type {decisionAiMeta('oppType')}
                 <select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
-                  onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })}>
+                  onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })} name="inbox-opp-type-2">
                   {OPP_TYPES.map(type => <option key={type} value={type}>{labelFor('oppType', type)}</option>)}
                 </select>
               </label>
@@ -3004,27 +3004,27 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                     setDecisionDraft({ ...decisionDraft, customerStatus: e.target.value })
                     setDecisionErr('')
                     setDecisionSaved(false)
-                  }}>
+                  }} name="inbox-customer-status-2">
                   {CUSTOMER_STATUSES.map(status => <option key={status} value={status}>{labelFor('customerStatus', status)}</option>)}
                 </select>
               </label>
               <label>Business unit {decisionAiMeta('bu')}
                 <select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
-                  onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })}>
+                  onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })} name="inbox-bu-2">
                   <option value="">Not specified</option>
                   {BUS.map(bu => <option key={bu} value={bu}>{labelFor('bu', bu)}</option>)}
                 </select>
               </label>
               <label>Segment {decisionAiMeta('segment')}
                 <select value={decisionDraft.segment} disabled={lead.status === 'Dropped'}
-                  onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })}>
+                  onChange={e => setDecisionDraft({ ...decisionDraft, segment: e.target.value })} name="inbox-segment-2">
                   <option value="">Not specified</option>
                   {SEGMENTS.map(segment => <option key={segment} value={segment}>{labelFor('segment', segment)}</option>)}
                 </select>
               </label>
               <label>Equipment / Product Family {decisionAiMeta('product')}
                 <select value={decisionDraft.product} disabled={lead.status === 'Dropped'}
-                  onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })}>
+                  onChange={e => setDecisionDraft({ ...decisionDraft, product: e.target.value })} name="inbox-product-2">
                 <option value="">Not specified</option>
                 {PRODUCTS.map(product => <option key={product} value={product}>{product === 'Various' ? 'Multiple equipment items' : product}</option>)}
                 </select>
@@ -3032,7 +3032,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               <details className="lead-routing-optional lead-decision-full">
                 <summary>Optional routing city / region {decisionAiMeta('location')}</summary>
                 <input type="search" value={locationSearch || (selectedLocation ? selectedLocation.city : '')} disabled={lead.status === 'Dropped'}
-                  onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" />
+                  onChange={e => setLocationSearch(e.target.value)} placeholder="Search city or state" aria-label="Search city or state" name="inbox-search-city-or-state" />
                 <div className="location-suggestions" role="listbox" aria-label="City suggestions">
                   {locationSearchState.loading && <span className="location-suggestion-note">Searching worldwide locations…</span>}
                   {locationQuery && visibleLocations.map(item => (
@@ -3070,7 +3070,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               <label className="afield" style={{ display: 'block', marginTop: 8 }}>Owner override reason
                 <textarea rows={2} value={lead.ownerOverrideReason || ''} disabled={!['LJS', 'AH'].includes(store.role)}
                   onChange={e => store.updateLead(lead.id, { ownerOverrideReason: e.target.value }, 'Owner override reason updated')}
-                  placeholder="Required for an LJS/AH owner override" />
+                  placeholder="Required for an LJS/AH owner override" name="inbox-required-for-an-ljs-ah-owner-override-2" />
               </label>
             )}
             {isFastTrackLead(previewLead, store.config, customer) && <div className="okbox" style={{ marginTop: 8 }}>Fast-track enabled for this Green customer.</div>}
@@ -3305,7 +3305,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
       ? { label: 'Continue registration', onClick: () => nav('/register/' + lead.id), disabled: registrationBlocked, note: blockedNote }
       : { label: 'Qualify lead', onClick: () => store.updateLead(lead.id, { status: 'Qualified' }), disabled: qualifyBlocked, note: qualifyBlocked ? blockedNote : 'Qualification does not create an opportunity.' }
       : undefined} onBack={() => nav('/inbox')} />
-    <input ref={docInput} type="file" multiple hidden onChange={event => { addDocuments(event.target.files); event.target.value = '' }} />
+    <input ref={docInput} type="file" multiple hidden onChange={event => { addDocuments(event.target.files); event.target.value = '' }} name="inbox-file-5" />
     {docErr && <p role="alert">{docErr}</p>}
     {dropping && <Modal title="Drop lead" onClose={() => setDropping(false)}><ReasonBox title="Disqualify this lead" categories={DROP_REASONS} confirmLabel="Confirm disqualify"
       onCancel={() => setDropping(false)} onConfirm={(category, note) => { store.updateLead(lead.id, { status: 'Dropped', droppedReason: `${category} — ${note}` }); setDropping(false) }} /></Modal>}
@@ -3449,7 +3449,7 @@ function LegacyLeadDetail({ lead, phoneLayout = false }) {
       {reassignOpen && <Modal title="Reassign lead" onClose={() => setReassignOpen(false)} className="reassign-modal">
         <p className="modal-intro">Choose the salesperson who should own this lead.</p>
         <label className="reassign-modal-field">Assigned owner
-          <select value={reassignTo} onChange={e => setReassignTo(e.target.value)}>
+          <select value={reassignTo} onChange={e => setReassignTo(e.target.value)} name="inbox-reassign-to-2">
             {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
           </select>
         </label>
@@ -3991,29 +3991,29 @@ export default function Inbox() {
           </p>
           <div className="sim-controls">
             <label className="afield">Project type
-              <select value={simProjectType} onChange={e => setSimProjectType(e.target.value)}>
+              <select value={simProjectType} onChange={e => setSimProjectType(e.target.value)} name="inbox-sim-project-type">
                 {PROJECT_TYPES.map(type => <option key={type}>{type}</option>)}
               </select>
             </label>
             <label className="afield">Opportunity type
-              <select value={activeSimOppType} onChange={e => setSimOppType(e.target.value)}>
+              <select value={activeSimOppType} onChange={e => setSimOppType(e.target.value)} name="inbox-active-sim-opp-type">
                 {simOppOptions.map(type => <option key={type}>{type}</option>)}
               </select>
             </label>
             <label className="afield">Customer category (test)
-              <select value={simCategory} onChange={e => setSimCategory(e.target.value)}>
+              <select value={simCategory} onChange={e => setSimCategory(e.target.value)} name="inbox-sim-category">
                 <option value="">Use scenario category</option>
                 {CUSTOMER_CATEGORY_OPTIONS.map(category => <option key={category}>{category}</option>)}
               </select>
             </label>
             <label className="afield wide">Enquiry shape
-              <select value={activeSimShape} onChange={e => setSimShape(e.target.value)}>
+              <select value={activeSimShape} onChange={e => setSimShape(e.target.value)} name="inbox-active-sim-shape">
                 <option value="">Any shape (varied)</option>
                 {simShapeOptions.map(t => <option key={t.key} value={t.key}>{t.subject}</option>)}
               </select>
             </label>
             <label className="afield">Extraction quality
-              <select value={simQuality} onChange={e => setSimQuality(e.target.value)}>
+              <select value={simQuality} onChange={e => setSimQuality(e.target.value)} name="inbox-sim-quality">
                 <option value="">Varied (weighted)</option>
                 <option value="clean">Complete extraction</option>
                 <option value="partial">Missing info - needs clarification</option>
@@ -4021,7 +4021,7 @@ export default function Inbox() {
               </select>
             </label>
             <label className="afield">After generating
-              <select value={simRegister ? 'register' : 'inbox'} onChange={e => setSimRegister(e.target.value === 'register')}>
+              <select value={simRegister ? 'register' : 'inbox'} onChange={e => setSimRegister(e.target.value === 'register')} name="inbox-select">
                 <option value="register">Register the opportunity immediately</option>
                 <option value="inbox">Stop at the inbox as a New lead</option>
               </select>
@@ -4071,7 +4071,7 @@ export default function Inbox() {
         {!phone && mobileFiltersOpen && <button type="button" className="mobile-record-view" aria-expanded={mobileFiltersOpen} onClick={() => setMobileFiltersOpen(false)}>Done selecting</button>}
         <div className="mail-column-head" data-mobile-open={mobileFiltersOpen}>
           <div className="mail-list-toolbar">
-          <label className="mail-check"><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" /></label>
+          <label className="mail-check"><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" name="inbox-select-visible-messages" /></label>
           {selectedIds.size > 0 && <span className="mail-selection-count">{selectedIds.size} selected</span>}
           </div>
           <span className="mail-head-filter-cell">{filterMenu('received', receivedF, setReceivedF, 'Received date', [['today', 'Today'], ['7', 'Last 7 days'], ['30', 'Last 30 days']], 'Date', 'All dates')}</span>
@@ -4093,7 +4093,7 @@ export default function Inbox() {
             onOpen={() => nav('/inbox/' + l.id)} onStar={() => store.updateLead(l.id, { starred: !l.starred })} />
           return (
             <div key={l.id} className={`mail-row ${unread ? 'unread' : ''} ${selectedIds.has(l.id) ? 'selected' : ''} ${String(previewLead?.id) === String(l.id) ? 'preview-active' : ''}`} role="button" tabIndex={0} aria-label={`Preview ${l.subject}`} onClick={() => window.innerWidth >= 1280 ? setPreviewLeadId(String(l.id)) : nav('/inbox/' + l.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.innerWidth >= 1280 ? setPreviewLeadId(String(l.id)) : nav('/inbox/' + l.id) } }}>
-              <label className="mail-check" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelected(l.id)} aria-label={`Select ${l.subject}`} /></label>
+              <label className="mail-check" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelected(l.id)} aria-label={`Select ${l.subject}`} name="inbox-checkbox" /></label>
               <button className={`mail-star ${l.starred ? 'starred' : ''}`} title={l.starred ? 'Remove star' : 'Star'} onClick={e => { e.stopPropagation(); store.updateLead(l.id, { starred: !l.starred }) }}><Icon name="star" size={15} /></button>
               <div className="mail-date"><b>{ddMmmYY((l.ts || '').slice(0, 10))}</b><small>{receivedTime(l.ts)}</small></div>
               <div className="mail-sender" title={[l.source || l.channel || 'Common mailbox', l.sender || l.from].filter(Boolean).join(' — ')}><b>{l.source || l.channel || 'Common mailbox'}</b><small>{l.sender || l.from}</small></div>

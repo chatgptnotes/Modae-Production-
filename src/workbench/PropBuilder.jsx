@@ -161,7 +161,7 @@ export default function PropBuilder({ opp, onRevision }) {
           <div key={s} className="check-row">
             <input type="checkbox" checked={sectionDone(s)} disabled={derived(s)}
               title={derived(s) ? 'Derived from the workbook content' : 'Auto-drafted — tick once reviewed'}
-              onChange={e => setManualDone({ ...manualDone, [s]: e.target.checked })} />
+              onChange={e => setManualDone({ ...manualDone, [s]: e.target.checked })} name="prop-builder-checkbox" />
             <span>{s}</span>
             {sectionDone(s)
               ? <Chip tone="state-Accepted">{derived(s) ? 'Ready' : 'Reviewed'}</Chip>
@@ -207,7 +207,7 @@ export default function PropBuilder({ opp, onRevision }) {
 
               <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
                 <input placeholder="Override reason (logged)" value={overrideReason} style={{ flex: 1 }}
-                  onChange={e => setOverrideReason(e.target.value)} />
+                  onChange={e => setOverrideReason(e.target.value)} name="prop-builder-override-reason" />
                 <button className="primary" disabled={!overrideReason.trim()} onClick={applyOverride}>Log override</button>
               </div>
             )}
@@ -232,7 +232,7 @@ export default function PropBuilder({ opp, onRevision }) {
                     <div style={{ marginTop: 6, display: 'flex', gap: 6 }}>
                       <input placeholder="How was it incorporated?" style={{ flex: 1 }}
                         value={condNotes[`${a.id}-${i}`] || ''}
-                        onChange={e => setCondNotes({ ...condNotes, [`${a.id}-${i}`]: e.target.value })} />
+                        onChange={e => setCondNotes({ ...condNotes, [`${a.id}-${i}`]: e.target.value })} name="prop-builder-how-was-it-incorporated" />
                       <button className="primary" disabled={!(condNotes[`${a.id}-${i}`] || '').trim()}
                         onClick={() => store.confirmCondition(a.id, i, condNotes[`${a.id}-${i}`].trim())}>
                         Confirm
@@ -321,11 +321,11 @@ export default function PropBuilder({ opp, onRevision }) {
               {reviseOpen && (
                 <>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                    <select value={reviseType} onChange={e => setReviseType(e.target.value)}>
+                    <select value={reviseType} onChange={e => setReviseType(e.target.value)} name="prop-builder-revise-type">
                       {REVISION_TYPES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
                     </select>
                     <input placeholder="Reason for revision (logged)" value={reviseReason} style={{ flex: 1, minWidth: 160 }}
-                      onChange={e => setReviseReason(e.target.value)} />
+                      onChange={e => setReviseReason(e.target.value)} name="prop-builder-revise-reason" />
                     <button className="primary" disabled={!reviseReason.trim()} onClick={applyRevision}>Open revision</button>
                   </div>
                   <div className="hint" style={{ marginTop: 4 }}>

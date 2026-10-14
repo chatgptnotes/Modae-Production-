@@ -1,3 +1,30 @@
+## 2026-10-14 — Ignore responses from previous login sessions
+
+- Guard sourcing, approval, opportunity recovery and generic save responses with
+  the initiating session version, including errors and delayed save retries.
+- Old requests cannot sign out a newer session, advance its save baseline, show
+  stale errors or trigger a reload. Same-account logout/login is also isolated.
+- Reset retry backoff for a new session while retaining current-session error
+  handling and draft protection. No database or API contract changes.
+
+## 2026-10-14 — Verified account identity at sign-in
+
+- Keep connected login and restored sessions behind account verification until
+  the authenticated workspace profile loads; remove the temporary RS fallback.
+- Apply the verified name, operational role and permission roles together, with
+  the server access policy, so dashboard and register scope agree on first login.
+- Offer Retry on failed or stalled verification, ignore previous-session responses,
+  and preserve same-account business drafts during profile correction.
+- Retain local/demo authentication. No database or business-record changes.
+
+## 2026-10-14 — Form control identifiers
+
+- Add browser-identifiable names to native form controls throughout desktop and
+  phone screens, including filters, editors, dialogs and shared controls.
+- Preserve existing form names and radio groups, and add a source-wide regression
+  check for missing identifiers. This addresses form autofill warnings; Chrome
+  DevTools can still report stale references to elements that have left the page.
+
 ## 2026-10-13 — Event-driven explicit workspace saves
 
 - Replace optional continuous version checks with coalesced activation checks;

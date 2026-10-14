@@ -16,9 +16,9 @@ export default function ColumnCondition({ type, label, value, onApply }) {
     }
     onApply(draft)
   }}>
-    <label>Filter {label}<select value={draft.op} onChange={event => update({ op: event.target.value })}>{options.map(option => <option key={option.op} value={option.op}>{option.label}</option>)}</select></label>
-    {selected.arity > 0 && <input aria-label={`${label} filter value`} type={inputType} step={inputType === 'number' ? 'any' : undefined} value={draft.a} onChange={event => update({ a: event.target.value })} placeholder={type === 'multi-enum' ? 'Separate values with commas' : 'Enter value'} />}
-    {selected.arity === 2 && <input aria-label={`${label} upper bound`} type={inputType} step={inputType === 'number' ? 'any' : undefined} value={draft.b} onChange={event => update({ b: event.target.value })} />}
+    <label>Filter {label}<select value={draft.op} onChange={event => update({ op: event.target.value })} name="column-condition-op">{options.map(option => <option key={option.op} value={option.op}>{option.label}</option>)}</select></label>
+    {selected.arity > 0 && <input aria-label={`${label} filter value`} type={inputType} step={inputType === 'number' ? 'any' : undefined} value={draft.a} onChange={event => update({ a: event.target.value })} placeholder={type === 'multi-enum' ? 'Separate values with commas' : 'Enter value'} name="column-condition-a" />}
+    {selected.arity === 2 && <input aria-label={`${label} upper bound`} type={inputType} step={inputType === 'number' ? 'any' : undefined} value={draft.b} onChange={event => update({ b: event.target.value })} name="column-condition-b" />}
     {error && <p role="alert">{error}</p>}
     <button type="submit">Apply condition</button>
   </form>

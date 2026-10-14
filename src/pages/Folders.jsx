@@ -201,10 +201,10 @@ function DocumentsBrowser({ store, scope, user }) {
         <div className="documents-sticky-controls">
         <div className="documents-toolbar">
           <label className="documents-search"><Icon name="search" size={18} />
-            <input type="search" aria-label="Search opportunity folders" placeholder="Search by customer or opportunity" value={search} onChange={e => setSearch(e.target.value)} />
+            <input type="search" aria-label="Search opportunity folders" placeholder="Search by customer or opportunity" value={search} onChange={e => setSearch(e.target.value)} name="folders-search-opportunity-folders" />
           </label>
           <label className="documents-sort">Sort by
-            <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort folders">
+            <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort folders" name="folders-sort-folders">
               <option value="id">Opportunity ID: descending</option><option value="ascending">Opportunity ID: ascending</option><option value="customer">Customer name</option>
             </select>
           </label>
@@ -276,7 +276,7 @@ function DocumentsBrowser({ store, scope, user }) {
           <div><h1>{subfolder}</h1><p>{opp.oppName || opp.sellTo}</p></div>
           {backend !== 'mock' ? (
             <>
-              <input ref={fileInput} type="file" multiple style={{ display: 'none' }} onChange={onUpload} />
+              <input ref={fileInput} type="file" multiple style={{ display: 'none' }} onChange={onUpload} name="folders-file" />
               <button onClick={() => fileInput.current?.click()} disabled={busy}>
                 <Icon name="upload" size={13} /> {busy ? 'Uploading…' : 'Upload'}
               </button>

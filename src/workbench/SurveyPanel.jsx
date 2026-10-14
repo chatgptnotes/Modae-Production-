@@ -36,7 +36,7 @@ export default function SurveyPanel({ opp, est }) {
         <div className="service-form-action-row">
           <label className="service-form-field service-form-grow">Survey requirement
             <input className="service-form-control" placeholder="What must the site visit confirm?"
-            value={detail} onChange={e => setDetail(e.target.value)} />
+            value={detail} onChange={e => setDetail(e.target.value)} name="survey-panel-detail" />
           </label>
           <button className="primary" onClick={() => store.requestSurvey(opp.id, detail.trim())}>
             <Icon name="send" size={13} /> Raise site survey request
@@ -52,7 +52,7 @@ export default function SurveyPanel({ opp, est }) {
           <label className="service-form-field service-form-field-spaced">
             Site visit date
             <input className="service-form-control service-date-control" type="date" value={survey.visitOn || ''}
-              onChange={e => store.updateSurvey(opp.id, { visitOn: e.target.value, state: e.target.value ? 'Visit scheduled' : 'Requested' }, 'Site visit scheduled')} />
+              onChange={e => store.updateSurvey(opp.id, { visitOn: e.target.value, state: e.target.value ? 'Visit scheduled' : 'Requested' }, 'Site visit scheduled')} name="survey-panel-date" />
           </label>
 
           <div className="section-title service-form-section-title">Survey findings</div>
@@ -62,7 +62,7 @@ export default function SurveyPanel({ opp, est }) {
             <div className="service-form-action-row service-report-entry">
               <label className="service-form-field service-form-grow">Survey findings
                 <textarea className="service-form-control" rows={6} placeholder="Record findings, access conditions, and recommendations"
-                value={report} onChange={e => setReport(e.target.value)} />
+                value={report} onChange={e => setReport(e.target.value)} name="survey-panel-report" />
               </label>
               <button className="primary" disabled={!report.trim() || !survey.visitOn}
                 title={!survey.visitOn ? 'Record the site visit date first' : ''}

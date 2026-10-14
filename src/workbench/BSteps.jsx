@@ -75,7 +75,7 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
                   <div style={{ display: 'flex', gap: 6 }}>
                     <input placeholder="Reason for reopening (logged)" style={{ flex: 1 }}
                       value={reopening[step.id]}
-                      onChange={event => setReopening({ ...reopening, [step.id]: event.target.value })} />
+                      onChange={event => setReopening({ ...reopening, [step.id]: event.target.value })} name={`bsteps-${step.id}`} />
                     <button className="primary" disabled={!reopening[step.id].trim()}
                       onClick={() => reopen(step.id)}>Reopen</button>
                   </div>
@@ -87,7 +87,7 @@ export default function BSteps({ opp, steps = ALL_B_STEPS, title = 'Brownfield w
               <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                 <input placeholder="Sign-off note (optional)" style={{ flex: 1 }}
                   value={notes[step.id] || ''}
-                  onChange={event => setNotes({ ...notes, [step.id]: event.target.value })} />
+                  onChange={event => setNotes({ ...notes, [step.id]: event.target.value })} name="bsteps-sign-off-note-optional" />
                 <button className="primary" onClick={() => sign(step.id)}>
                   <Icon name="check" size={13} /> Sign off {step.id}
                 </button>

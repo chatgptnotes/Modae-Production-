@@ -158,8 +158,8 @@ function TargetManagerDialog({ store, onClose }) {
             return <React.Fragment key={owner}>
               <tr>
                 <th scope="row">{label === owner ? displayRole(owner, store.config) : label}</th>
-                <td><input type="number" min="0" step="0.1" aria-label={`${owner} annual target (₹ lakh)`} value={draft.annual} onChange={event => update(owner, 'annual', event.target.value)} /></td>
-                {draft.q.map((value, index) => <td key={index}><input type="number" min="0" step="0.1" aria-label={`${owner} Q${index + 1} target (₹ lakh)`} value={value} onChange={event => update(owner, 'q', event.target.value, index)} /></td>)}
+                <td><input type="number" min="0" step="0.1" aria-label={`${owner} annual target (₹ lakh)`} value={draft.annual} onChange={event => update(owner, 'annual', event.target.value)} name={`target-${owner}-annual`} /></td>
+                {draft.q.map((value, index) => <td key={index}><input type="number" min="0" step="0.1" aria-label={`${owner} Q${index + 1} target (₹ lakh)`} value={value} onChange={event => update(owner, 'q', event.target.value, index)} name={`target-${owner}-q${index + 1}`} /></td>)}
                 <td className="target-manager-actions"><button type="button" onClick={() => split(owner)}>Split evenly</button><button type="button" onClick={() => save(owner)} disabled={mismatch}>Confirm target</button>{confirmed ? <span role="status">Confirmed</span> : ownerPlan.pendingCount > 0 ? <span role="status">Needs confirmation</span> : null}</td>
               </tr>
               {errors[owner] && <tr className="target-manager-error"><td colSpan="7" role="alert">{errors[owner]}</td></tr>}

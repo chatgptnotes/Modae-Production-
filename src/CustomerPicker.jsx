@@ -37,7 +37,7 @@ export default function CustomerPicker({ customers = [], value = '', onChange, o
         placeholder="Search customer master"
         onFocus={() => setOpen(true)}
         onChange={event => { setQuery(event.target.value); setOpen(true); onChange?.(event.target.value, null) }}
-        aria-label={label}
+        aria-label={label} name="customer-picker-query"
       />
       {open && !disabled && (
         <div className="customer-picker-menu" role="listbox" aria-label="Customer matches">

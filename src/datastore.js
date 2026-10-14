@@ -260,6 +260,15 @@ export function invalidateLoadCache() {
   loadCacheAt = 0
 }
 
+// A new verified login must not reuse a workspace read started by the old
+// account. Drain these reads while the identity gate is closed, then invalidate.
+export async function settleWorkspaceReads() {
+  await Promise.allSettled([loadInFlight, coreLoadInFlight, priceListInFlight].filter(Boolean))
+  invalidateLoadCache()
+  priceListCache = null
+  priceListCacheAt = 0
+}
+
 const writePriceListsCache = priceLists => {
   priceListCache = priceLists
   priceListCacheAt = Date.now()

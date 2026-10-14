@@ -64,7 +64,7 @@ function Field({ label, value, onChange, options, disabled, title }) {
   return (
     <label className="ana-field" title={title}>
       <span>{label}</span>
-      <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled}>
+      <select value={value} onChange={e => onChange(e.target.value)} disabled={disabled} name="analytics-value">
         {options.map(o => (typeof o === 'string'
           ? <option key={o} value={o}>{o}</option>
           : <option key={o.value} value={o.value}>{o.label}</option>))}
@@ -168,12 +168,12 @@ export default function Analytics({ embedded = false }) {
           <label className="ana-field">
             <span>From</span>
             <input type="date" value={f.range === 'custom' ? f.from : (dateRange?.[0] || '')}
-              onChange={e => set('from', e.target.value)} />
+              onChange={e => set('from', e.target.value)} name="analytics-date" />
           </label>
           <label className="ana-field">
             <span>To</span>
             <input type="date" value={f.range === 'custom' ? f.to : (dateRange?.[1] || '')}
-              onChange={e => set('to', e.target.value)} />
+              onChange={e => set('to', e.target.value)} name="analytics-date-2" />
           </label>
           {lockedOwner ? (
             <label className="ana-field">

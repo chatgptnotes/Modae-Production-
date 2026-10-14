@@ -81,21 +81,21 @@ export default function Dashboard({ embedded = false }) {
       <h2>Pivot — Sum of Value (₹) by Customer × Order Month</h2>
       <div className="toolbar">
         <label>Owner:{' '}
-          <select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}>
+          <select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)} name="dashboard-owner-filter">
             {owners.map(p => <option key={p} value={p}>{p === 'All' ? p : displayRole(p)}</option>)}
           </select>
         </label>
         <label title="Choose the expected order-date window">Range:{' '}
-          <select value={fromQ} onChange={e => setFromQ(e.target.value)}>
+          <select value={fromQ} onChange={e => setFromQ(e.target.value)} name="dashboard-from-q">
             {QUARTERS.map(q => <option key={q}>{q}</option>)}
           </select>
           {' '}to{' '}
-          <select value={toQ} onChange={e => setToQ(e.target.value)}>
+          <select value={toQ} onChange={e => setToQ(e.target.value)} name="dashboard-to-q">
             {QUARTERS.map(q => <option key={q}>{q}</option>)}
           </select>
         </label>
         <label>
-          <input type="checkbox" checked={forecastOnly} onChange={e => setForecastOnly(e.target.checked)} />
+          <input type="checkbox" checked={forecastOnly} onChange={e => setForecastOnly(e.target.checked)} name="dashboard-checkbox" />
           {' '}Forecast only
         </label>
         <span className="spacer" />

@@ -298,7 +298,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
               onDragLeave={() => setDrag(false)}
               onDrop={onDrop}
               onClick={() => fileInput.current?.click()}>
-              <input ref={fileInput} type="file" accept="application/pdf,.pdf,.png,.jpg,.jpeg,.webp,image/*" style={{ display: 'none' }} onChange={onPick} />
+              <input ref={fileInput} type="file" accept="application/pdf,.pdf,.png,.jpg,.jpeg,.webp,image/*" style={{ display: 'none' }} onChange={onPick} name="tender-intake-file" />
               <div className="tender-drop-icon"><Icon name="fileText" size={40} /></div>
               <b>Drop the tender / RFQ PDF here</b>
               <div className="hint">or tap to choose a file</div>
@@ -307,15 +307,15 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
             {!fixedTarget && <div className="form-card" style={{ marginTop: 12, maxWidth: 560 }}>
             <div className="section-title">Where should the extracted proposal go?</div>
             <label className="radio-row">
-              <input type="radio" checked={target === 'new'} onChange={() => setTarget('new')} />
+              <input type="radio" checked={target === 'new'} onChange={() => setTarget('new')} name="tender-intake-radio" />
               Create a new opportunity (tracker row + folder, like the intake form)
             </label>
             <label className="radio-row">
-              <input type="radio" checked={target !== 'new'} onChange={() => setTarget(openOpps[0]?.id || 'new')} />
+              <input type="radio" checked={target !== 'new'} onChange={() => setTarget(openOpps[0]?.id || 'new')} name="tender-intake-radio-2" />
               Attach to an existing open opportunity
             </label>
             {target !== 'new' && (
-              <select value={target} onChange={e => setTarget(e.target.value)} style={{ marginLeft: 24 }}>
+              <select value={target} onChange={e => setTarget(e.target.value)} style={{ marginLeft: 24 }} name="tender-intake-target">
                 {openOpps.map(o => <option key={o.id} value={o.id}>{displayOpportunityId(o.id)} — {o.oppName.slice(0, 50)}</option>)}
               </select>
             )}
@@ -367,7 +367,7 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
             <div style={{ maxWidth: 420 }}>
               <label>Tender / RFQ number {!parse.header.sectionRef.match(/\d/) && <span className="hint">(not stated in the document)</span>}</label>
               <input value={rfqNumber} onChange={e => setRfqNumber(e.target.value)}
-                placeholder="e.g. BTPS/CHP/2026/0417" />
+                placeholder="e.g. BTPS/CHP/2026/0417" name="tender-intake-rfq-number" />
             </div>
             <div className="costing-note">Printed on the proposal cover as the reference we are bidding against.</div>
           </div>
@@ -377,30 +377,30 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
               <div className="section-title">Opportunity <ConfBadge v={parse.confidence.header} /></div>
               <div className="dgrid2" style={{ maxWidth: 860 }}>
                 <div><label>Sell To Customer *</label>
-                  <input className={draft.sellTo ? '' : 'needs-input'} value={draft.sellTo} onChange={setD('sellTo')} /></div>
+                  <input className={draft.sellTo ? '' : 'needs-input'} value={draft.sellTo} onChange={setD('sellTo')} name="tender-intake-sell-to" /></div>
                 <div><label>Category</label>
-                  <select value={draft.category} onChange={setD('category')}>{CATEGORIES.map(c => <option key={c} value={c}>{labelFor('category', c)}</option>)}</select></div>
-                <div><label>Location</label><input value={draft.location} onChange={setD('location')} /></div>
-                <div><label>EUC Name</label><input value={draft.eucName} onChange={setD('eucName')} /></div>
-                <div><label>EUC Location</label><input value={draft.eucLocation} onChange={setD('eucLocation')} /></div>
+                  <select value={draft.category} onChange={setD('category')} name="tender-intake-category">{CATEGORIES.map(c => <option key={c} value={c}>{labelFor('category', c)}</option>)}</select></div>
+                <div><label>Location</label><input value={draft.location} onChange={setD('location')} name="tender-intake-location" /></div>
+                <div><label>EUC Name</label><input value={draft.eucName} onChange={setD('eucName')} name="tender-intake-euc-name" /></div>
+                <div><label>EUC Location</label><input value={draft.eucLocation} onChange={setD('eucLocation')} name="tender-intake-euc-location" /></div>
                 <div><label>Owner * <span className="hint">(sets the opportunity ID)</span></label>
-                  <select className={draft.owner ? '' : 'needs-input'} value={draft.owner} onChange={setD('owner')}>
+                  <select className={draft.owner ? '' : 'needs-input'} value={draft.owner} onChange={setD('owner')} name="tender-intake-owner">
                     <option value="">— select —</option>
                     {OWNERS.map(o => <option key={o} value={o}>{labelFor('owner', o)}</option>)}
                   </select></div>
                 <div style={{ gridColumn: '1 / -1' }}><label>Opportunity Name/Description *</label>
-                  <input className={draft.oppName ? '' : 'needs-input'} value={draft.oppName} onChange={setD('oppName')} /></div>
+                  <input className={draft.oppName ? '' : 'needs-input'} value={draft.oppName} onChange={setD('oppName')} name="tender-intake-opp-name" /></div>
                 <div><label>Opp Type</label>
-                  <select value={draft.oppType} onChange={setD('oppType')}>{OPP_TYPES.map(c => <option key={c} value={c}>{labelFor('oppType', c)}</option>)}</select></div>
+                  <select value={draft.oppType} onChange={setD('oppType')} name="tender-intake-opp-type">{OPP_TYPES.map(c => <option key={c} value={c}>{labelFor('oppType', c)}</option>)}</select></div>
                 <div><label>BU</label>
-                  <select value={draft.bu} onChange={setD('bu')}>{BUS.map(c => <option key={c} value={c}>{labelFor('bu', c)}</option>)}</select></div>
+                  <select value={draft.bu} onChange={setD('bu')} name="tender-intake-bu">{BUS.map(c => <option key={c} value={c}>{labelFor('bu', c)}</option>)}</select></div>
                 <div><label>Segment</label>
-                  <select value={draft.segment} onChange={setD('segment')}>{SEGMENTS.map(c => <option key={c} value={c}>{labelFor('segment', c)}</option>)}</select></div>
+                  <select value={draft.segment} onChange={setD('segment')} name="tender-intake-segment">{SEGMENTS.map(c => <option key={c} value={c}>{labelFor('segment', c)}</option>)}</select></div>
                 <div><label>Equipment / Product Family</label>
-                  <select value={draft.product} onChange={setD('product')}>{PRODUCTS.map(c => <option key={c} value={c}>{c === 'Various' ? 'Multiple equipment items' : c}</option>)}</select></div>
-                <div><label>Contact Person</label><input value={draft.contactPerson} onChange={setD('contactPerson')} /></div>
+                  <select value={draft.product} onChange={setD('product')} name="tender-intake-product">{PRODUCTS.map(c => <option key={c} value={c}>{c === 'Various' ? 'Multiple equipment items' : c}</option>)}</select></div>
+                <div><label>Contact Person</label><input value={draft.contactPerson} onChange={setD('contactPerson')} name="tender-intake-contact-person" /></div>
                 <div><label>Contact Phone # <span className="hint">(not in document)</span></label>
-                  <input className={draft.contactPhone ? '' : 'needs-input'} value={draft.contactPhone} onChange={setD('contactPhone')} /></div>
+                  <input className={draft.contactPhone ? '' : 'needs-input'} value={draft.contactPhone} onChange={setD('contactPhone')} name="tender-intake-contact-phone" /></div>
               </div>
             </div>
           ) : (
@@ -423,14 +423,14 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
                   <tr key={i} style={include[i] ? undefined : { opacity: .45 }}>
                     <td style={{ textAlign: 'center' }}>
                       <input type="checkbox" checked={include[i]}
-                        onChange={() => setInclude(include.map((v, j) => (j === i ? !v : v)))} title="Include in proposal" />
+                        onChange={() => setInclude(include.map((v, j) => (j === i ? !v : v)))} title="Include in proposal" name="tender-intake-checkbox" />
                     </td>
                     <td className="rowhead">{it.sn}</td>
-                    <td style={{ maxWidth: 340 }}><input value={it.description} onChange={setItem(i, 'description')} style={{ minWidth: 320 }} /></td>
+                    <td style={{ maxWidth: 340 }}><input value={it.description} onChange={setItem(i, 'description')} style={{ minWidth: 320 }} name="tender-intake-description" /></td>
                     <td>{it.sapCode || <span className="hint">—</span>}</td>
-                    <td><input value={it.pn} onChange={setItem(i, 'pn')} placeholder="—" style={{ minWidth: 150 }} /></td>
+                    <td><input value={it.pn} onChange={setItem(i, 'pn')} placeholder="—" style={{ minWidth: 150 }} name="tender-intake-pn" /></td>
                     <td>{it.uom}</td>
-                    <td className="num"><input type="number" min="0" value={it.qty} onChange={setItem(i, 'qty', true)} style={{ width: 60, textAlign: 'right' }} /></td>
+                    <td className="num"><input type="number" min="0" value={it.qty} onChange={setItem(i, 'qty', true)} style={{ width: 60, textAlign: 'right' }} name="tender-intake-qty" /></td>
                     <td>
                       <TenderPriceEvidence match={matched[i]?.match} />
                     </td>
@@ -452,9 +452,9 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
                   <tr key={c.key}>
                     <td><b>{c.label}</b>{c.needsReview && <div className="hint">engineering review</div>}</td>
                     <td style={{ maxWidth: 300, whiteSpace: 'normal' }}>{c.customerAsk}</td>
-                    <td><input value={c.ourResponse} onChange={setCompRow(i, 'ourResponse')} style={{ minWidth: 260 }} /></td>
+                    <td><input value={c.ourResponse} onChange={setCompRow(i, 'ourResponse')} style={{ minWidth: 260 }} name="tender-intake-our-response" /></td>
                     <td className={c.status === 'Deviation' ? 'err' : ''}>
-                      <select value={c.status} onChange={setCompRow(i, 'status')}>
+                      <select value={c.status} onChange={setCompRow(i, 'status')} name="tender-intake-status">
                         <option>Comply</option><option>Deviation</option>
                       </select>
                     </td>

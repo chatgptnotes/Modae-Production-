@@ -16,7 +16,7 @@ function Choices({ field, label, single, values, selected, onChange, labelFor })
   return <details className="opportunity-filter-choice">
     <summary><span>{label}</span><strong>{chosen.size ? [...chosen].map(value => valueLabel(field, value, labelFor)).join(', ') : 'All'}</strong><span aria-hidden="true">⌄</span></summary>
     <div className="opportunity-filter-options">
-      {['owner', 'stage'].includes(field) && <input type="search" aria-label={`Search ${label.toLowerCase()} options`} placeholder={`Search ${label.toLowerCase()}…`} value={query} onChange={event => setQuery(event.target.value)} />}
+      {['owner', 'stage'].includes(field) && <input type="search" aria-label={`Search ${label.toLowerCase()} options`} placeholder={`Search ${label.toLowerCase()}…`} value={query} onChange={event => setQuery(event.target.value)} name="opportunity-filters-query" />}
       <button type="button" onClick={() => onChange(undefined)}>Clear selection</button>
       <div role="group" aria-label={label}>{visible.map(value => <label key={value}>
         <input type={single ? 'radio' : 'checkbox'} name={`opportunity-filter-${field}`} checked={chosen.has(value)} onChange={() => {
@@ -57,13 +57,13 @@ export default function OpportunityFilters({ criteria, sort, options, columns, s
       <p className="opportunity-filter-hint">Match all fields. Multiple selections within a field match any selected value.</p>
       <div className="opportunity-filter-grid">{fields.filter(([key]) => scope === 'global' || key !== 'owner').map(([key, label, single]) => <Choices key={key} field={key} label={label} single={single} selected={draft.filters[key]} values={[...new Set([...(options[key] || []), ...(draft.filters[key] || [])])]} onChange={value => updateFilter(key, value)} labelFor={labelFor} />)}</div>
       <fieldset className="opportunity-filter-date"><legend>Date</legend><div className="opportunity-filter-grid">
-        <label>Date field<select value={draft.date.field} onChange={event => updateDate({ field: event.target.value })}>{OPPORTUNITY_DATE_FIELDS.map(field => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>
-        <label>Period<select value={draft.date.period} onChange={event => updateDate({ period: event.target.value })}>{OPPORTUNITY_PERIODS.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></label>
-        {draft.date.period === 'specific' && <label>Specific date<input type="date" value={draft.date.date} onChange={event => updateDate({ date: event.target.value })} /></label>}
-        {draft.date.period === 'custom' && <><label>From<input type="date" value={draft.date.from} onChange={event => updateDate({ from: event.target.value })} /></label><label>To<input type="date" value={draft.date.to} onChange={event => updateDate({ to: event.target.value })} /></label></>}
+        <label>Date field<select value={draft.date.field} onChange={event => updateDate({ field: event.target.value })} name="opportunity-filters-field">{OPPORTUNITY_DATE_FIELDS.map(field => <option key={field.key} value={field.key}>{field.label}</option>)}</select></label>
+        <label>Period<select value={draft.date.period} onChange={event => updateDate({ period: event.target.value })} name="opportunity-filters-period">{OPPORTUNITY_PERIODS.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></label>
+        {draft.date.period === 'specific' && <label>Specific date<input type="date" value={draft.date.date} onChange={event => updateDate({ date: event.target.value })} name="opportunity-filters-date" /></label>}
+        {draft.date.period === 'custom' && <><label>From<input type="date" value={draft.date.from} onChange={event => updateDate({ from: event.target.value })} name="opportunity-filters-from" /></label><label>To<input type="date" value={draft.date.to} onChange={event => updateDate({ to: event.target.value })} name="opportunity-filters-to" /></label></>}
       </div>{dateState.error && <p role="alert">{dateState.error}</p>}</fieldset>
       {advanced.length > 0 && <section className="opportunity-filter-advanced"><h3>Column filters also applied</h3>{advanced.map(item => <button type="button" key={item.id} onClick={item.remove} aria-label={`Remove ${item.label}`}>{item.label} ×</button>)}</section>}
-      <label className="opportunity-filter-sort">Sort<select value={draft.sort ? `${draft.sort.key}:${draft.sort.dir}` : ''} onChange={event => setDraft(current => ({ ...current, sort: event.target.value ? { key: event.target.value.split(':')[0], dir: Number(event.target.value.split(':')[1]) } : null }))}>
+      <label className="opportunity-filter-sort">Sort<select value={draft.sort ? `${draft.sort.key}:${draft.sort.dir}` : ''} onChange={event => setDraft(current => ({ ...current, sort: event.target.value ? { key: event.target.value.split(':')[0], dir: Number(event.target.value.split(':')[1]) } : null }))} name="opportunity-filters-select">
         <option value="">Default order</option><option value="lastUpdated:-1">Recently updated</option><option value="orderDate:1">Expected order date</option><option value="sellTo:1">Customer A–Z</option>
         {draft.sort && !['lastUpdated:-1', 'orderDate:1', 'sellTo:1'].includes(`${draft.sort.key}:${draft.sort.dir}`) && <option value={`${draft.sort.key}:${draft.sort.dir}`}>{columns.find(col => col.key === draft.sort.key)?.label || draft.sort.key} · {draft.sort.dir === 1 ? 'ascending' : 'descending'}</option>}
       </select></label>

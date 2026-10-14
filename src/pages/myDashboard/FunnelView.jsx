@@ -35,7 +35,7 @@ export function FunnelViewSwitch({ view, onChange }) {
     <span className={view === 'dynamic' ? 'is-selected' : undefined}>Dynamic</span>
     <label className="funnel-view-toggle">
       <input type="checkbox" role="switch" aria-label="Normal funnel view" checked={view === 'normal'}
-        onChange={event => onChange(event.target.checked ? 'normal' : 'dynamic')} />
+        onChange={event => onChange(event.target.checked ? 'normal' : 'dynamic')} name="funnel-view-normal-funnel-view" />
       <span className="funnel-view-toggle-track" aria-hidden="true" />
     </label>
     <span className={view === 'normal' ? 'is-selected' : undefined}>Normal</span>

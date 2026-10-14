@@ -17,7 +17,7 @@ export function PhoneLeadRow({ lead, archived = false, selecting, selected, onOp
   const timestamp = lead.ts || lead.receivedAt || lead.createdAt
   const date = timestamp && Number.isFinite(new Date(timestamp).getTime()) ? ddMmmYY(timestamp.slice(0, 10)).replace(/-\d{2}$/, '').replace('-', ' ') : '—'
   return <article className={`phone-lead-row${lead.status === 'New' && !lead.readAt ? ' is-unread' : ''}${selected ? ' is-selected' : ''}`}>
-    {selecting && <label className="phone-select"><input type="checkbox" checked={selected} onChange={onSelect} aria-label={`Select ${subject}`} /></label>}
+    {selecting && <label className="phone-select"><input type="checkbox" checked={selected} onChange={onSelect} aria-label={`Select ${subject}`} name="phone-inbox-checkbox" /></label>}
     <button type="button" className="phone-lead-open" onClick={onOpen} aria-label={`Open ${subject}`}>
       <span className="phone-lead-avatar" aria-hidden="true">{initials}</span>
       <span className="phone-lead-copy">
@@ -34,7 +34,7 @@ export function PhoneLeadRow({ lead, archived = false, selecting, selected, onOp
 export function PhoneInboxToolbar({ store, query, onQuery, view, onView, archive, onArchive, selecting, onSelecting, onRefresh, onFilters, filterCount, onNew }) {
   return <>
     <h1 className="visually-hidden">{archive ? 'Lead archive' : 'Lead inbox'}</h1>
-    <div className="phone-inbox-search"><Icon name="search" size={20} /><input type="search" aria-label="Search leads" placeholder="Search leads" value={query} onChange={event => onQuery(event.target.value)} /><button type="button" onClick={onFilters} aria-label={`Filter leads${filterCount ? ` (${filterCount} active)` : ''}`}><Icon name="filter" size={20} />{filterCount > 0 && <span>{filterCount}</span>}</button><details className="phone-list-more" onClick={event => { if (event.target.closest('button')) event.currentTarget.open = false }}><summary aria-label="Inbox actions"><Icon name="list" size={20} /></summary><div>
+    <div className="phone-inbox-search"><Icon name="search" size={20} /><input type="search" aria-label="Search leads" placeholder="Search leads" value={query} onChange={event => onQuery(event.target.value)} name="phone-inbox-search-leads" /><button type="button" onClick={onFilters} aria-label={`Filter leads${filterCount ? ` (${filterCount} active)` : ''}`}><Icon name="filter" size={20} />{filterCount > 0 && <span>{filterCount}</span>}</button><details className="phone-list-more" onClick={event => { if (event.target.closest('button')) event.currentTarget.open = false }}><summary aria-label="Inbox actions"><Icon name="list" size={20} /></summary><div>
         <button type="button" onClick={onArchive}>{archive ? 'Back to inbox' : 'Archive'}</button>
         <button type="button" onClick={onSelecting}>{selecting ? 'Done selecting' : 'Select messages'}</button>
       </div></details></div>

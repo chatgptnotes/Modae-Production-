@@ -260,7 +260,7 @@ export default function PriceLists() {
                     onChange={e => {
                       const value = e.target.value
                       setServiceDraft(draft => row.key === 'gst' ? { ...draft, gst: value } : { ...draft, rates: { ...draft.rates, [row.key]: value } })
-                    }} />
+                    }} name="price-lists-number" />
                   : fmt(row.value)}</td><td>{row.unit}</td></tr>
               ))}
             </tbody>
@@ -293,7 +293,7 @@ export default function PriceLists() {
         <div><b>Currency conversion rates</b><span className="hint"> Rates are INR per one unit of foreign currency. Source prices are not changed.</span></div>
         <div className="price-list-rates-grid">
           {currencies.filter(currency => currency !== 'INR').map(currency => <label key={currency} className="afield">1 {currency} = ₹
-            <input type="number" min="0.0001" step="0.0001" disabled={!canUpload} value={rateDraft[currency] ?? currencyRates[currency] ?? ''} onChange={e => setRateDraft({ ...rateDraft, [currency]: e.target.value })} />
+            <input type="number" min="0.0001" step="0.0001" disabled={!canUpload} value={rateDraft[currency] ?? currencyRates[currency] ?? ''} onChange={e => setRateDraft({ ...rateDraft, [currency]: e.target.value })} name="price-lists-number-2" />
             <button type="button" className="primary" disabled={!canUpload} onClick={() => { const rate = rateDraft[currency] ?? currencyRates[currency]; store.updateCurrencyRate(currency, rate); setRateDraft({ ...rateDraft, [currency]: String(rate) }) }}>Save</button>
           </label>)}
         </div>
@@ -301,7 +301,7 @@ export default function PriceLists() {
 
       {canUpload && <div className="toolbar price-list-version-bar">
         <label className="hint">View saved version</label>
-        <select value={versionId || pl.activeVersionId || ''} onChange={e => setVersionId(e.target.value || null)}>
+        <select value={versionId || pl.activeVersionId || ''} onChange={e => setVersionId(e.target.value || null)} name="price-lists-select">
           {(pl.versions || []).slice().reverse().map(version => <option key={version.id} value={version.id}>{version.version}{version.id === pl.activeVersionId ? ' · Current' : ''} · {version.uploaded || '—'}</option>)}
         </select>
         <>
@@ -316,11 +316,11 @@ export default function PriceLists() {
         <Modal title={`Upload ${list} price list`} wide onClose={() => setUploadOpen(false)}>
           <p className="hint">Upload the filled template, or the supplier's own price file — every sheet is read and as much as possible is extracted. This creates a new saved version; older versions remain available.</p>
           <div className="admin-field-grid">
-            <label className="afield">Version<input value={uploadVersion} placeholder="e.g. 2026-Q3" onChange={e => setUploadVersion(e.target.value)} /></label>
-            <label className="afield">Currency<select value={uploadCurrency} onChange={e => setUploadCurrency(e.target.value)}><option>EUR</option><option>INR</option><option>USD</option></select></label>
+            <label className="afield">Version<input value={uploadVersion} placeholder="e.g. 2026-Q3" onChange={e => setUploadVersion(e.target.value)} name="price-lists-upload-version" /></label>
+            <label className="afield">Currency<select value={uploadCurrency} onChange={e => setUploadCurrency(e.target.value)} name="price-lists-upload-currency"><option>EUR</option><option>INR</option><option>USD</option></select></label>
           </div>
           <div className="admin-actions" style={{ marginTop: 12 }}>
-            <input type="file" accept=".xlsx,.xls,.csv" disabled={aiBusy} onChange={e => e.target.files?.[0] && inspectUpload(e.target.files[0])} />
+            <input type="file" accept=".xlsx,.xls,.csv" disabled={aiBusy} onChange={e => e.target.files?.[0] && inspectUpload(e.target.files[0])} name="price-lists-file" />
             <button onClick={() => downloadPriceListTemplate(list, uploadCurrency)}>Download blank template</button>
           </div>
           {uploadFile && <div className="hint" style={{ marginTop: 8 }}>{uploadFile.name}</div>}
@@ -378,14 +378,14 @@ export default function PriceLists() {
       {canUpload && editOpen && (
         <Modal title={`Edit ${list} version`} wide onClose={() => setEditOpen(false)}>
           <p className="hint">Changes are saved as a new version. Add approved customer references as comma-separated aliases; these are reused by enquiry matching. Use the Adders format <b>CODE|Description|Price</b>; separate multiple adders with semicolons.</p>
-          <label className="afield">New version name<input value={editVersion} onChange={e => setEditVersion(e.target.value)} /></label>
+          <label className="afield">New version name<input value={editVersion} onChange={e => setEditVersion(e.target.value)} name="price-lists-edit-version" /></label>
           <div className="sheet-wrap" style={{ marginTop: 12, maxHeight: 420 }}><table className="sheet"><thead><tr><th>Part Number</th><th>Description</th><th>Price</th><th>Customer aliases</th><th>Adders</th></tr></thead><tbody>
             {editRows.map((row, index) => <tr key={index}>
-              <td><input value={row.pn} onChange={e => updateEditRow(index, 'pn', e.target.value)} /></td>
-              <td><input value={row.desc} onChange={e => updateEditRow(index, 'desc', e.target.value)} /></td>
-              <td><input type="number" min="0" step="any" aria-invalid={!validPriceAmount(row.price)} value={row.price} onChange={e => updateEditRow(index, 'price', e.target.value)} /></td>
-              <td><input value={aliasText(row)} placeholder="e.g. MPC4, MPC 4" onChange={e => updateEditRow(index, 'aliases', e.target.value.split(',').map(value => value.trim()).filter(Boolean))} /></td>
-              <td><input value={adderText(row)} placeholder="CODE|Description|Price" onChange={e => updateEditAdder(index, e.target.value)} /></td>
+              <td><input value={row.pn} onChange={e => updateEditRow(index, 'pn', e.target.value)} name="price-lists-pn" /></td>
+              <td><input value={row.desc} onChange={e => updateEditRow(index, 'desc', e.target.value)} name="price-lists-desc" /></td>
+              <td><input type="number" min="0" step="any" aria-invalid={!validPriceAmount(row.price)} value={row.price} onChange={e => updateEditRow(index, 'price', e.target.value)} name="price-lists-price" /></td>
+              <td><input value={aliasText(row)} placeholder="e.g. MPC4, MPC 4" onChange={e => updateEditRow(index, 'aliases', e.target.value.split(',').map(value => value.trim()).filter(Boolean))} name="price-lists-e-g-mpc4-mpc-4" /></td>
+              <td><input value={adderText(row)} placeholder="CODE|Description|Price" onChange={e => updateEditAdder(index, e.target.value)} name="price-lists-code-description-price" /></td>
             </tr>)}
           </tbody></table></div>
           {!editRowsValid && <p className="errbox" role="alert">Each row needs a part number and nonnegative prices for the part and its adders.</p>}
@@ -406,7 +406,7 @@ export default function PriceLists() {
       <div className="toolbar" style={{ marginBottom: 6 }}>
         <input type="search" value={partQuery} onChange={e => setPartQuery(e.target.value)}
           placeholder="Search part number or description" aria-label="Search this price list"
-          style={{ minWidth: 280 }} />
+          style={{ minWidth: 280 }} name="price-lists-search-this-price-list" />
         <span className="hint">
           {partQuery.trim()
             ? `Showing ${visibleParts.length} of ${displayList.parts.length} parts`

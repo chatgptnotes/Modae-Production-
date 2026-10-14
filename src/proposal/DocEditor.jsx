@@ -83,7 +83,7 @@ function ListEditor({ items, onChange, placeholder }) {
       {items.map((it, i) => (
         <div key={i} className="doc-list-row">
           <span className="doc-list-n">{i + 1}</span>
-          <textarea rows={2} value={it} onChange={e => set(i, e.target.value)} />
+          <textarea rows={2} value={it} onChange={e => set(i, e.target.value)} name="doc-editor-it" />
           <button onClick={() => move(i, -1)} disabled={i === 0} title="Move up"><Icon name="chevronUp" size={12} /></button>
           <button onClick={() => move(i, 1)} disabled={i === items.length - 1} title="Move down"><Icon name="chevronDown" size={12} /></button>
           <button onClick={() => onChange(items.filter((_, j) => j !== i))} title="Remove">✕</button>
@@ -106,8 +106,8 @@ function PairEditor({ items, keys, labels, onChange }) {
         <tbody>
           {items.map((it, i) => (
             <tr key={i}>
-              <td><input value={it[a] || ''} onChange={e => set(i, a, e.target.value)} style={{ minWidth: 300 }} /></td>
-              <td><input value={it[b] || ''} onChange={e => set(i, b, e.target.value)} style={{ minWidth: 140 }} /></td>
+              <td><input value={it[a] || ''} onChange={e => set(i, a, e.target.value)} style={{ minWidth: 300 }} name="doc-editor-input" /></td>
+              <td><input value={it[b] || ''} onChange={e => set(i, b, e.target.value)} style={{ minWidth: 140 }} name="doc-editor-input-2" /></td>
               <td><button onClick={() => onChange(items.filter((_, j) => j !== i))} title="Remove">✕</button></td>
             </tr>
           ))}
@@ -133,7 +133,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
     element.style.height = `${Math.max(element.scrollHeight, 72)}px`
   }
   const area = (field, rows = 4) => (
-    <textarea className="doc-auto-textarea" rows={rows} value={doc[field]} onChange={e => set(field, e.target.value)} onInput={autoGrow} />
+    <textarea className="doc-auto-textarea" rows={rows} value={doc[field]} onChange={e => set(field, e.target.value)} onInput={autoGrow} name={`doc-editor-${field}`} />
   )
 
   const navigation = [
@@ -180,7 +180,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
                     ? [...(p.printAnnexes || []), a.key]
                     : (p.printAnnexes || []).filter(k => k !== a.key)
                   save({ ...p, printAnnexes: next })
-                }} />
+                }} name="doc-editor-checkbox" />
               {' '}{a.label}
             </label>
           ))}
@@ -190,11 +190,11 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
         <div className="dgrid2" style={{ maxWidth: 620, marginBottom: 8 }}>
           <div>
             <label>Salutation <Auto p={p} field="letterSalutation" onReset={reset('letterSalutation')} /></label>
-            <input value={doc.letterSalutation} onChange={e => set('letterSalutation', e.target.value)} />
+            <input value={doc.letterSalutation} onChange={e => set('letterSalutation', e.target.value)} name="doc-editor-letter-salutation" />
           </div>
           <div>
             <label>Complimentary close <Auto p={p} field="letterClose" onReset={reset('letterClose')} /></label>
-            <input value={doc.letterClose} onChange={e => set('letterClose', e.target.value)} />
+            <input value={doc.letterClose} onChange={e => set('letterClose', e.target.value)} name="doc-editor-letter-close" />
           </div>
         </div>
         <div className="section-title">
@@ -209,7 +209,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
         </div>
         <div className="q" style={{ marginTop: 8 }}>
           <div className="q-label">CC (optional, comma separated)</div>
-          <input value={doc.letterCc} onChange={e => set('letterCc', e.target.value)} placeholder="e.g. Executive Engineer (Stores), Major Stores-A" />
+          <input value={doc.letterCc} onChange={e => set('letterCc', e.target.value)} placeholder="e.g. Executive Engineer (Stores), Major Stores-A" name="doc-editor-letter-cc" />
         </div>
       </Section>
 
@@ -265,7 +265,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
         <div className="dgrid2" style={{ maxWidth: 460, marginBottom: 8 }}>
           <div>
             <label>GST %</label>
-            <input type="number" min="0" step="0.5" value={doc.gstPct} onChange={e => set('gstPct', +e.target.value || 0)} />
+            <input type="number" min="0" step="0.5" value={doc.gstPct} onChange={e => set('gstPct', +e.target.value || 0)} name="doc-editor-gst-pct" />
           </div>
           <div>
             <label>Shown as</label>
@@ -283,9 +283,9 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
             {doc.priceBasis.map(([k, v], i) => (
               <tr key={i}>
                 <td><input value={k} style={{ minWidth: 160 }}
-                  onChange={e => set('priceBasis', doc.priceBasis.map((r, j) => (j === i ? [e.target.value, r[1]] : r)))} /></td>
+                  onChange={e => set('priceBasis', doc.priceBasis.map((r, j) => (j === i ? [e.target.value, r[1]] : r)))} name="doc-editor-k" /></td>
                 <td><input value={v} style={{ minWidth: 320 }}
-                  onChange={e => set('priceBasis', doc.priceBasis.map((r, j) => (j === i ? [r[0], e.target.value] : r)))} /></td>
+                  onChange={e => set('priceBasis', doc.priceBasis.map((r, j) => (j === i ? [r[0], e.target.value] : r)))} name="doc-editor-v" /></td>
                 <td><button onClick={() => set('priceBasis', doc.priceBasis.filter((_, j) => j !== i))} title="Remove">✕</button></td>
               </tr>
             ))}
@@ -360,7 +360,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
                         onChange={e => set('deviationNotes', {
                           ...(p.deviationNotes || {}),
                           [t.key]: { ...((p.deviationNotes || {})[t.key] || {}), [k]: e.target.value },
-                        })} />
+                        })} name={`doc-editor-${k}`} />
                     </div>
                   ))}
                 </div>
@@ -376,9 +376,9 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
             {doc.offerTerms.map((t, i) => (
               <tr key={i}>
                 <td><input value={t.term} style={{ minWidth: 120 }}
-                  onChange={e => set('offerTerms', doc.offerTerms.map((x, j) => (j === i ? { ...x, term: e.target.value } : x)))} /></td>
+                  onChange={e => set('offerTerms', doc.offerTerms.map((x, j) => (j === i ? { ...x, term: e.target.value } : x)))} name="doc-editor-term" /></td>
                 <td><input value={t.ourResponse} style={{ minWidth: 320 }}
-                  onChange={e => set('offerTerms', doc.offerTerms.map((x, j) => (j === i ? { ...x, ourResponse: e.target.value } : x)))} /></td>
+                  onChange={e => set('offerTerms', doc.offerTerms.map((x, j) => (j === i ? { ...x, ourResponse: e.target.value } : x)))} name="doc-editor-our-response" /></td>
                 <td><button onClick={() => set('offerTerms', doc.offerTerms.filter((_, j) => j !== i))} title="Remove">✕</button></td>
               </tr>
             ))}
@@ -395,7 +395,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
         <div className="dgrid2" style={{ maxWidth: 460 }}>
           <div>
             <label>Valid for (days)</label>
-            <input type="number" min="1" value={doc.validityDays} onChange={e => set('validityDays', +e.target.value || 0)} />
+            <input type="number" min="1" value={doc.validityDays} onChange={e => set('validityDays', +e.target.value || 0)} name="doc-editor-validity-days" />
           </div>
           <div>
             <label>Expires</label>
@@ -422,13 +422,13 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
       <Section title="About ModAE (front-matter page)" p={p} field="about" onReset={reset('about')}>
         <label>Introduction</label>
         <textarea rows={4} value={doc.about.intro} style={{ width: '100%' }}
-          onChange={e => set('about', { ...doc.about, intro: e.target.value })} />
+          onChange={e => set('about', { ...doc.about, intro: e.target.value })} name="doc-editor-intro" />
         <div className="section-title" style={{ marginTop: 10 }}>Capability relevant to this enquiry</div>
         <ListEditor items={doc.about.capabilities} placeholder="Nothing listed."
           onChange={v => set('about', { ...doc.about, capabilities: v })} />
         <label style={{ marginTop: 10, display: 'block' }}>Closing paragraph</label>
         <textarea rows={3} value={doc.about.closing} style={{ width: '100%' }}
-          onChange={e => set('about', { ...doc.about, closing: e.target.value })} />
+          onChange={e => set('about', { ...doc.about, closing: e.target.value })} name="doc-editor-closing" />
       </Section>
 
       <Section title="Signature block" p={p} field="preparedBy" onReset={reset('preparedBy')}>
@@ -436,7 +436,7 @@ export default function DocEditor({ p, opp, save, files, totals, priced }) {
           {[['name', 'Name'], ['title', 'Designation'], ['email', 'Email'], ['phone', 'Phone']].map(([k, label]) => (
             <div key={k}>
               <label>{label}</label>
-              <input value={doc.preparedBy[k] || ''} onChange={e => set('preparedBy', { ...doc.preparedBy, [k]: e.target.value })} />
+              <input value={doc.preparedBy[k] || ''} onChange={e => set('preparedBy', { ...doc.preparedBy, [k]: e.target.value })} name="doc-editor-input-3" />
             </div>
           ))}
         </div>

@@ -48,7 +48,7 @@ export default function PhoneTaskFocus({ enabled, stage, children }) {
     {enabled && groups.length > 1 && <nav className="phone-task-navigation" aria-label="Tasks in this workflow stage">
       <p>Task {active + 1} of {groups.length} · {stage}</p>
       <h2 ref={title} tabIndex={-1}>{groups[active]?.label}</h2>
-      <label>Choose task<select aria-label="Choose workflow task" value={active} onChange={event => choose(Number(event.target.value))}>{groups.map((group, index) => <option value={index} key={group.id}>{index + 1}. {group.label}</option>)}</select></label>
+      <label>Choose task<select aria-label="Choose workflow task" value={active} onChange={event => choose(Number(event.target.value))} name="phone-task-focus-choose-workflow-task">{groups.map((group, index) => <option value={index} key={group.id}>{index + 1}. {group.label}</option>)}</select></label>
       <div><button type="button" disabled={active === 0} onClick={() => choose(active - 1)}><Icon name="chevronLeft" size={16} />Previous task</button><button type="button" disabled={active === groups.length - 1} onClick={() => choose(active + 1)}>Next task<Icon name="chevronRight" size={16} /></button></div>
       <small>Switch tasks to review and edit. Use the stage action when ready to continue.</small>
     </nav>}

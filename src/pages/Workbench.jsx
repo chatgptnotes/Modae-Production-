@@ -840,7 +840,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
           ) : (
             <>
               <p className="hint">Returning from {opp.milestone} to {transition.target} is allowed for corrections. Enter a reason; it will be recorded in the audit trail.</p>
-              <label>Reason<textarea rows={3} value={transition.reason} onChange={e => setTransition({ ...transition, reason: e.target.value })} placeholder="Explain what changed or why this stage needs correction." /></label>
+              <label>Reason<textarea rows={3} value={transition.reason} onChange={e => setTransition({ ...transition, reason: e.target.value })} placeholder="Explain what changed or why this stage needs correction." name="workbench-reason" /></label>
               <div className="forms-actions"><button className="primary" disabled={!transition.reason?.trim()} onClick={() => { const moved = moveBackwardToStep(transition.targetStep || { milestone: transition.target, tab: LIFECYCLE_TABS[transition.target] }, transition.reason.trim()); if (moved) setTransition(null) }}>Return to stage</button><button onClick={() => setTransition(null)}>Cancel</button></div>
             </>
           )}
@@ -1035,15 +1035,15 @@ function CommercialDecisionPanel({ opp }) {
               <div><b>Customer requested:</b><span>{term.customerAsk || 'Not recorded'}</span></div>
               <div><b>ModAE standard:</b><span>{term.standardTerm || term.ourResponse || 'Not recorded'}</span></div>
             </div>
-            <label className="commercial-decision-choice">Decision <select value={term.decision || 'Decision pending'} onChange={e => setDecision(index, e.target.value)}>
+            <label className="commercial-decision-choice">Decision <select value={term.decision || 'Decision pending'} onChange={e => setDecision(index, e.target.value)} name="workbench-select">
               {COMMERCIAL_DECISIONS.map(option => <option key={option}>{option}</option>)}
             </select>
               {term.decision === 'Match customer terms' && <span className="hint">Save this decision, then request one grouped AH approval for the matched terms.</span>}
               {(!term.decision || term.decision === 'Decision pending') && <span className="err">Choose Match customer terms or Counter-offer with ModAE standard terms.</span>}
             </label>
             {term.decision === 'Counter-offer with ModAE standard terms' && <div className="commercial-decision-followup">
-              <label>Counter offer <input value={term.proposedTerm || term.ourResponse || ''} onChange={e => setProposedTerm(index, e.target.value)} /></label>
-              <label>Customer response <select value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => setConfirmation(index, e.target.value)}>
+              <label>Counter offer <input value={term.proposedTerm || term.ourResponse || ''} onChange={e => setProposedTerm(index, e.target.value)} name="workbench-input" /></label>
+              <label>Customer response <select value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => setConfirmation(index, e.target.value)} name="workbench-select-2">
                 {CUSTOMER_CONFIRMATION_STATUSES.filter(status => status !== 'Not required').map(status => <option key={status}>{status}</option>)}
               </select></label>
               <span className="hint">Customer confirmation will be tracked in Follow-up.</span>
@@ -1404,16 +1404,16 @@ function CustomerKycTab({ opp }) {
             </p>
             <div className="dgrid2 customer-commercial-grid" style={{ marginTop: 8 }}>
               <label className="customer-commercial-field">Billing address
-                <textarea className={detailChanged('billingAddress') ? 'customer-detail-changed' : undefined} rows={2} value={details.billingAddress} onChange={e => updateDetail('billingAddress', e.target.value)} placeholder="Add billing address" />
+                <textarea className={detailChanged('billingAddress') ? 'customer-detail-changed' : undefined} rows={2} value={details.billingAddress} onChange={e => updateDetail('billingAddress', e.target.value)} placeholder="Add billing address" name="workbench-billing-address" />
               </label>
               <label className="customer-commercial-field">Shipping address
-                <textarea className={detailChanged('shippingAddress') ? 'customer-detail-changed' : undefined} rows={2} value={details.shippingAddress} onChange={e => updateDetail('shippingAddress', e.target.value)} placeholder="Add shipping address" />
+                <textarea className={detailChanged('shippingAddress') ? 'customer-detail-changed' : undefined} rows={2} value={details.shippingAddress} onChange={e => updateDetail('shippingAddress', e.target.value)} placeholder="Add shipping address" name="workbench-shipping-address" />
               </label>
               <label className="customer-commercial-field">Shipping pincode
-                <input className={detailChanged('shippingPincode') ? 'customer-detail-changed' : undefined} value={details.shippingPincode} onChange={e => updateDetail('shippingPincode', e.target.value)} placeholder="e.g. 440001" inputMode="numeric" />
+                <input className={detailChanged('shippingPincode') ? 'customer-detail-changed' : undefined} value={details.shippingPincode} onChange={e => updateDetail('shippingPincode', e.target.value)} placeholder="e.g. 440001" inputMode="numeric" name="workbench-shipping-pincode" />
               </label>
               <label className="customer-commercial-field">GSTIN
-                <input className={detailChanged('gstin') ? 'customer-detail-changed' : undefined} value={details.gstin} onChange={e => updateDetail('gstin', e.target.value.toUpperCase())} placeholder="Add GSTIN" />
+                <input className={detailChanged('gstin') ? 'customer-detail-changed' : undefined} value={details.gstin} onChange={e => updateDetail('gstin', e.target.value.toUpperCase())} placeholder="Add GSTIN" name="workbench-gstin" />
               </label>
             </div>
             <div className="toolbar" style={{ marginTop: 8, marginBottom: 0 }}>
@@ -1485,7 +1485,7 @@ function CustomerKycTab({ opp }) {
             })}
           </>
         ) : <>
-        <input ref={fileInput} type="file" style={{ display: 'none' }} onChange={onPick} />
+        <input ref={fileInput} type="file" style={{ display: 'none' }} onChange={onPick} name="workbench-file" />
         {customer && !canVerify && <p className="hint">Only AH can verify these documents.</p>}
         {items.map(k => (
           <React.Fragment key={k.name}>
@@ -1951,9 +1951,9 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
         <div className="section-title">Add a required customer question</div>
         <p className="hint">Use this when the automatic suggestions miss a customer-specific gap. It will block sourcing until answered.</p>
         <div className="clarification-manual-fields">
-          <label>Category<input value={manualForm.category} onChange={e => setManualForm(form => ({ ...form, category: e.target.value }))} placeholder="Technical" /></label>
-          <label>Gap<input value={manualForm.gap} onChange={e => setManualForm(form => ({ ...form, gap: e.target.value }))} placeholder="What information is missing?" /></label>
-          <label className="clarification-manual-question">Customer question<textarea rows={2} value={manualForm.q} onChange={e => setManualForm(form => ({ ...form, q: e.target.value }))} placeholder="Write the exact question to send to the customer" /></label>
+          <label>Category<input value={manualForm.category} onChange={e => setManualForm(form => ({ ...form, category: e.target.value }))} placeholder="Technical" name="workbench-category" /></label>
+          <label>Gap<input value={manualForm.gap} onChange={e => setManualForm(form => ({ ...form, gap: e.target.value }))} placeholder="What information is missing?" name="workbench-gap" /></label>
+          <label className="clarification-manual-question">Customer question<textarea rows={2} value={manualForm.q} onChange={e => setManualForm(form => ({ ...form, q: e.target.value }))} placeholder="Write the exact question to send to the customer" name="workbench-q" /></label>
         </div>
         {manualErr && <div className="errbox">{manualErr}</div>}
         <div className="toolbar clarification-manual-actions">
@@ -1981,7 +1981,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
             {(c.response || c.missing) && <div className={`clarification-answer-box ${c.status === 'Needs review' ? 'needs-review' : 'answered'}`}>{c.response && <>Response: {c.response}</>}{c.missing && <div className="hint"><b>Still needed:</b> {c.missing}</div>}<div className="hint">From {c.answerSource || c.audience || 'source'}{c.answeredAt ? ` · ${ddMmmYY(c.answeredAt)}` : ''}</div>{c.answerEvidence && <div className="hint">Evidence: {c.answerEvidence}</div>}{(c.attachments || []).map(f => <div key={f.name} className="hint"><Icon name="fileText" size={11} /> {f.name}</div>)}</div>}
             <AiFieldSuggestion suggestion={c.aiFieldSuggestion} onConfirm={() => confirmAiField(c)} onReject={() => rejectAiField(c)} />
             <div className="clarification-card-actions">
-              <label>Updates field<select value={c.field || ''} disabled={coveredIds.has(c.id) || coveredByAnswerIds.has(c.id) || isClarificationResolved(c)} title="Once answered, apply this response straight to that Opportunity Details field" onChange={e => store.updateClarification(c.id, { field: e.target.value })}>{OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
+              <label>Updates field<select value={c.field || ''} disabled={coveredIds.has(c.id) || coveredByAnswerIds.has(c.id) || isClarificationResolved(c)} title="Once answered, apply this response straight to that Opportunity Details field" onChange={e => store.updateClarification(c.id, { field: e.target.value })} name="workbench-select-3">{OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
               <button disabled={coveredIds.has(c.id) || coveredByAnswerIds.has(c.id)} onClick={() => openAnswer(c)}>{coveredIds.has(c.id) ? 'Source already covers this' : coveredByAnswerIds.has(c.id) ? 'Covered by another answer' : isClarificationResolved(c) ? 'Edit information' : 'Update information'}</button>
             </div>
           </article>
@@ -2005,7 +2005,7 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
                 <td>
                   <select value={c.field || ''} disabled={coveredIds.has(c.id) || coveredByAnswerIds.has(c.id) || isClarificationResolved(c)}
                     title="Once answered, apply this response straight to that Opportunity Details field"
-                    onChange={e => store.updateClarification(c.id, { field: e.target.value })}>
+                    onChange={e => store.updateClarification(c.id, { field: e.target.value })} name="workbench-select-4">
                     {OPP_FIELD_OPTIONS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}
                   </select>
                 </td>
@@ -2024,19 +2024,19 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
           {replyErr && <ErrBox>{replyErr}</ErrBox>}
           <div className="clar-mail-form">
             <label className="afield">From
-              <input value={replyForm.from} onChange={e => setReplyForm({ ...replyForm, from: e.target.value })} placeholder="customer@company.com" autoFocus />
+              <input value={replyForm.from} onChange={e => setReplyForm({ ...replyForm, from: e.target.value })} placeholder="customer@company.com" autoFocus name="workbench-from" />
             </label>
             <label className="afield">Subject
-              <input value={replyForm.subject} onChange={e => setReplyForm({ ...replyForm, subject: e.target.value })} placeholder="Customer reply subject" />
+              <input value={replyForm.subject} onChange={e => setReplyForm({ ...replyForm, subject: e.target.value })} placeholder="Customer reply subject" name="workbench-subject" />
             </label>
             <label className="afield">Received date
-              <input type="date" value={replyForm.receivedAt} onChange={e => setReplyForm({ ...replyForm, receivedAt: e.target.value })} />
+              <input type="date" value={replyForm.receivedAt} onChange={e => setReplyForm({ ...replyForm, receivedAt: e.target.value })} name="workbench-received-at" />
             </label>
             <label className="afield">Reply message
-              <textarea rows={9} value={replyForm.body} onChange={e => setReplyForm({ ...replyForm, body: e.target.value })} placeholder="Paste the customer’s complete reply here." />
+              <textarea rows={9} value={replyForm.body} onChange={e => setReplyForm({ ...replyForm, body: e.target.value })} placeholder="Paste the customer’s complete reply here." name="workbench-body" />
             </label>
             <label className="afield">Attach email or supporting file
-              <input type="file" multiple onChange={e => setReplyFiles(Array.from(e.target.files || []))} />
+              <input type="file" multiple onChange={e => setReplyFiles(Array.from(e.target.files || []))} name="workbench-file-2" />
             </label>
             {!!replyFiles.length && <div className="hint">{replyFiles.length} file(s) will be saved in Customer Specs and read by AI. <button type="button" onClick={() => setReplyFiles([])}>Cancel upload</button></div>}
           </div>
@@ -2053,19 +2053,19 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
           {answerErr && <ErrBox>{answerErr}</ErrBox>}
           <div className="clar-mail-form">
             <label className="afield">Source
-              <select value={answerForm.answerSource} onChange={e => setAnswerForm({ ...answerForm, answerSource: e.target.value })}>
+              <select value={answerForm.answerSource} onChange={e => setAnswerForm({ ...answerForm, answerSource: e.target.value })} name="workbench-answer-source">
                 <option>Customer</option>
                 <option>Internal</option>
               </select>
             </label>
             <label className="afield">Received date
-              <input type="date" value={answerForm.receivedAt} onChange={e => setAnswerForm({ ...answerForm, receivedAt: e.target.value })} />
+              <input type="date" value={answerForm.receivedAt} onChange={e => setAnswerForm({ ...answerForm, receivedAt: e.target.value })} name="workbench-received-at-2" />
             </label>
             <label className="afield">Information received
-              <textarea rows={8} value={answerForm.response} onChange={e => setAnswerForm({ ...answerForm, response: e.target.value })} placeholder="Paste or summarise the missing information received for this request." autoFocus />
+              <textarea rows={8} value={answerForm.response} onChange={e => setAnswerForm({ ...answerForm, response: e.target.value })} placeholder="Paste or summarise the missing information received for this request." autoFocus name="workbench-response" />
             </label>
             <label className="afield">Files / mail evidence
-              <input type="file" multiple onChange={e => setAnswerFiles(Array.from(e.target.files || []))} />
+              <input type="file" multiple onChange={e => setAnswerFiles(Array.from(e.target.files || []))} name="workbench-file-3" />
             </label>
             {!!answerFiles.length && <div className="hint">{answerFiles.length} file(s) selected for Customer Specs. <button type="button" onClick={() => setAnswerFiles([])}>Cancel upload</button></div>}
           </div>
@@ -2080,19 +2080,19 @@ function ClarificationsTab({ opp, sourceText = '', compact = false }) {
           {sendErr && <ErrBox>{sendErr}</ErrBox>}
           <div className="clar-mail-form">
             <label className="afield">From
-              <input value={draft?.from || ''} readOnly />
+              <input value={draft?.from || ''} readOnly name="workbench-input-2" />
             </label>
             <label className="afield">To
-              <input value={draft?.to || ''} onChange={e => setDraft({ ...draft, to: e.target.value })} placeholder="customer@company.com" autoFocus />
+              <input value={draft?.to || ''} onChange={e => setDraft({ ...draft, to: e.target.value })} placeholder="customer@company.com" autoFocus name="workbench-customer-company-com" />
             </label>
             <label className="afield">CC
-              <input value={draft?.cc || ''} onChange={e => setDraft({ ...draft, cc: e.target.value })} placeholder="name@company.com, another@company.com" />
+              <input value={draft?.cc || ''} onChange={e => setDraft({ ...draft, cc: e.target.value })} placeholder="name@company.com, another@company.com" name="workbench-name-company-com-another-company-com" />
             </label>
             <label className="afield">Subject
-              <input value={draft?.subject || ''} onChange={e => setDraft({ ...draft, subject: e.target.value })} />
+              <input value={draft?.subject || ''} onChange={e => setDraft({ ...draft, subject: e.target.value })} name="workbench-input-3" />
             </label>
             <label className="afield">Body
-              <textarea rows={14} value={draft?.body || ''} onChange={e => setDraft({ ...draft, body: e.target.value })} />
+              <textarea rows={14} value={draft?.body || ''} onChange={e => setDraft({ ...draft, body: e.target.value })} name="workbench-textarea" />
             </label>
           </div>
           <WarnBox>Human review required before sending — verify every question and the addressee.</WarnBox>
@@ -2439,7 +2439,7 @@ function FollowUpPane({ opp, onRevision }) {
           {(p.terms || []).map((term, index) => term.decision !== 'Counter-offer with ModAE standard terms' ? null : <div className="route-template-row" key={`commercial-followup-${index}`}>
             <b>{term.term}</b>
             <span>Customer asked: {term.customerAsk || '—'} · ModAE counter: {term.proposedTerm || term.ourResponse || '—'}</span>
-            <select aria-label={`${term.term} customer confirmation`} value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => updateCommercialConfirmation(index, e.target.value)}>
+            <select aria-label={`${term.term} customer confirmation`} value={term.customerConfirmationStatus || 'Awaiting reply'} onChange={e => updateCommercialConfirmation(index, e.target.value)} name="workbench-select-5">
               {['Awaiting reply', 'Accepted', 'Rejected', 'Countered'].map(status => <option key={status}>{status}</option>)}
             </select>
           </div>)}
@@ -2476,11 +2476,11 @@ function FollowUpPane({ opp, onRevision }) {
           <div className="drawer-form">
             <b>Log customer reply</b>
             <label style={{ marginTop: 6 }}>From</label>
-            <input value={replyFrom} onChange={e => setReplyFrom(e.target.value)} placeholder={opp.contactPerson || opp.sellTo} />
+            <input value={replyFrom} onChange={e => setReplyFrom(e.target.value)} placeholder={opp.contactPerson || opp.sellTo} name="workbench-reply-from" />
             <label style={{ marginTop: 6 }}>Subject</label>
-            <input value={replySubject} onChange={e => setReplySubject(e.target.value)} placeholder={`Re: ${opp.oppName}`} />
+            <input value={replySubject} onChange={e => setReplySubject(e.target.value)} placeholder={`Re: ${opp.oppName}`} name="workbench-reply-subject" />
             <label style={{ marginTop: 6 }}>Reply body</label>
-            <textarea rows={5} value={replyBody} onChange={e => setReplyBody(e.target.value)} placeholder="Paste the customer's reply" />
+            <textarea rows={5} value={replyBody} onChange={e => setReplyBody(e.target.value)} placeholder="Paste the customer's reply" name="workbench-reply-body" />
             {replyErr && <ErrBox>{replyErr}</ErrBox>}
             <div className="toolbar" style={{ margin: 0 }}>
               <button className="primary" type="button" onClick={logReply}>Save reply</button>
@@ -2514,7 +2514,7 @@ function FollowUpPane({ opp, onRevision }) {
             {replyReview.status !== 'analyzing' && (
               <>
                 <label style={{ marginTop: 8 }}>Confirmed route</label>
-                <select value={replyAction} onChange={e => setReplyAction(e.target.value)}>
+                <select value={replyAction} onChange={e => setReplyAction(e.target.value)} name="workbench-reply-action">
                   <option value="">Select a route</option>
                   <option value="follow-up">Keep open for follow-up</option>
                   <option value="revision">Open a revision</option>
@@ -2523,7 +2523,7 @@ function FollowUpPane({ opp, onRevision }) {
                   <option value="rejected">Rejected — close as lost</option>
                 </select>
                 {replyAction === 'revision' && (
-                  <select value={replyRevisionType} onChange={e => setReplyRevisionType(e.target.value)} style={{ marginTop: 6 }}>
+                  <select value={replyRevisionType} onChange={e => setReplyRevisionType(e.target.value)} style={{ marginTop: 6 }} name="workbench-reply-revision-type">
                     {REVISION_TYPES.map(type => <option key={type.id} value={type.id}>{type.label}</option>)}
                   </select>
                 )}
@@ -2563,11 +2563,11 @@ function FollowUpPane({ opp, onRevision }) {
         ))}
         {!revisions.length && <p className="hint">No revisions recorded yet.</p>}
         <div className="follow-up-control-row revision-control-row">
-          <select value={revType} onChange={e => setRevType(e.target.value)}>
+          <select value={revType} onChange={e => setRevType(e.target.value)} name="workbench-rev-type">
             {REVISION_TYPES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
           </select>
           <input placeholder="Reason for revision (logged)" value={note} style={{ flex: 1, minWidth: 160 }}
-            onChange={e => setNote(e.target.value)} />
+            onChange={e => setNote(e.target.value)} name="workbench-note" />
           <button disabled={!note.trim()} onClick={addRevision}><Icon name="plus" size={13} /> Add revision</button>
         </div>
         <p className="hint" style={{ marginTop: 4 }}>
@@ -2630,14 +2630,14 @@ function FollowUpPane({ opp, onRevision }) {
                   data-explain-title="Closing as lost"
                   data-explain="A loss reason is required; explain “Other.” Competitor is optional."
                 >
-                <select value={lossReason} onChange={e => setLossReason(e.target.value)} autoFocus>
+                <select value={lossReason} onChange={e => setLossReason(e.target.value)} autoFocus name="workbench-loss-reason">
                   <option value="">— loss reason (required) —</option>
                   {CLOSE_REASONS.map(r => <option key={r} value={r}>{labelFor('closedReason', r)}</option>)}
                 </select>
                 {lossReason === 'Other' && <textarea value={lossReasonNote} onChange={e => setLossReasonNote(e.target.value)}
-                  maxLength={240} rows={3} placeholder="Enter the loss explanation" />}
+                  maxLength={240} rows={3} placeholder="Enter the loss explanation" name="workbench-loss-reason-note" />}
                 <input placeholder="Competitor who won it (optional)" value={lossCompetitor}
-                  onChange={e => setLossCompetitor(e.target.value)} />
+                  onChange={e => setLossCompetitor(e.target.value)} name="workbench-loss-competitor" />
                 <button disabled={!lossReason || (lossReason === 'Other' && !lossReasonNote.trim())} title={lossReason ? '' : 'Select a loss reason first'}
                   onClick={() => {
                     store.closeLost(opp.id, lossReason, lossCompetitor.trim() ? { name: lossCompetitor.trim() } : null, lossReason === 'Other' ? lossReasonNote.trim() : '')
@@ -2654,12 +2654,12 @@ function FollowUpPane({ opp, onRevision }) {
                   data-explain-title="Closing as won"
                   data-explain="A won reason is required; explain “Other.”"
                 >
-                <select value={wonReason} onChange={e => setWonReason(e.target.value)} autoFocus>
+                <select value={wonReason} onChange={e => setWonReason(e.target.value)} autoFocus name="workbench-won-reason">
                   <option value="">— won reason (required) —</option>
                   {WON_REASONS.map(r => <option key={r} value={r}>{labelFor('closedReason', r)}</option>)}
                 </select>
                 {wonReason === 'Other' && <textarea value={wonReasonNote} onChange={e => setWonReasonNote(e.target.value)}
-                  maxLength={240} rows={3} placeholder="Enter the reason" />}
+                  maxLength={240} rows={3} placeholder="Enter the reason" name="workbench-won-reason-note" />}
                 <button disabled={!wonReason || (wonReason === 'Other' && !wonReasonNote.trim())}
                   title={wonReason ? '' : 'Select a won reason first'}
                   onClick={() => {
@@ -2688,9 +2688,9 @@ function FollowUpPane({ opp, onRevision }) {
         {!competitors.length && <p className="hint">No competitor recorded on this opportunity.</p>}
         <div className="follow-up-control-row competitor-control-row">
           <input placeholder="Competitor" value={compName} style={{ flex: '1 1 120px' }}
-            onChange={e => setCompName(e.target.value)} />
+            onChange={e => setCompName(e.target.value)} name="workbench-comp-name" />
           <input placeholder="What we know (price, position)" value={compNote} style={{ flex: '2 1 180px' }}
-            onChange={e => setCompNote(e.target.value)} />
+            onChange={e => setCompNote(e.target.value)} name="workbench-comp-note" />
           <button disabled={!compName.trim()}
             onClick={() => {
               store.addCompetitor(opp.id, { name: compName.trim(), note: compNote.trim() })
@@ -2704,12 +2704,12 @@ function FollowUpPane({ opp, onRevision }) {
       {fuOpen && (
         <Modal title={mailType === 'escalation' ? 'Internal escalation email' : 'AI-drafted follow-up email'} onClose={() => setFuOpen(false)} wide>
           <div className="follow-up-email-fields">
-            <label>From<input type="email" value={mailFrom} onChange={e => setMailFrom(e.target.value)} /></label>
-            <label>To<input type="text" value={mailTo} onChange={e => setMailTo(e.target.value)} placeholder="Recipient email address(es)" /></label>
-            <label>CC<input type="text" value={mailCc} onChange={e => setMailCc(e.target.value)} placeholder="Optional" /></label>
-            <label>Subject<input value={mailSubject} onChange={e => setMailSubject(e.target.value)} /></label>
+            <label>From<input type="email" value={mailFrom} onChange={e => setMailFrom(e.target.value)} name="workbench-mail-from" /></label>
+            <label>To<input type="text" value={mailTo} onChange={e => setMailTo(e.target.value)} placeholder="Recipient email address(es)" name="workbench-mail-to" /></label>
+            <label>CC<input type="text" value={mailCc} onChange={e => setMailCc(e.target.value)} placeholder="Optional" name="workbench-mail-cc" /></label>
+            <label>Subject<input value={mailSubject} onChange={e => setMailSubject(e.target.value)} name="workbench-mail-subject" /></label>
           </div>
-          <label className="follow-up-email-body-label">Message<textarea rows={10} style={{ width: '100%' }} value={fuDraft} onChange={e => setFuDraft(e.target.value)} /></label>
+          <label className="follow-up-email-body-label">Message<textarea rows={10} style={{ width: '100%' }} value={fuDraft} onChange={e => setFuDraft(e.target.value)} name="workbench-fu-draft" /></label>
           <WarnBox>Review the recipient and message in Gmail before sending.</WarnBox>
           {mailError && <ErrBox>{mailError}</ErrBox>}
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>

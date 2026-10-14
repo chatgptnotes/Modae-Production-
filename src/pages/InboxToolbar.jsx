@@ -43,7 +43,7 @@ function ToolbarMenu({ label, className = '', trigger, items, disabled = false }
 
 export default function InboxToolbar({ query, onQuery, filterCount, onFilters, view, counts, onView, archive, onArchive, archiveCount, onRefresh, onNew, canCreate = true, actions, selectionCount }) {
   return <div className="inbox-toolbar" role="group" aria-label="Inbox search and actions">
-    <div className="inbox-toolbar-search"><Icon name="search" size={19} /><input type="search" aria-label="Search mail" placeholder="Search leads…" value={query} onChange={event => onQuery(event.target.value)} />
+    <div className="inbox-toolbar-search"><Icon name="search" size={19} /><input type="search" aria-label="Search mail" placeholder="Search leads…" value={query} onChange={event => onQuery(event.target.value)} name="inbox-toolbar-search-mail" />
       <button type="button" className="inbox-toolbar-icon" aria-label="Filter leads" title={filterCount ? `${filterCount} active filters` : 'Filter leads'} aria-haspopup="dialog" onClick={onFilters}><Icon name="sliders" size={19} />{filterCount > 0 && <span className="inbox-filter-count">{filterCount}</span>}</button>
     </div>
     <ToolbarMenu label="Inbox view" className="inbox-view-trigger" disabled={archive}

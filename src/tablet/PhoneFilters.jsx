@@ -5,7 +5,7 @@ import { Modal } from '../ui.jsx'
 export default function PhoneFilters({ title = 'Filters', fields, onApply, onClose, className = '', showCancel = false }) {
   const [draft, setDraft] = useState(() => Object.fromEntries(fields.map(field => [field.key, field.value || ''])))
   return <Modal title={title} onClose={onClose} className={`phone-filter-sheet ${className}`.trim()}>
-    <div className="phone-filter-fields">{fields.map(field => <label key={field.key}>{field.label}<select value={draft[field.key]} onChange={event => setDraft(current => ({ ...current, [field.key]: event.target.value }))}>{field.options.map(option => {
+    <div className="phone-filter-fields">{fields.map(field => <label key={field.key}>{field.label}<select value={draft[field.key]} onChange={event => setDraft(current => ({ ...current, [field.key]: event.target.value }))} name={`phone-filters-${field.key}`}>{field.options.map(option => {
       const [value, label] = Array.isArray(option) ? option : [option, option]
       return <option key={value} value={value}>{label}</option>
     })}</select></label>)}</div>

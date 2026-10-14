@@ -75,13 +75,13 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
               <label>{label}</label>
               {opts
                 ? (
-                  <select value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })}>
+                  <select value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })} name={`customers-${k}`}>
                     {[...new Set([...(opts === 'category' ? fieldValues(store.config, 'category') : opts), form[k]])].map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 )
                 : (
                   <input value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })}
-                    placeholder="e.g. Avg 60 days" />
+                    placeholder="e.g. Avg 60 days" name={`customers-${k}`} />
                 )}
             </div>
           ))}
@@ -93,7 +93,7 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
           <div className="dgrid2">
             {criteriaRows.map(({ id, label }) => <div key={id}>
               <label>{label}</label>
-              <input value={criteria[id] ?? criteria[label] ?? ''} onChange={e => setCriteria({ ...criteria, [id]: e.target.value })} />
+              <input value={criteria[id] ?? criteria[label] ?? ''} onChange={e => setCriteria({ ...criteria, [id]: e.target.value })} name="customers-input" />
               {guidance.find(row => row.label === label)?.values?.[form.status] && <small className="hint">{form.status} guidance: {guidance.find(row => row.label === label).values[form.status]}</small>}
             </div>)}
           </div>
@@ -105,7 +105,7 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
           placeholder={canEditDirect
             ? 'e.g. corrected after accounting extract of 12 Aug'
             : 'e.g. customer cleared the overdue invoices last week'}
-          style={{ width: '100%' }} />
+          style={{ width: '100%' }} name="customers-reason" />
 
         {changed.length > 0 && (
           <p className="hint" style={{ marginTop: 6 }}>
@@ -153,20 +153,20 @@ function AddCustomer({ onClose }) {
       <form onSubmit={submit} className="drawer-form">
         <label>Company name</label>
         <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })}
-          placeholder="e.g. Adani Power Ltd" autoFocus style={{ width: '100%' }} />
+          placeholder="e.g. Adani Power Ltd" autoFocus style={{ width: '100%' }} name="customers-name" />
         <div className="dgrid2" style={{ marginTop: 8 }}>
           {FIELDS.map(([k, label, opts]) => (
             <div key={k}>
               <label>{label}</label>
               {opts
                 ? (
-                  <select value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })}>
+                  <select value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })} name={`customers-${k}`}>
                     {(opts === 'category' ? fieldValues(store.config, 'category') : opts).map(o => <option key={o} value={o}>{o}</option>)}
                   </select>
                 )
                 : (
                   <input value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })}
-                    placeholder="e.g. Avg 60 days" />
+                    placeholder="e.g. Avg 60 days" name={`customers-${k}`} />
                 )}
             </div>
           ))}
@@ -322,7 +322,7 @@ export default function Customers() {
             <button onClick={() => fileRef.current?.click()}>
               <Icon name="folder" size={13} /> Upload customer list
             </button>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onFile} />
+            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }} onChange={onFile} name="customers-file" />
           </>
         )}
       </div>

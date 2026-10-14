@@ -53,7 +53,7 @@ function NumField({ label, value, disabled, onChange }) {
   return (
     <label className="afield">{label}
       <input type="number" value={value ?? 0} disabled={disabled}
-        onChange={e => onChange(Number(e.target.value) || 0)} />
+        onChange={e => onChange(Number(e.target.value) || 0)} name="admin-number" />
     </label>
   )
 }
@@ -69,7 +69,7 @@ function AutoSizingTextarea({ onChange, value, ...props }) {
   useLayoutEffect(() => resize(ref.current))
 
   return <textarea {...props} ref={ref} rows={1} value={value}
-    onChange={event => { resize(event.currentTarget); onChange(event) }} />
+    onChange={event => { resize(event.currentTarget); onChange(event) }} name={props.name || "admin-value"} />
 }
 
 // The service day rates every service quote and invoice is priced from. These
@@ -119,7 +119,7 @@ function FileButton({ label, disabled, onFile, variant = 'secondary', accept }) 
   return (
     <>
       <input ref={ref} type="file" accept={accept} style={{ display: 'none' }}
-        onChange={e => { const f = e.target.files && e.target.files[0]; if (f) onFile(f); e.target.value = '' }} />
+        onChange={e => { const f = e.target.files && e.target.files[0]; if (f) onFile(f); e.target.value = '' }} name="admin-file" />
       <button className={variant} disabled={disabled} onClick={() => ref.current && ref.current.click()}>
         <Icon name="upload" size={11} /> {label}
       </button>
@@ -471,11 +471,11 @@ export default function Admin() {
           {(config.ownershipRules || []).map((r, i) => (
             <div key={i} className="arow admin-ownership-row">
               <input type="text" value={r.region || ''} disabled={!canEdit}
-                onChange={e => patchList('ownershipRules', i, { region: e.target.value })} />
+                onChange={e => patchList('ownershipRules', i, { region: e.target.value })} name="admin-text" />
               <label className="admin-select-with-badge">
                 <span className={`admin-owner-badge owner-${String(r.owner || '').toLowerCase()}`}>{r.owner}</span>
                 <select aria-label={`Owner for ${r.region || 'region'}`} value={r.owner} disabled={!canEdit}
-                  onChange={e => patchList('ownershipRules', i, { owner: e.target.value })}>
+                  onChange={e => patchList('ownershipRules', i, { owner: e.target.value })} name="admin-owner">
                   {OWNERS.map(o => <option key={o} value={o}>{labelFor('owner', o)}</option>)}
                 </select>
               </label>
@@ -495,7 +495,7 @@ export default function Admin() {
             <span className="sr-only">Search states and Union Territories</span>
             <Icon name="search" size={12} />
             <input type="search" value={regionSearch} placeholder="Search state or UT"
-              onChange={e => setRegionSearch(e.target.value)} />
+              onChange={e => setRegionSearch(e.target.value)} name="admin-region-search" />
           </label>
           <div className="admin-scroll-list">
             {filteredStateRegions.map(r => {
@@ -504,7 +504,7 @@ export default function Admin() {
               <div key={r.code} className="arow">
                 <span>{r.name}</span>
                 <select value={r.region} disabled={!canEdit}
-                  onChange={e => patchList('stateRegions', i, { region: e.target.value })}>
+                  onChange={e => patchList('stateRegions', i, { region: e.target.value })} name="admin-region">
                   {REGION_OPTIONS.map(o => <option key={o}>{o}</option>)}
                 </select>
               </div>
@@ -554,7 +554,7 @@ export default function Admin() {
                       const current = thresholds.pricingApprovers || ['AH', 'LJS']
                       const next = e.target.checked ? [...new Set([...current, role])] : current.filter(item => item !== role)
                       if (next.length) store.updateConfig({ approvalThresholds: { ...thresholds, pricingApprovers: next } })
-                    }} />
+                    }} name="admin-checkbox" />
                   {displayRoleLabel(role)}
                 </label>
               })}
@@ -562,12 +562,12 @@ export default function Admin() {
           </div>
           <label className="check-row">
             <input type="checkbox" checked={config.requireFinalQuoteApproval !== false} disabled={!canEdit}
-              onChange={e => store.updateConfig({ requireFinalQuoteApproval: e.target.checked })} />
+              onChange={e => store.updateConfig({ requireFinalQuoteApproval: e.target.checked })} name="admin-checkbox-2" />
             Require AH + LJS approval before final proposal send
           </label>
           <label className="check-row">
             <input type="checkbox" checked={config.requireCommercialDeviationApproval !== false} disabled={!canEdit}
-              onChange={e => store.updateConfig({ requireCommercialDeviationApproval: e.target.checked })} />
+              onChange={e => store.updateConfig({ requireCommercialDeviationApproval: e.target.checked })} name="admin-checkbox-3" />
             Require AH approval for special customer terms
           </label>
           <p className="hint">Values above the discount or markup limits require one approval from the selected role(s). Existing value/margin routing remains unchanged.</p>
@@ -580,7 +580,7 @@ export default function Admin() {
             <label key={currency} className="afield">1 {currency} = ₹
               <input type="number" min="0.0001" step="0.0001" disabled={!canEditPricing}
                 value={currencyRateDraft[currency] ?? currencyRates[currency] ?? ''}
-                onChange={e => setCurrencyRateDraft({ ...currencyRateDraft, [currency]: e.target.value })} />
+                onChange={e => setCurrencyRateDraft({ ...currencyRateDraft, [currency]: e.target.value })} name="admin-number-2" />
               <button type="button" className="primary" disabled={!canEditPricing}
                 onClick={() => {
                   const rate = currencyRateDraft[currency] ?? currencyRates[currency]
@@ -618,7 +618,7 @@ export default function Admin() {
           <label className="afield">Common mailbox
             <input type="email" value={config.commonMailbox || ''} disabled={!canEdit}
               placeholder={DEFAULT_COMMON_MAILBOX}
-              onChange={e => store.updateConfig({ commonMailbox: e.target.value })} />
+              onChange={e => store.updateConfig({ commonMailbox: e.target.value })} name="admin-email" />
           </label>
           <p className="hint">
             Unassigned leads send clarification mail from this address; once a lead is assigned it
@@ -626,12 +626,12 @@ export default function Admin() {
           </p>
           <label className="check-row">
             <input type="checkbox" checked={config.fastTrack?.enabled !== false} disabled={!canEdit}
-              onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), enabled: e.target.checked } })} />
+              onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), enabled: e.target.checked } })} name="admin-checkbox-4" />
             Enable existing Green-customer fast track
           </label>
           <label className="afield">Fast-track customer class
             <select value={config.fastTrack?.customerStatus || 'Green'} disabled={!canEdit}
-              onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), customerStatus: e.target.value } })}>
+              onChange={e => store.updateConfig({ fastTrack: { ...(config.fastTrack || {}), customerStatus: e.target.value } })} name="admin-select">
               {['Green', 'Blue', 'Amber', 'Red'].map(v => <option key={v}>{v}</option>)}
             </select>
           </label>
@@ -696,14 +696,14 @@ export default function Admin() {
                 <div className="hint"><b>Example:</b> {usesBuiltInFormat ? rule.example : 'Defined by the advanced rule below'}</div>
               </div>
               <label className="check-row"><input type="checkbox" checked={rule.enabled !== false} disabled={!canEdit}
-                onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, enabled: e.target.checked } } })} /> Validate</label>
+                onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, enabled: e.target.checked } } })} name="admin-checkbox-5" /> Validate</label>
               <label className="check-row"><input type="checkbox" checked={!!rule.required} disabled={!canEdit || rule.enabled === false}
-                onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, required: e.target.checked } } })} /> Required</label>
+                onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, required: e.target.checked } } })} name="admin-checkbox-6" /> Required</label>
               <details className="admin-kyc-advanced" open={!usesBuiltInFormat}>
                 <summary>Advanced validation rule</summary>
                 <label className="afield">Regular expression
                   <input type="text" value={rule.pattern || ''} disabled={!canEdit || rule.enabled === false} aria-label={`${key} validation pattern`}
-                    onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, pattern: e.target.value } } })} />
+                    onChange={e => store.updateConfig({ kycValidation: { ...kycValidation, [key]: { ...rule, pattern: e.target.value } } })} name="admin-text-2" />
                 </label>
               </details>
             </div>
@@ -735,9 +735,9 @@ export default function Admin() {
           <div className="section-title" style={{ marginTop: 6 }}>Supplier price list</div>
           <div className="admin-actions">
             <input type="text" value={supplier} placeholder="Supplier (e.g. B&K)" disabled={!canEditPricing}
-              onChange={e => setSupplier(e.target.value)} />
+              onChange={e => setSupplier(e.target.value)} name="admin-supplier" />
             <input type="text" value={plVersion} placeholder="Version (e.g. 2026-Q3)" disabled={!canEditPricing}
-              onChange={e => setPlVersion(e.target.value)} />
+              onChange={e => setPlVersion(e.target.value)} name="admin-pl-version" />
             <FileButton variant="secondary" label="Upload price list" disabled={!canEditPricing}
               onFile={async f => {
                 try {
@@ -844,7 +844,7 @@ export default function Admin() {
           {(config.reminders || []).map((r, i) => (
             <label key={r.id || i} className="check-row">
               <input type="checkbox" checked={!!r.on} disabled={!canEdit}
-                onChange={() => patchList('reminders', i, { on: !r.on })} />
+                onChange={() => patchList('reminders', i, { on: !r.on })} name="admin-checkbox-7" />
               {r.label || r.name}
             </label>
           ))}

@@ -215,7 +215,7 @@ export default function VoiceUpdate() {
             </div>
             <textarea style={{ width: '100%', minHeight: 74 }}
               placeholder='e.g. "2608222 moved to firm bid, high probability"'
-              value={typed} onChange={e => setTyped(e.target.value)} />
+              value={typed} onChange={e => setTyped(e.target.value)} name="voice-update-typed" />
             <div style={{ marginTop: 8 }}>
               <button className="primary" disabled={!typed.trim()}
                 onClick={() => { setApplied(null); handleParse(typed.trim()) }}>
@@ -253,7 +253,7 @@ export default function VoiceUpdate() {
                         onChange={e => setPending({
                           ...pending,
                           patch: { ...pending.patch, closedReason: e.target.value },
-                        })}>
+                        })} name="voice-update-closed-reason">
                         {(pending.patch.stage === 'Won' ? WON_REASONS : CLOSE_REASONS).map(r => <option key={r}>{r}</option>)}
                       </select>
                     ) : c.to}

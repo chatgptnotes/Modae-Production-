@@ -181,7 +181,7 @@ export default function WbProject({ opp, openBuilder, readOnly = false }) {
                     <td>{t.customerAsk}</td>
                     <td>{t.ourResponse}</td>
                     <td>
-                      <select disabled={!canEdit} value={t.status} onChange={e => setTermStatus(i, e.target.value)}>
+                      <select disabled={!canEdit} value={t.status} onChange={e => setTermStatus(i, e.target.value)} name="wb-project-status">
                         {TERM_STATUSES.map(s => <option key={s}>{s}</option>)}
                       </select>
                     </td>
@@ -204,7 +204,7 @@ export default function WbProject({ opp, openBuilder, readOnly = false }) {
           <div className="section-title">Assumptions / exclusions</div>
           <textarea disabled={!canEdit} rows={8} style={{ width: '100%' }} value={p.assumptions || ''}
             placeholder={'One per line, e.g.\nUtility power available at rack room\nCivil works excluded\nSite access and permits by customer'}
-            onChange={e => save({ ...p, assumptions: e.target.value })} />
+            onChange={e => save({ ...p, assumptions: e.target.value })} name="wb-project-textarea" />
           <p className="hint">Flows into the proposal's Assumptions and Exclusions sections.</p>
         </div>
       )
@@ -233,7 +233,7 @@ export default function WbProject({ opp, openBuilder, readOnly = false }) {
                 {['USD', 'AED'].map(cur => (
                   <label key={cur} style={{ fontSize: 12 }}>
                     1 {cur} = ₹ <input type="number" step="0.1" value={fx[cur]} style={{ width: 70 }}
-                      onChange={e => setFx({ ...fx, [cur]: +e.target.value || 1 })} />
+                      onChange={e => setFx({ ...fx, [cur]: +e.target.value || 1 })} name={`wb-project-${cur}`} />
                     <b style={{ marginLeft: 6 }}>{cur} {fmt(totals.value / (fx[cur] || 1))}</b>
                   </label>
                 ))}
@@ -256,7 +256,7 @@ export default function WbProject({ opp, openBuilder, readOnly = false }) {
 
   return (
     <div className={phone ? 'phone-project-workbench' : ''} style={{ display: 'flex', gap: 14, alignItems: 'flex-start', flexWrap: 'wrap' }}>
-      {phone ? <label className="phone-project-section">Project task<select aria-label="Project sourcing task" value={sec} onChange={event => { setSec(Number(event.target.value)); const next = new URLSearchParams(params); next.set('projectTask', event.target.value); setParams(next, { replace: true }) }}>{SECTIONS.map((section, index) => <option key={section} value={index}>{section}</option>)}</select></label> : <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 210 }}>
+      {phone ? <label className="phone-project-section">Project task<select aria-label="Project sourcing task" value={sec} onChange={event => { setSec(Number(event.target.value)); const next = new URLSearchParams(params); next.set('projectTask', event.target.value); setParams(next, { replace: true }) }} name="wb-project-project-sourcing-task">{SECTIONS.map((section, index) => <option key={section} value={index}>{section}</option>)}</select></label> : <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 210 }}>
         {SECTIONS.map((s, i) => (
           <button key={s} className={sec === i ? 'primary' : ''} style={{ textAlign: 'left' }}
             onClick={() => setSec(i)}>{s}</button>

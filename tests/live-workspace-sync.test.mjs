@@ -302,12 +302,6 @@ test('boot does not delete the active browser snapshot before reading it', () =>
   assert.doesNotMatch(store, /localStorage\.removeItem\(['"]wintrack-modae-v4['"]\)/)
 })
 
-test('session restoration cannot leave the login screen waiting forever', () => {
-  const store = read('src/store.jsx')
-  assert.match(store, /const SESSION_RESTORE_TIMEOUT_MS = 8000/)
-  assert.match(store, /Promise\.race\(/)
-  assert.match(store, /Supabase session restore timed out; continuing to the sign-in screen/)
-})
 
 test('invalid Supabase auth clears the session and pauses save retries', () => {
   const store = read('src/store.jsx')

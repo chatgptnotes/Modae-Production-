@@ -214,7 +214,7 @@ export function PromptModal({ title = 'Enter a value', message, defaultValue = '
       <form onSubmit={submit}>
         {message && <p className="modal-message">{message}</p>}
         <label className="modal-prompt-field">Value
-          <input ref={inputRef} value={value} onChange={event => setValue(event.target.value)} placeholder={placeholder} autoComplete="off" />
+          <input ref={inputRef} value={value} onChange={event => setValue(event.target.value)} placeholder={placeholder} autoComplete="off" name="ui-value" />
         </label>
         <div className="forms-actions modal-actions">
           <button type="button" onClick={onClose}>Cancel</button>
@@ -260,7 +260,7 @@ export function MarkWonControl({ opp, store, className = '' }) {
               setOpen(true)
             }
           }}
-          onClick={event => event.stopPropagation()}
+          onClick={event => event.stopPropagation()} name="ui-checkbox"
         />
         <span>Won</span>
       </label>

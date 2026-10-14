@@ -220,10 +220,10 @@ export default function ProposalSent() {
           </div></div>
         </div>
         <div className="proposal-sent-filters">
-          <label className="proposal-sent-search"><Icon name="search" size={14} /><span className="visually-hidden">Search proposals</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search customer, opportunity or reference" /></label>
-          <label><span className="visually-hidden">Filter status</span><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>{statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label><span className="visually-hidden">Filter owner</span><select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}><option value="all">All owners</option>{owners.map(owner => <option key={owner} value={owner}>{displayRole(owner)}</option>)}</select></label>
-          <label><span className="visually-hidden">Sort proposals</span><select value={sort} onChange={e => setSort(e.target.value)}><option value="urgency">Sort: urgency</option><option value="sent">Sort: newest</option><option value="value">Sort: value</option><option value="customer">Sort: customer</option></select></label>
+          <label className="proposal-sent-search"><Icon name="search" size={14} /><span className="visually-hidden">Search proposals</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search customer, opportunity or reference" name="proposal-sent-query" /></label>
+          <label><span className="visually-hidden">Filter status</span><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} name="proposal-sent-status-filter">{statusOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+          <label><span className="visually-hidden">Filter owner</span><select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)} name="proposal-sent-owner-filter"><option value="all">All owners</option>{owners.map(owner => <option key={owner} value={owner}>{displayRole(owner)}</option>)}</select></label>
+          <label><span className="visually-hidden">Sort proposals</span><select value={sort} onChange={e => setSort(e.target.value)} name="proposal-sent-sort"><option value="urgency">Sort: urgency</option><option value="sent">Sort: newest</option><option value="value">Sort: value</option><option value="customer">Sort: customer</option></select></label>
         </div>
         {view === 'board' ? <div className="proposal-board-wrap" role="region" aria-label="Proposal follow-up plan by owner and week">
           <div className="proposal-board-grid" style={{ '--proposal-board-columns': boardColumns.length }}>

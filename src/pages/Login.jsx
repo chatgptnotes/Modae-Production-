@@ -47,7 +47,7 @@ export default function Login() {
           setErr(error.message || 'Supabase sign-in failed.')
           return
         }
-        const res = store.loginExternal(data?.user)
+        const res = await store.loginExternal(data?.user, data?.session)
         if (!res.ok) { setErr(res.err); return }
         nav('/my-dashboard', { replace: true })
         return
@@ -158,7 +158,11 @@ export function RequireAuth({ children }) {
       <div className="auth-loading__content">
         <ModaeImageLogo height={42} className="auth-loading__logo" />
         <span className="auth-loading__spinner" aria-hidden="true" />
-        <span>Checking your session…</span>
+        {store.authProfileError ? <>
+          <p role="alert">{store.authProfileError}</p>
+          <button type="button" onClick={() => store.retryAccountProfile()}>Retry</button>
+          <button type="button" onClick={store.logout}>Back to sign in</button>
+        </> : <span>Loading your account…</span>}
       </div>
     </div>
   )

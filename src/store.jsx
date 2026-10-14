@@ -5,7 +5,7 @@ import { workspaceSyncState, committedWorkspace, resolvedWorkspaceRecord } from 
 import { recordFrom, replaceRecord } from './workspaceReconcile.js'
 import { applyApprovalEffects } from './approvalEffects.js'
 import { createApprovalCommands } from './approvalCommands.js'
-import { getWorkspaceGeneration } from './workspaceApi.js'
+import { getWorkspaceGeneration, fetchWorkspace } from './workspaceApi.js'
 import { previewOpportunityNumber, validateOpportunityNumbering } from './opportunityNumbering.js'
 import { canPerform as policyCanPerform, effectiveAccess, validateAccessPolicy } from './accessPolicy.js'
 import { readAdminPolicy, saveAdminPolicy } from './adminPolicyApi.js'
@@ -60,7 +60,10 @@ function applyAuthoritativeProfile(state, users) {
   if (!Array.isArray(users) || !state.auth?.user) return state
   const profile = users.find(user => matchesAccount(user, state.auth.user))
   const roles = isActiveUser(profile) ? userRoles(profile) : []
-  return { ...state, roles, auth: { ...state.auth, user: { ...state.auth.user, roles } } }
+  if (!isActiveUser(profile) || !ROLES[profile.role]) return { ...state, role: null, roles: [], auth: { ...state.auth, user: null } }
+  return { ...state, role: profile.role, roles, auth: { ...state.auth, user: {
+    ...state.auth.user, name: profile.name || state.auth.user.email, role: profile.role, roles,
+  } } }
 }
 const workflowTransition = (from, to, reason = '', id = null) => ({
   id: id || `WFT-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`}`,
@@ -296,7 +299,11 @@ export function StoreProvider({ children }) {
   const initialHydrationRef = useRef(null)
   const sharedPullInFlightRef = useRef(null)
   datastore.setLocalDemoMode(isLocalDemoSession(state))
-  const [authReady, setAuthReady] = useState(() => !supabase || !!state.auth?.user)
+  const [authReady, setAuthReady] = useState(() => !supabase || isLocalDemoSession(state))
+  const [authProfileError, setAuthProfileError] = useState('')
+  const authEpochRef = useRef(0)
+  const externalLoginRef = useRef(null)
+  const pendingAuthUserRef = useRef(null)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
   const [adminSaveState, setAdminSaveState] = useState('saved')
   const [priceListsStatus, setPriceListsStatus] = useState(() => Object.keys(state.priceLists || {}).length ? 'ready' : 'loading')
@@ -403,6 +410,7 @@ export function StoreProvider({ children }) {
   }
 
   const flushSaves = ({ explicit = false, selection = null } = {}) => {
+    const epoch = authEpochRef.current
     if (datastore.dbEnabled() && !workspaceSyncState.ready) return Promise.resolve(false)
     if (workspaceSyncState.enabled && !explicit) return Promise.resolve(false)
     if (workspaceSyncState.suspended) return Promise.resolve(false)
@@ -414,6 +422,10 @@ export function StoreProvider({ children }) {
     if (!hydratedRef.current) return Promise.resolve()
     if (authInvalidRef.current) return Promise.resolve()
     const retry = saveRetryRef.current
+    if (retry.epoch !== epoch) {
+      clearTimeout(retry.timer)
+      Object.assign(retry, { epoch, attempts: 0, retryAt: 0, timer: null })
+    }
     if (retry.retryAt > Date.now()) return Promise.resolve()
     const dirty = selection || dirtySlices()
     if (!Object.keys(dirty).length) {
@@ -423,6 +435,7 @@ export function StoreProvider({ children }) {
     setAdminSaveState('saving')
     return datastore.saveSlices(dirty)
       .then(() => {
+        if (epoch !== authEpochRef.current || authInvalidRef.current) return false
         retry.attempts = 0
         retry.retryAt = 0
         clearTimeout(retry.timer)
@@ -449,6 +462,7 @@ export function StoreProvider({ children }) {
         return ![...workspaceDrafts.entries.values()].some(e=>workspaceDrafts.blocked(e.entity,e.id))
       })
       .catch(e => {
+        if (epoch !== authEpochRef.current || authInvalidRef.current) return false
         setAdminSaveState('error')
         if (e?.code === 'WORKSPACE_PURGED') {
           // The server rejected a snapshot from before a permanent purge.
@@ -483,6 +497,7 @@ export function StoreProvider({ children }) {
         retry.retryAt = Date.now() + delay
         clearTimeout(retry.timer)
         retry.timer = setTimeout(() => {
+          if (epoch !== authEpochRef.current || authInvalidRef.current) return
           retry.timer = null
           retry.retryAt = 0
           flushSaves()
@@ -509,7 +524,9 @@ export function StoreProvider({ children }) {
   // straight away, and it is gone). Same rule as applyServer, measured against
   // bootRef instead of lastSavedRef because we have not saved anything yet.
   const hydrate = async () => {
+    const epoch = authEpochRef.current
     const res = await datastore.loadCore()
+    if (epoch !== authEpochRef.current || authInvalidRef.current) return
     if (!res) {
       setSourcingDataStatus('error')
       if (!supabaseConfigError) setLiveSyncStatus('error')
@@ -645,6 +662,7 @@ export function StoreProvider({ children }) {
   }
 
   const loadApprovedPriceLists = async ({ force = false } = {}) => {
+    const epoch = authEpochRef.current
     if (!datastore.dbEnabled()) {
       setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'ready' : 'empty')
       return
@@ -657,6 +675,7 @@ export function StoreProvider({ children }) {
     setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'refreshing' : 'loading')
     try {
       const result = await datastore.loadPriceLists({ force })
+      if (epoch !== authEpochRef.current || authInvalidRef.current) return
       if (!result) throw new Error('Approved price lists could not be loaded')
       const next = result.priceLists || {}
       const current = stateRef.current.priceLists || {}
@@ -668,6 +687,7 @@ export function StoreProvider({ children }) {
       }
       setPriceListsStatus(Object.keys(next).length ? 'ready' : 'empty')
     } catch (error) {
+      if (epoch !== authEpochRef.current || authInvalidRef.current) return
       console.warn('Approved price-list load failed:', error?.message || error)
       setPriceListsStatus('error')
     }
@@ -683,11 +703,13 @@ export function StoreProvider({ children }) {
   }
 
   const refreshDecisionState = async (allEffects = false) => {
+    const epoch = authEpochRef.current
+    if (authInvalidRef.current) return false
     const actor = stateRef.current.auth?.user?.id
     const generation = getWorkspaceGeneration()
     const slices = await datastore.loadApprovalDecisionState({ allEffects,
-      isCurrent: () => actor === stateRef.current.auth?.user?.id && generation === getWorkspaceGeneration() })
-    if (!slices) return false
+      isCurrent: () => epoch === authEpochRef.current && !authInvalidRef.current && actor === stateRef.current.auth?.user?.id && generation === getWorkspaceGeneration() })
+    if (!slices || epoch !== authEpochRef.current || authInvalidRef.current) return false
     if (actor !== stateRef.current.auth?.user?.id || generation !== getWorkspaceGeneration()) return false
     applyServer(slices)
     return true
@@ -698,10 +720,13 @@ export function StoreProvider({ children }) {
   const pullSharedData = ({ force = false } = {}) => {
     if (!datastore.dbEnabled()) return false
     if (!force && sharedPullInFlightRef.current) return sharedPullInFlightRef.current
+    const epoch = authEpochRef.current
+    if (authInvalidRef.current) return false
     const pull = (async () => {
       if (!workspaceSyncState.enabled) await flushSaves()
       registerDirtyRecords()
       const res = await datastore.loadAll({ force: true })
+      if (epoch !== authEpochRef.current || authInvalidRef.current) return false
       if (!res) { setLiveSyncStatus('error'); return false }
       if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
       if (res.error) {
@@ -725,7 +750,7 @@ export function StoreProvider({ children }) {
 
   useEffect(() => {
     const userId = state.auth?.user?.id || ''
-    if (!datastore.dbEnabled() || !userId) return
+    if (!authReady || !datastore.dbEnabled() || !userId) return
     if (initialHydrationRef.current === userId) return
     initialHydrationRef.current = userId
     hydrate()
@@ -754,7 +779,7 @@ export function StoreProvider({ children }) {
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)
     }
-  }, [state.auth?.user?.id])
+  }, [state.auth?.user?.id, authReady])
 
   useEffect(() => {
     // An uncaught throw here (quota, storage disabled) would kill persistence
@@ -2799,8 +2824,10 @@ export function StoreProvider({ children }) {
     },
 
     async refreshSharedData() {
-      if (!datastore.dbEnabled()) return false
+      const epoch = authEpochRef.current
+      if (!datastore.dbEnabled() || authInvalidRef.current) return false
       const res = await datastore.loadAll({ force: true })
+      if (epoch !== authEpochRef.current || authInvalidRef.current) return false
     if (!res) { setLiveSyncStatus('error'); return false }
       if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
       if (res.error) {
@@ -2821,9 +2848,11 @@ export function StoreProvider({ children }) {
     // the BOQ depend on unrelated full-workspace reads (for example a
     // transient audit/config query failure).
   async refreshSourcingData() {
-      if (!datastore.dbEnabled()) return false
+      const epoch = authEpochRef.current
+      if (!datastore.dbEnabled() || authInvalidRef.current) return false
       try {
         const slices = await datastore.loadSourcingData()
+        if (epoch !== authEpochRef.current || authInvalidRef.current) return false
         if (!slices) {
           setSourcingDataStatus('error')
           setSourcingDataError('Sourcing data could not be loaded')
@@ -2835,6 +2864,7 @@ export function StoreProvider({ children }) {
         applyServer(slices)
         return true
       } catch (error) {
+        if (epoch !== authEpochRef.current || authInvalidRef.current) return false
         setSourcingDataStatus('error')
         setSourcingDataError(error?.message || 'Sourcing data could not be loaded')
         if (!invalidateSupabaseAuth(error)) setLiveSyncStatus('error')
@@ -2843,12 +2873,15 @@ export function StoreProvider({ children }) {
     },
 
     async refreshApprovals() {
+      const epoch = authEpochRef.current
+      if (authInvalidRef.current) return false
       // Approval pages only need the two compact collaborative slices. Keep
       // their background refresh independent from the heavier workspace pull.
       if (!datastore.dbEnabled()) return true
       try {
         return await refreshDecisionState()
       } catch (error) {
+        if (epoch !== authEpochRef.current || authInvalidRef.current) return false
         if (invalidateSupabaseAuth(error)) return false
         console.warn('Approval refresh failed:', error?.message || error)
         return false
@@ -2856,9 +2889,11 @@ export function StoreProvider({ children }) {
     },
 
     async recoverOpportunity(id) {
+      const epoch = authEpochRef.current
       if (!datastore.dbEnabled() || !id) return false
       try {
         const opportunity = await datastore.loadOpportunity(id)
+        if (epoch !== authEpochRef.current || authInvalidRef.current) return false
         if (!opportunity) return false
         setState(s => {
           if (s.opportunities.some(item => item.id === id)) return s
@@ -2871,6 +2906,7 @@ export function StoreProvider({ children }) {
         })
         return true
       } catch (e) {
+        if (epoch !== authEpochRef.current || authInvalidRef.current) return false
         setLiveSyncStatus('error')
         console.warn('Opportunity recovery failed:', e?.message || e)
         return false
@@ -2891,6 +2927,11 @@ export function StoreProvider({ children }) {
         return { ok: false, err: 'The customer portal is unavailable at the moment.' }
       }
       if (u.pw !== pw) return { ok: false, err: 'Incorrect password.' }
+      authEpochRef.current++
+      externalLoginRef.current = null
+      authInvalidRef.current = false
+      setAuthProfileError('')
+      setAuthReady(true)
       datastore.setLocalDemoMode(source === 'local-demo')
       setState(st => ({
         ...withAudit(st, 'Signed in', u.email),
@@ -2900,23 +2941,85 @@ export function StoreProvider({ children }) {
       }))
       return { ok: true }
     },
-    loginExternal(user, fallbackRole = 'RS') {
-      if (!user?.id || !user.email) return { ok: false, err: 'Supabase did not return a valid user.' }
-      authInvalidRef.current = false
-      datastore.setLocalDemoMode(false)
-      const local = stateRef.current.users.find(item => item.email.toLowerCase() === user.email.toLowerCase())
-      if (local && !isActiveUser(local)) return { ok: false, err: 'Account access is disabled. Contact an administrator.' }
-      const role = local?.role || user.user_metadata?.role || fallbackRole
-      const roles = userRoles(local || { role, roles: user.user_metadata?.roles })
-      setState(st => ({
-        ...withAudit(st, 'Signed in', user.email),
-        auth: { source: 'supabase', user: { id: user.id, name: local?.name || user.user_metadata?.name || user.email, email: user.email, role, roles } },
-        roles,
-        role: ROLES[role] ? role : st.role,
-      }))
-      return { ok: true }
+    loginExternal(user, session = null) {
+      if (!user?.id || !user.email) return Promise.resolve({ ok: false, err: 'Supabase did not return a valid user.' })
+      if (externalLoginRef.current?.id === user.id) return externalLoginRef.current.promise
+      const epoch = ++authEpochRef.current
+      pendingAuthUserRef.current = user
+      setAuthReady(false)
+      setAuthProfileError('')
+      authInvalidRef.current = true
+      clearTimeout(saveTimerRef.current)
+      let settled = false
+      const current = () => authEpochRef.current === epoch && !settled
+      let timeout
+      const promise = (async () => {
+        try {
+          const workspace = await Promise.race([
+            (async () => {
+              const result = session ? { data: { session } } : await supabase.auth.getSession()
+              if (result.error) throw result.error
+              const verifiedSession = result.data?.session
+              if (!verifiedSession?.access_token || verifiedSession.user?.id !== user.id) throw new Error('Your session changed. Sign in again.')
+              const workspace = await fetchWorkspace(verifiedSession.access_token, undefined, { isCurrent: current })
+              await datastore.settleWorkspaceReads()
+              return workspace
+            })(),
+            new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Account verification timed out. Retry.')), 15000) }),
+          ])
+          if (!current()) return { ok: false, err: 'Session changed.' }
+          const profile = workspace.users?.find(row => matchesAccount(row, user))
+          if (!isActiveUser(profile) || !ROLES[profile.role]) throw new Error('An active workspace profile is required. Contact your administrator or retry.')
+          const previous = stateRef.current
+          const switching = previous.auth?.user?.id !== user.id
+          const base = switching ? { ...emptyState(previous), users: [], audit: [], priceLists: {}, rateSheets: {}, adhocParts: [], config: {} } : previous
+          const next = applyAuthoritativeProfile({ ...base, users: workspace.users,
+            config: switching ? workspace.config || {} : { ...base.config, accessPolicy: workspace.config?.accessPolicy },
+            auth: { source: 'supabase', user: { id: user.id, email: user.email } },
+          }, workspace.users)
+          if (switching) workspaceDrafts.reset()
+          datastore.setLocalDemoMode(false)
+          datastore.invalidateLoadCache()
+          // Hydration may have been started by an earlier session. Start a new
+          // read; preserve same-account draft baselines on ordinary revalidation.
+          if (switching || !hydratedRef.current) {
+            hydratedRef.current = false
+            lastSavedRef.current = {}
+            bootRef.current = syncedOf(next)
+          }
+          initialHydrationRef.current = null
+          sharedPullInFlightRef.current = null
+          authInvalidRef.current = false
+          stateRef.current = next
+          setState(next)
+          setAuthReady(true)
+          return { ok: true }
+        } catch (error) {
+          if (current()) setAuthProfileError(error.message || 'Could not load your account. Retry.')
+          return { ok: false, err: error.message || 'Could not load your account.' }
+        } finally {
+          clearTimeout(timeout)
+          if (current()) externalLoginRef.current = null
+          settled = true
+        }
+      })()
+      externalLoginRef.current = { id: user.id, promise }
+      return promise
+    },
+    retryAccountProfile() {
+      if (pendingAuthUserRef.current) return api.loginExternal(pendingAuthUserRef.current)
+      window.location.reload()
     },
     logout() {
+      authEpochRef.current++
+      externalLoginRef.current = null
+      pendingAuthUserRef.current = null
+      initialHydrationRef.current = null
+      hydratedRef.current = !supabase
+      authInvalidRef.current = true
+      clearTimeout(saveTimerRef.current)
+      setAuthProfileError('')
+      setAuthReady(true)
       approvalCommandsRef.current.clear()
       workspaceDrafts.reset()
       datastore.setLocalDemoMode(false)
@@ -3057,31 +3160,35 @@ export function StoreProvider({ children }) {
     const SESSION_RESTORE_TIMEOUT_MS = 8000
 
     const restoreSession = async () => {
+      const epoch = authEpochRef.current
       const applySession = async ({ data, error }) => {
-        if (!active) return
+        if (!active || epoch !== authEpochRef.current) return
         if (error) {
-          invalidateSupabaseAuth(error)
+          setAuthProfileError(error.message || 'Could not verify your session. Retry.')
           return
         }
         if (data?.session?.user) {
-          const current = stateRef.current.auth?.user
-          if (!current || current.email?.toLowerCase() !== data.session.user.email?.toLowerCase()) {
-            api.loginExternal(data.session.user)
-          }
+          await api.loginExternal(data.session.user, data.session)
+        } else if (isLocalDemoSession(stateRef.current)) {
+          setAuthReady(true)
         } else if (stateRef.current.auth?.user && !isLocalDemoSession(stateRef.current)) {
           setState(st => ({ ...st, auth: { user: null } }))
+          setAuthReady(true)
+        } else {
+          setAuthReady(true)
         }
       }
       const sessionRequest = supabase.auth.getSession()
+      let timeout
       try {
         const result = await Promise.race([
           sessionRequest,
-          new Promise(resolve => setTimeout(() => resolve({ timedOut: true }), SESSION_RESTORE_TIMEOUT_MS)),
+          new Promise(resolve => { timeout = setTimeout(() => resolve({ timedOut: true }), SESSION_RESTORE_TIMEOUT_MS) }),
         ])
+        if (!active || epoch !== authEpochRef.current) return
         if (result?.timedOut) {
-          // Do not keep the entire application behind a loading screen when a
-          // network/session read stalls. Apply the result if it arrives later.
-          console.warn('Supabase session restore timed out; continuing to the sign-in screen.')
+          // Keep unverified cached identity behind the retry gate.
+          setAuthProfileError('Session verification timed out. Retry.')
           setSyncDiagnostics(diagnostics => ({ ...diagnostics, authRestoreTimedOutAt: new Date().toISOString() }))
           sessionRequest.then(applySession).catch(e => console.warn('Supabase session restore failed:', e?.message || e))
         } else {
@@ -3089,8 +3196,9 @@ export function StoreProvider({ children }) {
         }
       } catch (e) {
         console.warn('Supabase session restore failed:', e?.message || e)
+        if (active && epoch === authEpochRef.current) setAuthProfileError(e.message || 'Could not verify your session. Retry.')
       } finally {
-        if (active) setAuthReady(true)
+        clearTimeout(timeout)
       }
     }
 
@@ -3099,14 +3207,26 @@ export function StoreProvider({ children }) {
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
       if (!active) return
       if (event === 'SIGNED_OUT') {
+        authEpochRef.current++
+        externalLoginRef.current = null
+        pendingAuthUserRef.current = null
+        initialHydrationRef.current = null
+        hydratedRef.current = false
+        authInvalidRef.current = true
+        setAuthProfileError('')
+        setAuthReady(true)
         setState(st => ({ ...st, auth: { user: null } }))
-      } else if (event === 'SIGNED_IN' && session?.user && !stateRef.current.auth?.user) {
-        api.loginExternal(session.user)
+      } else if (event === 'SIGNED_IN' && session?.user && session.user.id !== stateRef.current.auth?.user?.id) {
+        // Leave the Supabase auth callback before doing asynchronous work.
+        const epoch = authEpochRef.current
+        setTimeout(() => { if (active && epoch === authEpochRef.current) void api.loginExternal(session.user, session) }, 0)
       }
     })
 
     return () => {
       active = false
+      authEpochRef.current++
+      externalLoginRef.current = null
       listener?.subscription?.unsubscribe()
     }
   }, [])
@@ -3121,7 +3241,7 @@ export function StoreProvider({ children }) {
     return () => window.removeEventListener('focus', onFocus)
   }, [])
 
-  return <StoreCtx.Provider value={{ ...api, authReady, liveSyncStatus: workspaceSyncStatus({ status: liveSyncStatus, enabled: datastore.dbEnabled(), localDemo: isLocalDemoSession(state), configError: supabaseConfigError }), syncDiagnostics, adminSaveState }}><WorkspaceSyncRuntime />{children}</StoreCtx.Provider>
+  return <StoreCtx.Provider value={{ ...api, authReady, liveSyncStatus: workspaceSyncStatus({ status: liveSyncStatus, enabled: datastore.dbEnabled(), localDemo: isLocalDemoSession(state), configError: supabaseConfigError }), syncDiagnostics, adminSaveState, authProfileError }}><WorkspaceSyncRuntime />{children}</StoreCtx.Provider>
 }
 
 export const useStore = () => useContext(StoreCtx)

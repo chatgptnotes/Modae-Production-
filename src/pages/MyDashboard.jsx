@@ -153,13 +153,13 @@ function AnalyticsOverview({ store, role, nav, scope = 'role', summary }) {
       <Card title="Win / loss analysis" icon="checkCircle" tone="tone-green" span={12}
         action={<button className="dashboard-card-link" onClick={() => nav('/analytics')}>View detailed analysis <span aria-hidden="true">↗</span></button>}>
         <div className="dashboard-wl-filters" aria-label="Win and loss filters">
-          <label><span>Period</span><select value={winLossFilters.period} onChange={event => setWinLossFilters(current => ({ ...current, period: event.target.value }))}>
+          <label><span>Period</span><select value={winLossFilters.period} onChange={event => setWinLossFilters(current => ({ ...current, period: event.target.value }))} name="my-dashboard-period">
             <option value="all">All time</option><option value="90d">Last 90 days</option><option value="fy">This FY</option>
           </select></label>
-          {canFilterOutcomeOwner && <label><span>Owner</span><select value={winLossFilters.owner} onChange={event => setWinLossFilters(current => ({ ...current, owner: event.target.value }))}>
+          {canFilterOutcomeOwner && <label><span>Owner</span><select value={winLossFilters.owner} onChange={event => setWinLossFilters(current => ({ ...current, owner: event.target.value }))} name="my-dashboard-owner">
             <option value="All">All owners</option>{outcomeOwners.map(owner => <option key={owner} value={owner}>{displayRoleLabel(owner)}</option>)}
           </select></label>}
-          <label><span>Close reason</span><select value={selectedReason} onChange={event => setWinLossFilters(current => ({ ...current, reason: event.target.value }))}>
+          <label><span>Close reason</span><select value={selectedReason} onChange={event => setWinLossFilters(current => ({ ...current, reason: event.target.value }))} name="my-dashboard-selected-reason">
             <option value="All">All reasons</option>{outcomeReasons.map(reason => <option key={reason} value={reason}>{reason}</option>)}
           </select></label>
           <span className="dashboard-wl-filter-count">{winLoss.summary.total} closed {winLoss.summary.total === 1 ? 'outcome' : 'outcomes'}</span>
@@ -812,12 +812,12 @@ function TeamTargetsCard({ store, span = 12 }) {
                 <td className="targets-owner"><b>{displayRole(owner)}</b> <span className="hint">{roleLabel(owner).replace(`${displayRole(owner)} - `, '')}</span></td>
                 <td className="num targets-action-cell">
                   <input type="number" min="0" value={draft.annual} aria-label={`${owner} annual target`}
-                    onChange={e => setDraft(d => ({ ...d, annual: e.target.value }))} />
+                    onChange={e => setDraft(d => ({ ...d, annual: e.target.value }))} name="my-dashboard-annual" />
                 </td>
                 {draft.q.map((v, i) => (
                   <td key={FY_QUARTERS[i]} className="num">
                     <input type="number" min="0" value={v} aria-label={`${owner} Q${i + 1} target`}
-                      onChange={e => setDraft(d => ({ ...d, q: d.q.map((x, j) => (j === i ? e.target.value : x)) }))} />
+                      onChange={e => setDraft(d => ({ ...d, q: d.q.map((x, j) => (j === i ? e.target.value : x)) }))} name="my-dashboard-v" />
                   </td>
                 ))}
                 <td className="num">
