@@ -57,16 +57,16 @@ export default function Audit() {
     <div className="page">
       <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="list" size={18} /> Audit Trail</h2>
       <div className="toolbar">
-        <input type="text" placeholder="Search actions, objects, details…" value={q}
+        <input type="text" name="audit-search" aria-label="Search audit trail" placeholder="Search actions, objects, details…" value={q}
           onChange={e => setQ(e.target.value)} style={{ width: 240 }} />
         <label>Role:{' '}
-          <select value={role} onChange={e => setRole(e.target.value)}>
+          <select name="audit-role" value={role} onChange={e => setRole(e.target.value)}>
             <option>All</option>
             {roles.map(r => <option key={r} value={r}>{displayRole(r)}</option>)}
           </select>
         </label>
         <label>Action:{' '}
-          <select value={action} onChange={e => setAction(e.target.value)}>
+          <select name="audit-action" value={action} onChange={e => setAction(e.target.value)}>
             <option>All</option>
             {actions.map(a => <option key={a}>{a}</option>)}
           </select>

@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useId, useState } from 'react'
 import './pagination.css'
 
 export const DEFAULT_PAGE_SIZE = 10
 
 export function PhonePagePicker({ page, pageCount, onPageChange }) {
+  const id = useId()
   return <label className="phone-page-picker">
     <span className="visually-hidden">Go to page</span>
-    <select aria-label="Go to page" value={page} onChange={event => onPageChange(Number(event.target.value))}>
+    <select id={id} aria-label="Go to page" value={page} onChange={event => onPageChange(Number(event.target.value))}>
       {Array.from({ length: pageCount }, (_, index) => <option key={index + 1} value={index + 1}>Page {index + 1} of {pageCount}</option>)}
     </select>
   </label>
