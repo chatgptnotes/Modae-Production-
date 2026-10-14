@@ -1,31 +1,67 @@
 @import './additionalFonts.css';
 
-/* Use an installed face first, then the company-hosted webfont. Supply the four
-   licensed WOFF2 assets under public/fonts/candara before rollout. */
+/* Bundled Candara is authoritative on every device. The Candara alias also
+   covers legacy brand tokens and signed-out screens. */
+
 @font-face {
   font-family: 'WinTrack Candara';
-  src: local('Candara'), local('Candara Regular'), url('/fonts/candara/regular.woff2') format('woff2');
+  src: url('/fonts/candara/regular.woff2') format('woff2');
   font-style: normal;
   font-weight: 400;
   font-display: swap;
 }
+
 @font-face {
   font-family: 'WinTrack Candara';
-  src: local('Candara Bold'), local('Candara-Bold'), url('/fonts/candara/bold.woff2') format('woff2');
+  src: url('/fonts/candara/bold.woff2') format('woff2');
   font-style: normal;
   font-weight: 700;
   font-display: swap;
 }
+
 @font-face {
   font-family: 'WinTrack Candara';
-  src: local('Candara Italic'), local('Candara-Italic'), url('/fonts/candara/italic.woff2') format('woff2');
+  src: url('/fonts/candara/italic.woff2') format('woff2');
   font-style: italic;
   font-weight: 400;
   font-display: swap;
 }
+
 @font-face {
   font-family: 'WinTrack Candara';
-  src: local('Candara Bold Italic'), local('Candara-BoldItalic'), url('/fonts/candara/bold-italic.woff2') format('woff2');
+  src: url('/fonts/candara/bold-italic.woff2') format('woff2');
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Candara';
+  src: url('/fonts/candara/regular.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Candara';
+  src: url('/fonts/candara/bold.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Candara';
+  src: url('/fonts/candara/italic.woff2') format('woff2');
+  font-style: italic;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Candara';
+  src: url('/fonts/candara/bold-italic.woff2') format('woff2');
   font-style: italic;
   font-weight: 700;
   font-display: swap;

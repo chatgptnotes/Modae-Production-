@@ -11,13 +11,13 @@ submission, and follow-up.
   devices; local/demo choices remain per user on that browser. Open settings from
   the desktop sidebar, tablet utilities or phone account menu. Company proposals
   and printed documents keep Candara regardless of the interface choice.
-- Candara webfont binaries have not been supplied. The interface uses installed
-  Candara when available and reports fallback use in Personal settings otherwise.
-  Hosting is wired for `public/fonts/candara/regular.woff2`, `bold.woff2`,
-  `italic.woff2`, and `bold-italic.woff2`. Supply all four licensed files before
-  rollout; Vite includes public files in the website build automatically.
-  Approved webfont assets are required to guarantee Candara on all devices. Before
-  proposal printing, all four Candara faces must load; missing fonts show an error.
+- Candara regular, bold, italic and bold italic are bundled as WOFF2 files under
+  `public/fonts/candara/`; devices do not need Candara installed. Both the interface
+  default and company print documents use these files. Personal font choices remain
+  available. Printing waits for all four faces and stops if a face cannot load.
+  The supplied Candara version lacks the rupee glyph (`₹`); missing characters use
+  the fallback fonts. Excel exports name Candara but require it on the recipient's
+  device. Uploaded documents retain their original fonts.
   Inter and the four additional families are bundled locally and work without an
   external font service. The additional families include normal and italic variable
   faces with weights 400–700, Latin/extended Latin coverage and bundled OFL licences.

@@ -248,8 +248,10 @@ directory convention, or validation requirement changes.
   revisions; never include preferences in generic workspace snapshots or roster saves.
 - Interface font choices are account-specific. Company documents keep Candara;
   the interface preference must not affect uploaded document content or print fonts.
-- Candara webfont binaries are not yet supplied. Do not claim universal Candara
-  rendering until approved assets are bundled and actual browser faces verified.
+- Candara WOFF2 faces are bundled under `public/fonts/candara/` for regular, bold,
+  italic and bold italic. Preserve both hosted family aliases and verify actual
+  browser faces when changing font loading. The supplied version lacks `₹`;
+  missing glyphs use fallback fonts.
 
 ## Event-driven workspace mode
 

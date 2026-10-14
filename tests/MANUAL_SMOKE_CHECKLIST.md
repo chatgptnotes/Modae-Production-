@@ -256,12 +256,13 @@ Our Ref 2511096RS) are retained with the local reference documents.
 
 - Nothing sky-blue or navy survives: chrome is ModAE red `#ED3F2F` on charcoal
   `#282828`.
-- Headings and body render in **Candara** where the system provides it, with the
-  documented fallback stack on other platforms.
+- With Candara selected, headings and body use the bundled **Candara** on desktop
+  and phone, including devices without it installed. Check all four styles and
+  proposal print preview; changing the personal font must leave print in Candara.
 - Buttons are 7px-radius, primary is red with white text, **Danger is a distinct
   red** so a destructive action never reads as a primary button.
-- Prices show a real `₹` glyph, not a fallback-font one. (That is the latin-ext
-  subset doing its job.)
+- Prices show a readable `₹` using a fallback font: the supplied Candara family
+  does not contain that glyph. Check amounts remain aligned and unclipped.
 - Tablet view stays on the permanent light ModAE palette; nothing switches to
   a dark surface.
 

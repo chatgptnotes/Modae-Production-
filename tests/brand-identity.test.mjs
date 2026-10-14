@@ -95,9 +95,15 @@ test('no orphan font stylesheet ships alongside the real one', () => {
   assert.equal(exists('public/font-face.css'), false)
   const files = fs.readdirSync(path.join(root, 'public/fonts'))
   assert.deepEqual(files.sort(), [
-    'inter-latin-ext.woff2', 'inter-latin.woff2',
+    'candara', 'inter-latin-ext.woff2', 'inter-latin.woff2',
     'lora', 'merriweather', 'open-sans', 'roboto',
-  ], 'bundled Inter subsets and additional personal font families')
+  ], 'bundled Candara, Inter subsets and additional personal font families')
+  const typography = read('src/ui/workspaceTypography.css')
+  for (const face of ['regular', 'bold', 'italic', 'bold-italic']) {
+    const file = `fonts/candara/${face}.woff2`
+    assert.ok(typography.includes(`url('/${file}')`))
+    assert.equal(fs.readFileSync(path.join(root, 'public', file)).subarray(0, 4).toString(), 'wOF2')
+  }
   const fontCss = read('src/ui/additionalFonts.css')
   for (const family of ['lora', 'merriweather', 'open-sans', 'roboto']) {
     assert.match(read(`public/fonts/${family}/OFL.txt`), /SIL OPEN FONT LICENSE/i)
@@ -139,7 +145,7 @@ test('buttons carry the website treatment at enterprise metrics', () => {
   assert.match(css, /button:focus-visible, \.btn:focus-visible/)
 })
 
-test('Candara is the system typography and is not network-dependent', () => {
+test('Candara is the default typography and uses no third-party font service', () => {
   assert.doesNotMatch(read('index.html'), /fonts\.googleapis\.com|fonts\.gstatic\.com/)
   assert.doesNotMatch(css, /fonts\.googleapis\.com|fonts\.gstatic\.com/)
   assert.match(css, /--font-family-sans: 'Candara'/)

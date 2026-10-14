@@ -1,5 +1,14 @@
 ## 2026-10-14 — Phone header controls
 
+## 2026-10-14 — Bundled Candara family
+
+- Bundle regular, bold, italic and bold italic WOFF2 faces from the supplied
+  Candara family. Hosted faces cover personal font selection, legacy brand tokens,
+  signed-out screens and company print documents without a local installation.
+- Preserve account font choices and the four-face print loading gate. Missing
+  glyphs, including `₹` in this version, continue to use fallback fonts.
+
+
 - Keep the My/Global indicator inside the phone toggle and align account menu
   actions to the left. Anchor the menu below the avatar, constrain it to the
   phone workspace and viewport, and scroll long menus on short screens.

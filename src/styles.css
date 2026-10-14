@@ -248,8 +248,8 @@
 }
 
 /* ---- ModAE typography ---------------------------------------------------
-   Candara is a system font. Unsupported platforms use the shared fallback
-   stack declared in the typography tokens above. --------------------------- */
+   Candara is bundled in workspaceTypography.css. Missing glyphs use the
+   shared fallback stack declared in the typography tokens above. --------------------------- */
 /* Compatibility palette tokens for legacy selectors. These values are
    centralized here so component rules never contain literal colors. */
 :root {
@@ -551,7 +551,7 @@
   --fw-medium: 500;
   --fw-semibold: 600;
   --fw-bold: 700;
-  /* Candara is a Windows system font; other platforms use the fallbacks. */
+  /* Candara is bundled; missing glyphs use the fallback fonts. */
   --font-document: 'Candara', 'Segoe UI', system-ui, sans-serif;
 
   --bg-sidebar: var(--palette-5c743b8);          /* existing workspace navigation */
