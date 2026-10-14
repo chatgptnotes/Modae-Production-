@@ -66,12 +66,7 @@
   .mobile-search > svg { flex-shrink: 0; }
   .shell.tablet-mode .wintrack-mobile-dashboard .mobile-search input { min-width: 0; width: 100%; min-height: 46px; padding: 0; border: 0 !important; box-shadow: none !important; background: transparent !important; color: var(--mobile-primary) !important; font: inherit; font-size: 16px; }
   .mobile-search input::placeholder { color: var(--mobile-muted); font-size: 13px; }
-  .mobile-filter-row { display: flex; gap: 8px; overflow-x: auto; padding: 12px 0; scrollbar-width: none; }
-  .mobile-filter-row::-webkit-scrollbar { display: none; }
-  .shell.tablet-mode .wintrack-mobile-dashboard .mobile-filter-chip { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; min-height: 44px; padding: 7px 12px; border: 1px solid var(--mobile-border) !important; border-radius: 999px !important; background: var(--mobile-surface) !important; color: var(--mobile-primary) !important; font-size: 12px; font-weight: 500; }
-  .mobile-filter-chip b { display: grid; place-items: center; min-width: 24px; padding: 2px 5px; border-radius: 99px; background: var(--mobile-input); font-weight: 600; }
-  .shell.tablet-mode .wintrack-mobile-dashboard .mobile-filter-chip.is-active { background: var(--mobile-accent) !important; border-color: var(--mobile-accent) !important; color: white !important; }
-  .mobile-filter-chip.is-active b { background: rgba(0, 0, 0, .12); }
+  .mobile-search + .mobile-kpi-grid { margin-top: 16px; }
   .mobile-kpi-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; margin-bottom: 14px; }
   .mobile-kpi { min-width: 0; padding: 13px 12px; border: 1px solid var(--mobile-border); border-radius: 9px; background: var(--mobile-surface); }
   .mobile-kpi > span { display: flex; align-items: center; gap: 4px; color: var(--mobile-muted); font-size: 12px; }
@@ -195,3 +190,40 @@
   .shell.tablet-mode .wintrack-mobile-dashboard .mobile-priority-action > .mobile-card-action { grid-column: 3; grid-row: 1; align-self: center; }
   .shell.tablet-mode .wintrack-mobile-dashboard .mobile-opportunity-card > .mobile-card-action { grid-column: 2; align-self: end; max-width: 125px; padding-inline: 10px; }
 }
+
+/* Option 01: compact opportunity and priority rows in the phone dashboard. */
+.wintrack-mobile-dashboard .mobile-deal-row {
+  --deal-stage: var(--text-secondary);
+  position: relative; display: grid; gap: 6px; padding: 14px 0 10px 14px;
+  border-bottom: 1px solid var(--border-subtle); min-width: 0;
+}
+.wintrack-mobile-dashboard .mobile-deal-row::before {
+  content: ''; position: absolute; left: 0; top: 16px; bottom: 16px;
+  width: 3px; border-radius: 2px; background: var(--deal-stage);
+}
+.wintrack-mobile-dashboard .mobile-deal-row[data-stage-tone="info"] { --deal-stage: var(--mobile-info, #175cd3); }
+.wintrack-mobile-dashboard .mobile-deal-row[data-stage-tone="warning"] { --deal-stage: var(--mobile-warning, #855600); }
+.wintrack-mobile-dashboard .mobile-deal-row[data-stage-tone="success"] { --deal-stage: var(--mobile-success, #237a33); }
+.wintrack-mobile-dashboard .mobile-deal-row:last-child { border-bottom: 0; }
+.wintrack-mobile-dashboard .mobile-deal-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+.wintrack-mobile-dashboard .mobile-deal-customer { flex: 1; min-width: 0; }
+.wintrack-mobile-dashboard .mobile-deal-customer h3 { margin: 0; font-size: 15px; line-height: 1.4; color: var(--text-primary); overflow-wrap: anywhere; }
+.wintrack-mobile-dashboard .mobile-deal-customer p { margin: 2px 0; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; }
+.wintrack-mobile-dashboard .mobile-deal-customer small { font-size: 11px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.wintrack-mobile-dashboard .mobile-deal-value { flex-shrink: 0; max-width: 45%; text-align: right; font-size: 15px; line-height: 1.4; color: var(--text-primary); }
+.wintrack-mobile-dashboard .mobile-deal-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; color: var(--text-secondary); }
+.wintrack-mobile-dashboard .mobile-deal-meta > span { display: inline-flex; align-items: center; gap: 4px; }
+.wintrack-mobile-dashboard .mobile-deal-stage { color: var(--deal-stage); background: color-mix(in srgb, var(--deal-stage) 9%, var(--surface-default)); padding: 2px 6px; border-radius: 4px; }
+.wintrack-mobile-dashboard .mobile-deal-row .mobile-blocker-note { margin: 0; font-size: 12px; }
+html[data-workspace-theme] .shell[data-theme] .wintrack-mobile-dashboard .mobile-deal-action {
+  display: inline-flex; align-items: center; gap: 4px; justify-self: end; width: auto;
+  min-height: 44px; padding: 4px 0 4px 8px; border: 0 !important; border-radius: 3px;
+  background: transparent !important; color: var(--mobile-accent-text, var(--text-primary)) !important;
+  box-shadow: none !important; font: inherit; font-size: 12px; font-weight: 600;
+}
+.wintrack-mobile-dashboard .mobile-deal-row:focus-visible,
+.wintrack-mobile-dashboard .mobile-deal-action:focus-visible { outline: 2px solid var(--focus-ring, #2469d8); outline-offset: 2px; }
+
+.wintrack-mobile-dashboard .mobile-deal-row[data-stage-tone="danger"] { --deal-stage: var(--mobile-danger, var(--status-danger)); }
+.wintrack-mobile-dashboard .mobile-task-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; min-width: 0; }
+.wintrack-mobile-dashboard .mobile-task-footer > span { overflow-wrap: anywhere; min-width: 0; }

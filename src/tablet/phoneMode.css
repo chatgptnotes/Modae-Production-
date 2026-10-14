@@ -1,7 +1,7 @@
 .phone-workspace { width: 100%; min-width: 0; container: phone-workspace / inline-size; }
 .phone-workspace-selected { width: min(100%, 440px); margin-inline: auto; min-height: 100dvh; background: var(--surface-default); }
 [data-phone-portal-container] { container: phone-workspace / inline-size; width: 100%; }
-html[data-phone-mode] { --phone-width: min(100vw, 440px); --phone-left: max(0px, calc((100vw - 440px) / 2)); }
+html[data-phone-mode] { --phone-width: min(100vw, 440px); --phone-left: max(0px, calc((100% - 440px) / 2)); }
 html[data-phone-mode] body { overflow-x: clip; background: var(--surface-canvas); }
 html[data-phone-mode] [data-phone-portal-container] { width: var(--phone-width); margin-inline: auto; }
 html[data-phone-mode] :is(.tab-bottom, .drawer-backdrop, .modal-backdrop, .modal-overlay, .approval-drawer-layer) { left: var(--phone-left); right: auto; width: var(--phone-width); }

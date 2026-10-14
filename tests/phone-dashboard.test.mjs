@@ -82,11 +82,20 @@ test('pending approvals offer review only to roles with approval access', () => 
     store: { ...store, role: 'CUST', roles: ['CUST'] } }), /Review Approval/)
 })
 
-test('phone filters search all ranked period candidates before selecting five', async () => {
+test('phone search checks all ranked period candidates before selecting five', async () => {
   const { phoneTopOpportunities } = await import('../src/pages/myDashboard/phoneDashboard.js')
   assert.deepEqual(phoneTopOpportunities(model, { query: 'Customer F' }).map(row => row.id), ['F'])
   assert.deepEqual(phoneTopOpportunities(model, { query: 'no match' }), [])
-  const filteredModel = { ...model, blocked: [{ opp: opportunities[5] }] }
-  assert.deepEqual(phoneTopOpportunities(filteredModel, { filter: 'blocked' }).map(row => row.id), ['F'])
   assert.deepEqual(phoneTopOpportunities(model).map(row => row.id), ['A', 'B', 'C', 'D', 'E'])
+})
+
+
+test('compact opportunity rows retain enquiry, ID, stage and missing-date context', () => {
+  const row = opp('COMPACT', 2400, { sellTo: 'A long industrial customer name', oppName: 'Pump retrofit enquiry', orderDate: '', prob: 'High' })
+  const html = render({ model: { ...model, topOpportunityCandidates: [row] } })
+  const feed = html.split('class="mobile-opportunity-feed"')[1].split('mobile-view-all')[0]
+  for (const text of ['A long industrial customer name', 'Pump retrofit enquiry', 'COMPACT', 'RFQ', 'Date not set', 'High', 'View Details']) assert.ok(feed.includes(text), text)
+  assert.doesNotMatch(feed, /mobile-customer-avatar|mobile-rank|mobile-opportunity-facts|mobile-card-action/)
+  assert.match(feed, /class="mobile-deal-action"/)
+  assert.match(feed, /tabindex="0"/)
 })

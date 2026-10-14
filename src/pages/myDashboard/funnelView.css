@@ -7,6 +7,7 @@
 .funnel-view-toggle input:checked + .funnel-view-toggle-track { background: #2563eb; }
 .funnel-view-toggle input:checked + .funnel-view-toggle-track::after { transform: translateX(12px); }
 .funnel-view-toggle input:focus-visible + .funnel-view-toggle-track, .normal-funnel button:focus-visible, .normal-funnel-bands:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+.compact-funnel-detail { display: none; }
 .normal-funnel { padding: 12px 0; color: inherit; container-type: inline-size; }
 .normal-funnel-head, .normal-funnel-row { display: grid; grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(60px, .35fr); gap: 18px; align-items: center; }
 .normal-funnel.has-values :is(.normal-funnel-head, .normal-funnel-row) { grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr) minmax(60px, .35fr) minmax(110px, .65fr); }

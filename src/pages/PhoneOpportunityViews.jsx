@@ -4,8 +4,22 @@ import { Icon } from '../icons.jsx'
 import { displayOpportunityId } from '../seed.js'
 import { fmtRupeesFromK } from '../utils.js'
 
-export function PhoneOpportunityRow({ opportunity: opp, canSeeValue, due }) {
+export function PhoneOpportunityRow({ opportunity: opp, canSeeValue, due, register = false }) {
   const overdue = due && !['Won', 'Lost', 'Closed'].includes(opp.stage) && new Date(`${due}T23:59:59`) < new Date()
+  if (register) {
+    const stage = opp.milestone || opp.stage || 'No stage'
+    const tone = /follow|lost/i.test(stage) ? 'red' : /screen|qualif/i.test(stage) ? 'blue' : /rfq|proposal|negotiat/i.test(stage) ? 'amber' : /won/i.test(stage) ? 'green' : 'neutral'
+    return <article className="phone-opportunity-row phone-register-row">
+      <Link className="phone-record phone-register-record" to={`/opp/${opp.id}`}>
+        <span className={`phone-register-stage phone-register-stage--${tone}`}>{stage}</span>
+        <strong className="phone-register-customer">{opp.sellTo || opp.oppName || 'Untitled opportunity'}</strong>
+        <span className="phone-register-enquiry">{opp.oppName || 'Untitled opportunity'}</span>
+        <span className="phone-register-details"><small>{displayOpportunityId(opp.id)}</small>{overdue && <span className="phone-opportunity-overdue">Overdue</span>}</span>
+        {canSeeValue && <b className="phone-register-value">{fmtRupeesFromK(opp.valueK) || '—'}</b>}
+        <Icon name="chevronRight" size={18} />
+      </Link>
+    </article>
+  }
   return <article className="phone-opportunity-row">
     <Link className="phone-record" to={`/opp/${opp.id}`}>
       <strong>{opp.sellTo || opp.oppName || 'Untitled opportunity'}</strong>

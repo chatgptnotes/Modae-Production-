@@ -32,14 +32,20 @@ submission, and follow-up.
   the matching slice, and press feedback acknowledges clicks. Reduced motion is supported.
   Full-site KPI cards lift with cursor lighting; individual funnel probability
   segments lift and highlight their stage details in both Normal and Dynamic views.
-  Top 5 and action rows open their existing workspaces.
+  Top 5 and action rows open their existing workspaces. Phone Top 5 uses compact
+  customer/enquiry rows with inline stage/date details and text action shortcuts.
+  Priority actions use matching compact customer/task rows and text shortcuts.
   Popups retain My/Global scope, period and value permissions on desktop and phone.
   At phone widths, amounts stay together, performance controls form two columns,
   and Full site tables scroll within readable columns. Below 360px, KPIs stack.
 
 - Opportunities uses the same Filters panel and matching logic in full site
   and phone mode. Combine owner, status, stage, type, probability, and dates;
-  preview the matching count before Apply. Column filters remain visible and
+  preview the matching count before Apply. A sentence-style builder makes
+  selections readable; each highlighted phrase opens a compact popup beside it
+  without expanding the dialog. Dates and sorting stay visible as compact summaries. The date popup offers a
+  calendar with Single day / Date range modes, quick periods and an optional date-field
+  selector. Completed selections update the draft; Show opportunities applies it. Column filters remain visible and
   removable, and Reset clears structured filters while keeping search and sort.
   Stage shortcuts preserve other selections. More contains Excel export,
   admin import, and the phone editable-table action.
@@ -60,6 +66,10 @@ submission, and follow-up.
   business history; self, System Owner and last-administrator protections apply.
   Shared account changes require migration `020_user_account_lifecycle.sql`.
 
+- Phone Opportunities uses a register with a single coloured stage strip, customer,
+  enquiry, ID and value. Narrow screens place values below the enquiry; existing
+  filters and 10-record page controls remain available.
+
 - Phone mode uses spacious record rows, full customer names and enquiry subjects,
   wrapping filters, stacked form fields and full-width dashboard actions. Long
   IDs and filenames wrap without pushing pages sideways; spreadsheet editors
@@ -70,6 +80,11 @@ submission, and follow-up.
   between them and the visible record range above.
 - Performance: tap QTD for the current quarter; tap again or double-click to
   choose Q1–Q4. The selected quarter applies to Actual, Target and Gap.
+- The phone dashboard places search directly above the KPI cards. Search narrows
+  the Top 5 list; KPI totals and their drilldowns remain workspace-wide. Narrow
+  dashboards use a shorter funnel with stage names, counts and values beside it,
+  plus compact section spacing. Desktop chart sizing stays unchanged.
+
 - Analytics shares the dashboard funnel and offers a Back to dashboard link.
 - Pipeline charts offer a compact Dynamic / Normal switch, shared across Dashboard,
   Analytics and phone views. Normal is the default fixed narrowing funnel with

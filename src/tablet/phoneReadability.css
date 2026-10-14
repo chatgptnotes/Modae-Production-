@@ -95,15 +95,13 @@
     padding-left: 52px;
     box-sizing: border-box;
   }
-  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-inbox-views,
-  html[data-workspace-theme] .shell.tablet-mode .wintrack-mobile-dashboard .mobile-filter-row {
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-inbox-views {
     flex-wrap: wrap;
     overflow: visible;
     gap: 8px;
     padding-block: 16px;
   }
-  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-inbox-views button,
-  html[data-workspace-theme] .shell.tablet-mode .wintrack-mobile-dashboard .mobile-filter-chip { flex: 1 1 120px; justify-content: center; white-space: normal; }
+  html[data-workspace-theme] .shell.tablet-mode .phone-inbox-page .phone-inbox-views button { flex: 1 1 120px; justify-content: center; white-space: normal; }
   html[data-workspace-theme] .shell.tablet-mode .phone-record { gap: 8px; padding-block: 20px; font-size: 15px; }
   html[data-workspace-theme] .shell.tablet-mode :is(.phone-record small, .phone-lead-detail small, .mobile-destination-group small) { line-height: 1.5; }
   html[data-workspace-theme] .shell.tablet-mode .mobile-destination-group a { min-height: 56px; padding-block: 14px; }

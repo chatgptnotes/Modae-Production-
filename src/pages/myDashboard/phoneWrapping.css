@@ -36,9 +36,6 @@
     overflow-x: auto; scrollbar-width: thin; line-height: 1.4;
   }
   .shell[data-theme] [data-dashboard-depth="glass"] .mobile-kpi strong { font-size: clamp(20px, 5vw, 24px); }
-  .shell[data-theme] [data-dashboard-depth="glass"] .mobile-filter-chip b {
-    flex: 0 0 auto; white-space: nowrap; word-break: normal; overflow-wrap: normal;
-  }
   .shell[data-theme] [data-dashboard-depth="glass"] :is(.reference-kpi p, .mobile-kpi small) [data-drill-click] {
     display: inline-block; white-space: nowrap; overflow-wrap: normal;
   }

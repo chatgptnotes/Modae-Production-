@@ -210,7 +210,7 @@ test('Won and Lost closure paths keep terminal milestones and reason notes align
 test('tracker owner filtering follows the top-bar scope', () => {
   assert.match(tracker, /scopedOpportunityRows\(aiRows, scope, store\.role, sheet\)/)
   assert.match(tracker, /normalizeOpportunityFilters\(savedFilters, ownerFilter\)/)
-  assert.match(read('src/pages/OpportunityFilters.jsx'), /scope === 'global' \|\| key !== 'owner'/)
+  assert.match(read('src/pages/OpportunityFilters.jsx'), /scope === 'global' \? <span className="opportunity-filter-phrase"><span>owned by<\/span>\{token\('owner'\)\}/)
 })
 
 test('My and Global scope comes from the shared top-bar switch', () => {
@@ -379,8 +379,12 @@ test('tracker custom date range validates ordering and allows open bounds', () =
 
 test('tracker renders selectable date fields and period controls', () => {
   const popup = read('src/pages/OpportunityFilters.jsx')
-  assert.match(popup, /OPPORTUNITY_DATE_FIELDS\.map/)
-  assert.match(popup, /OPPORTUNITY_PERIODS\.map/)
+  const calendar = read('src/pages/OpportunityDateCalendar.jsx')
+  assert.match(popup, /<OpportunityDateCalendar/)
+  assert.match(calendar, /OPPORTUNITY_DATE_FIELDS\.map/)
+  assert.match(calendar, /OPPORTUNITY_PERIODS\.filter/)
+  assert.match(calendar, /Single day/)
+  assert.match(calendar, /Date range/)
   assert.match(popup, /opportunityFilterDateState\(draft.date\)/)
   assert.match(tracker, /matchesOpportunityDate\(o, dateFilter\)/)
 })

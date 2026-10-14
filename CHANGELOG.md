@@ -1,3 +1,94 @@
+## 2026-10-14 — Compact phone dashboard opportunities
+
+- Apply option 01 to the Top 5 opportunity feed: compact customer/enquiry rows,
+  right-aligned values, stage markers and inline date/probability details.
+- Retain blocker messages, permission-aware text action shortcuts and existing
+  selection/order rules. Priority actions use matching compact rows with customer,
+  task, timing and text shortcuts. Keep the remaining dashboard sections unchanged.
+
+## 2026-10-14 — Align the centred phone workspace
+
+- Account for desktop scrollbars when positioning fixed phone navigation and
+  overlays so they align with the centred workspace.
+
+## 2026-10-14 — Phone search and filter wrapping
+
+- Give the phone opportunity search a full-width row and place the list selector
+  and More action below it. Keep filter phrases together and allow footer actions
+  to wrap, with a content-sized phone filter sheet and scrollable body.
+
+## 2026-10-14 — Phone opportunity register
+
+- Apply design 12 to the phone Opportunities list with a single coloured stage
+  strip, wrapping customer/enquiry text and aligned commercial values. Preserve
+  the account font, dark theme, filters, page controls and navigation. Keep the
+  existing data and amount formatting without adding scheduling fields.
+
+## 2026-10-14 — Calendar-first opportunity date filters
+
+- Pick a single day or a two-click date range from an anchored calendar, with
+  quick periods, direct month/year navigation and an optional date-field selector.
+- Keep unfinished ranges local until completed; dismissing them preserves the
+  previous selection. Summaries use readable dates and existing date-only,
+  inclusive, India-business-time filtering remains unchanged.
+- Allow the calendar to extend outside the dialog within the viewport, with
+  keyboard navigation, phone touch targets and explicit Show opportunities.
+- Place the calendar beside the dialog on wide screens; fall back above or
+  below the date button on smaller screens without covering the clicked field.
+
+## 2026-10-14 — Keep filter popups beside their trigger
+
+- Fit each menu below or above its clicked phrase and scroll long option lists
+  within the available space, preventing tall popups from covering their trigger.
+
+## 2026-10-14 — Anchored sentence-filter popups
+
+- Open compact selection popups beside filter phrases instead of expanding a
+  full-width editor. Keep the dialog size stable, position menus within its bounds,
+  and dismiss on outside clicks or Escape. Preserve searchable multi-selection,
+  date controls, scope and explicit application of filters.
+
+## 2026-10-14 — Sentence-style opportunity filters
+
+- Replace the compact form with a readable “Show … opportunities” sentence and
+  selectable phrases for status, owner, stage, probability and type. One shared
+  editor supports searchable options, multiple selections, dates and sorting.
+- Keep draft counts, explicit Show opportunities, Cancel, Reset, column filters
+  and My/Global scope. Escape closes an editor before closing the dialog; phone
+  layouts retain touch targets and a fixed action footer.
+
+## 2026-10-14 — Keep the last phone dashboard report reachable
+
+- Preserve bottom navigation and safe-area clearance when applying compact
+  dashboard padding, so the final Win/Loss section can scroll fully into view.
+
+## 2026-10-14 — Compact opportunity filters
+
+- Use compact label/value rows, direct multi-select Probability buttons and an
+  expandable Date & sort section in the shared desktop and phone filter panel.
+  Preserve draft previews, explicit Apply, scope, column filters and Reset behavior.
+
+## 2026-10-14 — Compact phone dashboard and funnel
+
+- Shorten funnel stages in narrow dashboards and place stage names, counts and
+  permitted values together beside the chart. Retain Normal/Dynamic views and drilldowns.
+- Tighten phone KPI, section and list spacing using dashboard container width,
+  including the selected phone workspace on wider displays. Preserve KPI calculations.
+
+## 2026-10-14 — Simplify phone dashboard filters
+
+- Remove All, Qualified, Proposal Sent and Blocked filter buttons from the phone
+  dashboard. Keep search, Top 5 period selection, KPI values and drilldowns unchanged.
+
+## 2026-10-14 — Keep Admin usable without service rate sheets
+
+- Handle missing, partially loaded and incomplete service rate sheets without
+  crashing Admin. Keep India/International selection available and offer Retry
+  through the existing shared refresh.
+- Suppress editing until the selected sheet has complete saved amounts; do not
+  manufacture zero prices or restore demo rates. Existing pricing permissions
+  and valid-sheet editing are unchanged.
+
 ## 2026-10-14 — Ignore responses from previous login sessions
 
 - Guard sourcing, approval, opportunity recovery and generic save responses with

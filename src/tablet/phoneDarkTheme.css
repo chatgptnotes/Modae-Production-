@@ -26,7 +26,7 @@
     outline:2px solid var(--phone-accent); outline-offset:3px;
   }
   html[data-workspace-theme="dark"] :is(.shell.tablet-mode,[data-modae-portal-root]) .opportunity-intake-form .star { color:var(--text-secondary); }
-  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.phone-inbox-page .phone-inbox-new,.phone-inbox-page .phone-inbox-views button[aria-pressed="true"],.tracker-toolbar-actions .tracker-create-logo,.wintrack-mobile-dashboard .mobile-card-action,.wintrack-mobile-dashboard .mobile-filter-chip.is-active) {
+  html[data-workspace-theme="dark"] .shell.tablet-mode :is(.phone-inbox-page .phone-inbox-new,.phone-inbox-page .phone-inbox-views button[aria-pressed="true"],.tracker-toolbar-actions .tracker-create-logo,.wintrack-mobile-dashboard .mobile-card-action) {
     background:var(--phone-accent) !important; border-color:var(--phone-accent) !important;
     color:var(--phone-accent-ink) !important;
   }

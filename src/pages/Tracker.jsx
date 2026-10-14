@@ -696,7 +696,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
       </div>
       {activeAi && <div className="opportunity-ai-results" role="status"><div><strong>AI search · {rows.length} {rows.length === 1 ? 'result' : 'results'}</strong><p>{searchSummary(activeAi.plan)}{activeAi.plan.sort ? ` · Sorted by ${SEARCH_FIELDS[activeAi.plan.sort.key].label} (${activeAi.plan.sort.dir === 1 ? 'ascending' : 'descending'})` : ''}</p></div><button type="button" onClick={() => { setAiSearch(null); setSearchTerm(''); setSort(null) }}>Clear AI search</button></div>}
       {pipelineUploadError && <div className="errbox" role="alert">{pipelineUploadError}</div>}
-      {filtersOpen && <OpportunityFilters criteria={criteria} sort={sort} options={filterOptions} columns={COLS} scope={scope} phone={phone} anchor={filterTrigger.current} labelFor={labelFor}
+      {filtersOpen && <OpportunityFilters criteria={criteria} sort={sort} options={filterOptions} columns={COLS} scope={scope} phone={phone} labelFor={labelFor}
         countMatches={draft => filterOpportunityRows(aiRows, draft, filterContext).length}
         onClose={() => setFiltersOpen(false)}
         onApply={draft => { setFilters(draft.filters); setConditions(draft.conditions); setDateFilter(draft.date); setSort(draft.sort); setPage(1) }} />}
@@ -705,7 +705,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
       <div className={`mobile-opportunity-cards${mobileTable ? ' is-hidden' : ''}`}>
         <div className="phone-opportunity-list-label">{sheet} · {rows.length} result{rows.length === 1 ? '' : 's'}</div>
         {!pageRows.length && <p>No matching opportunities. Adjust your search or filters.</p>}
-        {pageRows.map(o => <PhoneOpportunityRow key={o.id} opportunity={o} canSeeValue due={o.orderDate || o.proposalDate} />)}
+        {pageRows.map(o => <PhoneOpportunityRow key={o.id} opportunity={o} canSeeValue due={o.orderDate || o.proposalDate} register={phone && sheet === 'Opportunities'} />)}
       </div>
       <div ref={sheetWrapRef} className={`sheet-wrap fill${mobileTable ? ' phone-table-workspace' : ' mobile-table-collapsed'}`} onScroll={handleSheetScroll}>
         {mobileTable && <div className="phone-table-chrome"><PhoneOverlayHeader /><button type="button" className="mobile-record-view phone-table-close" onClick={() => setMobileTable(false)}>Close table</button></div>}

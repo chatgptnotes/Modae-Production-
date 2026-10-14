@@ -1,40 +1,111 @@
-.modal.opportunity-filter-dialog { width: min(480px, calc(100vw - 24px)); padding: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 12px; color: var(--text-primary); background: var(--surface-default); }
-.opportunity-filter-dialog .modal-header { padding: 16px; margin: 0; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
-.opportunity-filter-body { padding: 14px 16px; overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
-.opportunity-filter-hint { margin: 0 0 12px; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
-.opportunity-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
-.opportunity-filter-dialog :is(label, summary) { font-size: 13px; line-height: 1.5; text-transform: none; letter-spacing: normal; overflow-wrap: anywhere; }
-.opportunity-filter-choice { border: 1px solid var(--border-control); border-radius: 8px; min-width: 0; }
-.opportunity-filter-choice summary { padding: 10px; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto; list-style: none; }
-.opportunity-filter-choice summary::-webkit-details-marker { display: none; }
-.opportunity-filter-choice summary > span:first-child { color: var(--text-secondary); }
-.opportunity-filter-choice summary strong { grid-row: 2; font-weight: 600; }
-.opportunity-filter-choice summary > span:last-child { grid-column: 2; grid-row: 1 / 3; align-self: center; }
-.opportunity-filter-options { padding: 8px; border-top: 1px solid var(--border-subtle); }
-.opportunity-filter-options > div { max-height: 180px; overflow-y: auto; }
-.opportunity-filter-options label { display: flex; align-items: center; gap: 8px; min-height: 36px; margin: 0; cursor: pointer; }
-.opportunity-filter-options input:is([type=checkbox], [type=radio]) { flex: 0 0 16px; width: 16px; height: 16px; min-height: 0; margin: 0; }
+.modal.opportunity-filter-dialog { width: min(680px, calc(100vw - 24px)); max-height: calc(100dvh - 32px); padding: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: 14px; color: var(--text-primary); background: var(--surface-default); }
+.opportunity-filter-dialog .modal-header { padding: 16px 22px; margin: 0; border-bottom: 1px solid var(--border-subtle); flex-shrink: 0; }
+.opportunity-filter-dialog .modal-header .section-title { font-size: 20px; }
+.opportunity-filter-body { padding: 18px 22px; overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+.opportunity-filter-hint { font-size: 13px; color: var(--text-secondary); margin: 0 0 16px; line-height: 1.5; }
+.opportunity-filter-sentence { display: grid; gap: 12px; }
+.opportunity-filter-clause { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 21px; line-height: 1.6; }
+.opportunity-filter-dialog .opportunity-filter-token { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; max-width: 100%; min-width: 0; min-height: 42px; padding: 6px 12px; font-family: inherit; font-size: inherit; font-weight: 600; line-height: 1.45; text-align: left; white-space: normal; border: 1px solid var(--border-control); border-radius: 7px; color: var(--text-primary); background: var(--surface-sunken); box-shadow: none; }
+.opportunity-filter-token > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.opportunity-filter-token > span:last-child { flex: 0 0 auto; font-size: 14px; color: var(--text-secondary); }
+/* Preserve selected phrases against the shared modal button theme overrides. */
+.modal.opportunity-filter-dialog .opportunity-filter-token[data-active="true"] { border-color: var(--action-primary) !important; background: color-mix(in srgb, var(--action-primary) 7%, var(--surface-default)) !important; }
+.modal.opportunity-filter-dialog .opportunity-filter-token[aria-expanded="true"] { border-color: var(--action-primary) !important; box-shadow: 0 0 0 1px var(--action-primary); }
+.opportunity-filter-refinements { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding-top: 16px; margin-top: 18px; border-top: 1px solid var(--border-subtle); font-size: 13px; }
+.opportunity-filter-date-phrase { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; min-width: 0; max-width: 100%; }
+.opportunity-filter-date-phrase > span { color: var(--text-secondary); }
+.opportunity-filter-refinements .opportunity-filter-token { font-size: 13px; min-height: 36px; }
+.opportunity-filter-dialog .opportunity-filter-sort-trigger { display: flex; align-items: center; gap: 8px; padding: 6px 0; min-height: 36px; border: 0; background: transparent; box-shadow: none; color: var(--text-secondary); font-size: 13px; text-align: left; white-space: normal; }
+.opportunity-filter-sort-trigger span { overflow-wrap: anywhere; }
+.opportunity-filter-editor { position: absolute; z-index: 5; display: flex; flex-direction: column; margin: 0; padding: 10px; overflow: hidden; overscroll-behavior: contain; border: 1px solid var(--border-control); border-radius: 8px; background: var(--surface-default); box-shadow: 0 8px 24px rgb(0 0 0 / 16%); }
+.opportunity-filter-editor-heading { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.opportunity-filter-editor-heading h3 { margin: 0; font-size: 15px; }
+.opportunity-filter-dialog .opportunity-filter-editor-heading button { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.opportunity-filter-selection-tools { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 4px; font-size: 12px; color: var(--text-secondary); }
+.opportunity-filter-dialog .opportunity-filter-selection-tools button { padding: 6px 0; border: 0; background: transparent; color: var(--text-secondary); box-shadow: none; font-size: 12px; }
+.opportunity-filter-options { min-height: 0; flex-shrink: 1; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; max-height: 210px; overflow-y: auto; }
+.opportunity-filter-options label { display: flex; align-items: center; gap: 8px; padding: 8px; min-height: 40px; box-sizing: border-box; border: 1px solid transparent; border-radius: 5px; margin: 0; cursor: pointer; overflow-wrap: anywhere; font-size: 14px; line-height: 1.4; text-transform: none; letter-spacing: normal; font-weight: 400; }
+.opportunity-filter-options label[data-selected="true"] { background: var(--surface-default); border-color: var(--border-control); }
+.opportunity-filter-options input:is([type=checkbox], [type=radio]) { flex: 0 0 16px; width: 16px; height: 16px; min-height: 0; margin: 0; accent-color: var(--action-primary); }
 .opportunity-filter-dialog :is(select, input[type=search], input[type=date]) { width: 100%; min-width: 0; max-width: 100%; min-height: 40px; box-sizing: border-box; color: var(--text-primary); background: var(--surface-default); border: 1px solid var(--border-control); border-radius: 6px; padding: 8px; font: inherit; }
-.opportunity-filter-dialog :is(button, summary, input, select):focus-visible { outline: 2px solid var(--focus-ring, #2469d8); outline-offset: 2px; }
-.opportunity-filter-date { border: 0; border-top: 1px solid var(--border-subtle); padding: 12px 0 0; margin: 16px 0; min-width: 0; }
-.opportunity-filter-date legend { padding-right: 8px; font-size: 13px; font-weight: 600; }
-.opportunity-filter-date label, .opportunity-filter-sort { display: grid; gap: 6px; }
-.opportunity-filter-date [role=alert] { color: var(--status-danger); font-size: 12px; }
-.opportunity-filter-advanced { margin-bottom: 12px; }
-.opportunity-filter-advanced h3 { font-size: 13px; }
-.opportunity-filter-advanced button { text-align: left; white-space: normal; overflow-wrap: anywhere; max-width: 100%; margin-bottom: 6px; }
-.opportunity-filter-footer { flex-shrink: 0; border-top: 1px solid var(--border-subtle); padding: 12px 16px; background: var(--surface-default); }
-.opportunity-filter-footer p { font-size: 13px; margin: 0 0 8px; }
-.opportunity-filter-footer > div { display: flex; gap: 8px; justify-content: flex-end; }
-.opportunity-filter-footer button { min-height: 40px; }
-.opportunity-filter-footer button:first-child { margin-right: auto; }
+.opportunity-filter-dialog :is(button, input, select):focus-visible { outline: 2px solid var(--focus-ring, #2469d8); outline-offset: 2px; }
+.opportunity-filter-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 10px; }
+.opportunity-filter-grid label, .opportunity-filter-sort { display: grid; gap: 5px; font-size: 13px; min-width: 0; }
+.opportunity-filter-error { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--status-danger); font-size: 13px; margin-top: 12px; }
+.opportunity-filter-error button { font-size: 13px; }
+.opportunity-filter-advanced { margin-top: 14px; }
+.opportunity-filter-advanced h3 { font-size: 13px; margin: 0 0 6px; }
+.opportunity-filter-advanced button { text-align: left; white-space: normal; overflow-wrap: anywhere; max-width: 100%; margin: 0 6px 6px 0; font-size: 12px; }
+.opportunity-filter-footer { flex-shrink: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--border-subtle); padding: 14px 22px; background: var(--surface-default); }
+.opportunity-filter-footer p { font-size: 13px; color: var(--text-secondary); margin: 0; }
+.opportunity-filter-footer p strong { color: var(--text-primary); }
+.opportunity-filter-footer > div { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.opportunity-filter-footer button { min-height: 40px; font-size: 13px; }
 .modal.opportunity-filter-dialog.is-phone { top: auto !important; bottom: 0 !important; left: var(--phone-left, 0px) !important; width: var(--phone-width, 100vw) !important; max-width: 100vw; max-height: 88dvh; transform: none !important; border-radius: 14px 14px 0 0; }
+.opportunity-filter-dialog.is-phone .modal-header { padding: 14px 16px; }
+.opportunity-filter-dialog.is-phone .opportunity-filter-body { padding: 16px; }
+.opportunity-filter-dialog.is-phone .opportunity-filter-clause { font-size: 18px; gap: 6px; }
+.opportunity-filter-dialog.is-phone .opportunity-filter-options { grid-template-columns: minmax(0, 1fr); }
 .opportunity-filter-dialog.is-phone .opportunity-filter-grid { grid-template-columns: minmax(0, 1fr); }
 .opportunity-filter-dialog.is-phone :is(button, select, input[type=search], input[type=date]) { min-height: 44px; }
 .opportunity-filter-dialog.is-phone :is(input[type=search], input[type=date], select) { font-size: 16px; }
 .opportunity-filter-dialog.is-phone .opportunity-filter-options label { min-height: 44px; }
-.opportunity-filter-dialog.is-phone .opportunity-filter-footer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+.opportunity-filter-dialog.is-phone .opportunity-filter-footer { padding: 12px 16px max(12px, env(safe-area-inset-bottom)); }
+.opportunity-filter-dialog.is-phone .opportunity-filter-footer > div { width: 100%; flex-wrap: nowrap; }
+.opportunity-filter-dialog.is-phone .opportunity-filter-footer button { font-size: 13px; padding-inline: 10px; white-space: nowrap; min-width: 0; }
+.opportunity-filter-dialog.is-phone .opportunity-filter-footer button:first-child { margin-right: auto; }
+@media (max-width: 600px) {
+  .opportunity-filter-clause { font-size: 18px; }
+  .opportunity-filter-footer > div { width: 100%; }
+  .opportunity-filter-footer button:first-child { margin-right: auto; }
+}
 .opportunities-page .tracker-page .tracker-toolbar-filters .tracker-search-group .tracker-search-filter { width: auto !important; min-width: max-content !important; flex: 0 0 auto !important; gap: 6px; padding-inline: 10px !important; white-space: nowrap; }
 .opportunity-stage-strip button[aria-pressed="true"] { box-shadow: inset 0 -3px 0 var(--action-primary); background: var(--surface-sunken); }
 .tracker-filter-chips { flex-basis: 100%; }
 .tracker-filter-chip { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+
+.opportunity-filter-editor > input[type="search"] { flex-shrink: 0; }
+.opportunity-filter-editor > :is(.opportunity-filter-grid, .opportunity-filter-sort) { min-height: 0; overflow-y: auto; }
+
+/* The calendar can extend beyond the dialog while retaining its focus trap. */
+.modal.opportunity-filter-dialog.has-calendar { overflow: visible; }
+.opportunity-filter-dialog.has-calendar .modal-header { border-radius: 14px 14px 0 0; }
+.opportunity-filter-dialog.has-calendar .opportunity-filter-footer { border-radius: 0 0 14px 14px; }
+.opportunity-filter-editor.is-calendar { z-index: 6; }
+.opportunity-date-calendar { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.opportunity-calendar-mode { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin: 4px 0 10px; }
+.modal.opportunity-filter-dialog .opportunity-date-calendar button { font-size: 13px; padding: 5px 8px; min-width: 0; min-height: 34px; line-height: 1.35; letter-spacing: normal; text-transform: none; box-shadow: none; }
+.modal.opportunity-filter-dialog .opportunity-calendar-mode button[aria-pressed="true"],
+.modal.opportunity-filter-dialog .opportunity-calendar-presets button[aria-pressed="true"] { border-color: var(--action-primary) !important; background: color-mix(in srgb, var(--action-primary) 9%, var(--surface-default)) !important; color: var(--text-primary) !important; }
+.opportunity-calendar-navigation { display: grid; grid-template-columns: 32px minmax(0, 1fr) 72px 32px; gap: 5px; align-items: center; margin-bottom: 8px; }
+.modal.opportunity-filter-dialog .opportunity-calendar-navigation :is(select, input) { font-size: 14px; min-height: 34px; padding: 4px 6px; }
+.opportunity-calendar-navigation input { width: 100%; min-width: 0; border: 1px solid var(--border-control); border-radius: 6px; color: var(--text-primary); background: var(--surface-default); font: inherit; }
+.opportunity-calendar-grid > [role="row"] { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.opportunity-calendar-grid [role="columnheader"] { font-size: 11px; text-align: center; padding: 5px 0; color: var(--text-secondary); }
+.modal.opportunity-filter-dialog .opportunity-calendar-grid button { width: 100%; height: 36px; border: 1px solid transparent !important; border-radius: 5px; background: transparent !important; color: var(--text-primary) !important; padding: 0; font-size: 14px; }
+.modal.opportunity-filter-dialog .opportunity-calendar-grid button[data-range="true"] { background: color-mix(in srgb, var(--action-primary) 12%, var(--surface-default)) !important; border-radius: 0; }
+.modal.opportunity-filter-dialog .opportunity-calendar-grid button[data-endpoint="true"] { background: var(--action-primary) !important; color: var(--text-on-accent) !important; border-radius: 5px; font-weight: 700; }
+.modal.opportunity-filter-dialog .opportunity-calendar-grid button[aria-current="date"] { border-color: var(--action-primary) !important; }
+.opportunity-calendar-status { font-size: 12px; line-height: 1.5; color: var(--text-secondary); min-height: 18px; margin: 8px 0; }
+.opportunity-calendar-presets { display: flex; flex-wrap: wrap; gap: 5px; border-top: 1px solid var(--border-subtle); padding-top: 8px; }
+.modal.opportunity-filter-dialog .opportunity-calendar-presets button { font-size: 12px; }
+.opportunity-calendar-field { margin-top: 8px; border-top: 1px solid var(--border-subtle); padding-top: 6px; }
+.modal.opportunity-filter-dialog .opportunity-calendar-field > button { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; width: 100%; border: 0 !important; background: transparent !important; text-align: left; padding-inline: 0; font-size: 12px; }
+.opportunity-calendar-field > button span { color: var(--text-secondary); }
+.opportunity-calendar-field label { display: grid; gap: 4px; font-size: 12px; }
+.modal.opportunity-filter-dialog.is-phone .opportunity-date-calendar button { min-height: 44px; }
+.modal.opportunity-filter-dialog.is-phone .opportunity-calendar-navigation :is(select, input) { min-height: 44px; font-size: 16px; }
+
+.opportunity-filter-phrase { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; max-width: 100%; }
+.modal.opportunity-filter-dialog.is-phone {
+  height: auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  max-height: min(88dvh, var(--phone-dialog-height, 88dvh));
+}
+.modal.opportunity-filter-dialog.is-phone .opportunity-filter-body { flex: 0 1 auto; min-width: 0; }
+.modal.opportunity-filter-dialog.is-phone .opportunity-filter-clause { gap: 10px 8px; }
+.modal.opportunity-filter-dialog.is-phone .opportunity-filter-refinements { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.modal.opportunity-filter-dialog.is-phone .opportunity-filter-token { overflow-wrap: anywhere; }
+.modal.opportunity-filter-dialog.is-phone .opportunity-filter-footer > div { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; }
+.modal.opportunity-filter-dialog.is-phone .opportunity-filter-footer button { white-space: normal; overflow-wrap: anywhere; margin: 0; }

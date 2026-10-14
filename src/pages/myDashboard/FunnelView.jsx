@@ -69,6 +69,7 @@ export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClic
         return cumulative > row.count / 2
       })?.key
       const active = hovered?.stage === row.key ? hovered.probability : null
+      const compactDetail = <><span className="compact-funnel-label">{row.label}</span><span className="compact-funnel-metrics"><span>{row.count} {row.count === 1 ? 'opp' : 'opps'}</span>{showMoney && <span>{formatMoney(row.valueK)}</span>}</span></>
       const activate = probability => setHovered(probability ? { stage: row.key, probability } : null)
       const detailHover = !animate || !row.count ? {} : {
         onPointerEnter: event => { if (canHoverSurface(event)) activate('all') },
@@ -107,6 +108,9 @@ export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClic
             <line x1={dynamic ? 448 + geometry[index].center / 2 : left + top - 20} y1="50" x2="995" y2="50" />
           </svg>
           <b style={onSegmentClick ? { pointerEvents: 'none' } : undefined} className={`normal-funnel-number${centerBand === 'high' || centerBand === 'low' ? ' on-dark' : ''}`}>{row.count}</b>
+        </div>
+        <div className="compact-funnel-detail">
+          {onStageClick ? <button type="button" onClick={() => onStageClick(row)} aria-label={`View ${row.label}: ${row.count} opportunities`}>{compactDetail}</button> : <div>{compactDetail}</div>}
         </div>
         <div {...detailHover} className="normal-funnel-stage" data-explain-title={row.label}
           data-explain={row.key === 'won' ? 'Only closed opportunities explicitly marked Won count.' : `Only open opportunities at ${row.stages?.join(', ') || row.label} count.`}>

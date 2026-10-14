@@ -87,16 +87,45 @@ const RATE_FIELDS = [
 function ServiceRateSheetEditor({ canEdit }) {
   const store = useStore()
   const [sheet, setSheet] = useState('India')
-  const current = store.rateSheets[sheet]
-  const unit = current.currency === 'INR' ? 'K₹' : 'USD'
+  const [refreshing, setRefreshing] = useState(false)
+  const [refreshMessage, setRefreshMessage] = useState('')
+  const current = store.rateSheets?.[sheet]
+  const validAmount = value => (typeof value === 'number' || typeof value === 'string' && value.trim() !== '')
+    && Number.isFinite(Number(value)) && Number(value) >= 0
+  const complete = current && ['INR', 'USD'].includes(current.currency)
+    && RATE_FIELDS.every(([key]) => validAmount(current.rates?.[key]))
+    && validAmount(current.gst) && Number(current.gst) <= 100
+  const unit = current?.currency === 'INR' ? 'K₹' : 'USD'
+  const selector = <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', marginBottom: 8 }}>
+    {['India', 'International'].map(name => (
+      <button type="button" key={name} className={sheet === name ? 'primary' : ''}
+        onClick={() => { setSheet(name); setRefreshMessage('') }}>{name}</button>
+    ))}
+    {complete && <Chip tone="state-Accepted">{current.currency} · {unit}</Chip>}
+  </div>
+  if (!complete) return <div style={{ marginTop: 10 }}>
+    {selector}
+    <div role="status">
+      <strong>Service rates unavailable</strong>
+      <p>The {sheet} rate sheet has not loaded or is incomplete. Refresh to load saved rates. Editing is unavailable until the complete sheet is available.</p>
+      <button type="button" disabled={refreshing} onClick={async () => {
+        setRefreshing(true)
+        setRefreshMessage('')
+        try {
+          const ok = await store.refreshSharedData()
+          setRefreshMessage(ok ? 'Refresh complete. If rates are still unavailable, contact your administrator.' : 'Service rates could not be refreshed. Please retry.')
+        } catch {
+          setRefreshMessage('Service rates could not be refreshed. Please retry.')
+        } finally {
+          setRefreshing(false)
+        }
+      }}>{refreshing ? 'Refreshing…' : 'Retry'}</button>
+      {refreshMessage && <p>{refreshMessage}</p>}
+    </div>
+  </div>
   return (
     <div style={{ marginTop: 10 }}>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 8 }}>
-        {['India', 'International'].map(name => (
-          <button key={name} className={sheet === name ? 'primary' : ''} onClick={() => setSheet(name)}>{name}</button>
-        ))}
-        <Chip tone="state-Accepted">{current.currency} · {unit}</Chip>
-      </div>
+      {selector}
       {RATE_FIELDS.map(([key, label]) => (
         <NumField key={key} label={`${label}${key === 'weekendPct' ? '' : ` (${unit})`}`}
           value={current.rates[key]} disabled={!canEdit}

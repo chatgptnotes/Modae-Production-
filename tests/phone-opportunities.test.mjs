@@ -72,3 +72,21 @@ test('portaled phone editors inherit changing workflow read-only state explicitl
   assert.match(sourcing, /phone && comm && !readOnly && editingItem/)
   assert.match(sourcing, /if \(!comm \|\| readOnly\) return/)
 })
+
+
+test('phone register shows the stage once and preserves record data and value visibility', () => {
+  const { PhoneOpportunityRow } = load('src/pages/PhoneOpportunityViews.jsx')
+  const opportunity = { id: '2609002PP', sellTo: 'Adani Power', oppName: 'VM600 spares', milestone: 'Sourcing', valueK: 618 }
+  const html = render(PhoneOpportunityRow, { opportunity, register: true, canSeeValue: true, due: '2000-01-01' })
+  assert.equal((html.match(/Sourcing/g) || []).length, 1)
+  assert.match(html, /Adani Power/)
+  assert.match(html, /VM600 spares/)
+  assert.match(html, /href="\/opp\/2609002PP"/)
+  assert.match(html, /6,18,000/)
+  assert.match(html, /Overdue/)
+  const hidden = render(PhoneOpportunityRow, { opportunity, register: true, canSeeValue: false })
+  assert.doesNotMatch(hidden, /6,18,000|phone-register-value/)
+  const fallback = render(PhoneOpportunityRow, { opportunity: { id: 'EMPTY' }, register: true })
+  assert.match(fallback, /No stage/)
+  assert.match(fallback, /Untitled opportunity/)
+})
