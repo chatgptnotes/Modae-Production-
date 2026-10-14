@@ -1,3 +1,9 @@
+## 2026-10-14 — Phone header controls
+
+- Keep the My/Global indicator inside the phone toggle and align account menu
+  actions to the left. Anchor the menu below the avatar, constrain it to the
+  phone workspace and viewport, and scroll long menus on short screens.
+
 ## 2026-10-14 — Compact phone dashboard opportunities
 
 - Apply option 01 to the Top 5 opportunity feed: compact customer/enquiry rows,

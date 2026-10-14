@@ -60,3 +60,21 @@
   .tablet-mode .phone-table-chrome .phone-table-close { position:static; margin:8px 0; }
   .tablet-mode .approval-decision-drawer:has(.phone-workspace-header) { grid-template-rows:auto auto minmax(0,1fr); }
 }
+
+@media screen and (max-width: 600px) {
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .workspace-view-switch__thumb {
+    top: 50%; left: 5px; width: 8px; height: 24px; transform: translateY(-50%);
+    transition: left .24s ease, background-color .24s ease;
+  }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .workspace-view-switch[aria-checked="true"] .workspace-view-switch__thumb {
+    left: calc(100% - 13px); transform: translateY(-50%);
+  }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .workspace-view-switch__label { left: 22px; max-width: calc(100% - 30px); }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .workspace-view-switch[aria-checked="true"] .workspace-view-switch__label { left: 9px; }
+  .phone-workspace-header .phone-account-menu { overflow-y: auto; overscroll-behavior: contain; }
+  :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-account-menu > button { justify-content: flex-start; text-align: left; white-space: normal; }
+  .phone-workspace-header .phone-account-menu > button svg { flex: 0 0 18px; }
+  @media (prefers-reduced-motion: reduce) {
+    :is(.shell.tablet-mode,[data-modae-portal-root]) .phone-workspace-header .workspace-view-switch__thumb { transition: none; }
+  }
+}

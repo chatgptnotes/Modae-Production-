@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Icon } from '../icons.jsx'
 import { displayRoleLabel } from '../utils.js'
@@ -21,10 +21,53 @@ export default function PhoneAccountMenu({ store }) {
     if (restoreFocus) buttonRef.current?.focus()
   }
 
+  useLayoutEffect(() => {
+    if (!open) return
+    const root = rootRef.current
+    const menu = menuRef.current
+    const header = root?.closest('.mobile-dashboard-header')
+    if (!root || !menu || !header) return
+    const place = () => {
+      const anchor = root.getBoundingClientRect()
+      const bounds = header.getBoundingClientRect()
+      const viewport = window.visualViewport
+      const viewportLeft = viewport?.offsetLeft || 0
+      const viewportTop = viewport?.offsetTop || 0
+      const right = Math.min(bounds.right, viewportLeft + (viewport?.width || innerWidth)) - 8
+      const left = Math.max(bounds.left, viewportLeft) + 8
+      const scaleX = anchor.width / root.offsetWidth || 1
+      const scaleY = anchor.height / root.offsetHeight || 1
+      const width = Math.max(0, Math.min(260 * scaleX, right - left))
+      const x = Math.max(left, Math.min(anchor.right - width, right - width))
+      const y = anchor.bottom + 8
+      menu.style.width = `${width / scaleX}px`
+      menu.style.left = `${(x - anchor.left) / scaleX - root.clientLeft}px`
+      menu.style.right = 'auto'
+      menu.style.top = `${(y - anchor.top) / scaleY - root.clientTop}px`
+      menu.style.maxHeight = `${Math.max(0, viewportTop + (viewport?.height || innerHeight) - 8 - y) / scaleY}px`
+    }
+    place()
+    const observer = new ResizeObserver(place)
+    observer.observe(header)
+    observer.observe(root)
+    const scroll = event => { if (!menu.contains(event.target)) place() }
+    window.addEventListener('resize', place)
+    document.addEventListener('scroll', scroll, true)
+    window.visualViewport?.addEventListener('resize', place)
+    window.visualViewport?.addEventListener('scroll', place)
+    return () => {
+      observer.disconnect()
+      window.removeEventListener('resize', place)
+      document.removeEventListener('scroll', scroll, true)
+      window.visualViewport?.removeEventListener('resize', place)
+      window.visualViewport?.removeEventListener('scroll', place)
+    }
+  }, [open])
+
   useEffect(() => { setOpen(false) }, [location.key])
   useEffect(() => {
     if (!open) return
-    menuRef.current?.focus()
+    menuRef.current?.focus({ preventScroll: true })
     const outside = event => {
       if (!rootRef.current?.contains(event.target)) close()
     }
