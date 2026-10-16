@@ -50,7 +50,7 @@ export function useViewportPageSize(totalRows, { enabled = true, rootRef, selfRo
       observer?.disconnect()
       window.removeEventListener('resize', update)
     }
-  })
+  }, [enabled, rootRef, selfRoot, listRef, rowSelector, leadingSelector, measureTallest, fallbackRowHeight, heightSource, totalRows])
 
   return { pageSize, listRef, pagerRef }
 }

@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { viewportPageSize } from '../src/ui/viewportPageSize.js'
+
+const source = readFileSync(new URL('../src/ui/useViewportPageSize.js', import.meta.url), 'utf8')
 
 test('viewport capacity uses the list position within its own section', () => {
   const dimensions = { viewportTop: 100, viewportBottom: 900, listOffsetTop: 120, rowHeight: 40, pagerHeight: 44, gap: 0, bottomReserve: 16, totalRows: 100 }
@@ -13,4 +16,8 @@ test('viewport capacity keeps a short complete list together and reserves pager 
   assert.equal(viewportPageSize(dimensions), 16)
   assert.equal(viewportPageSize({ ...dimensions, totalRows: 20 }), 15)
   assert.equal(viewportPageSize({ ...dimensions, viewportBottom: 250, totalRows: 20 }), 1)
+})
+
+test('viewport page sizing does not remeasure rows after a page-only render', () => {
+  assert.match(source, /useLayoutEffect\(\(\) => \{[\s\S]*?\}, \[enabled, rootRef, selfRoot, listRef, rowSelector, leadingSelector, measureTallest, fallbackRowHeight, heightSource, totalRows\]\)/)
 })
