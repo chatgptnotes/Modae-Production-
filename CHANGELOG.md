@@ -1,3 +1,10 @@
+## 2026-10-17 — Restore detailed lead review
+
+- Restore the existing detailed lead review on desktop and phone, including
+  extracted-field evidence, decision panels and converted-lead summaries.
+  Keep the expanded New Lead form and current workflow rules; route opportunity
+  creation through the existing revision-aware registration flow.
+
 ## 2026-10-17 — Compact Admin integrations
 
 - Replace provider tiles with one dropdown showing connection status. Group API

@@ -5,6 +5,16 @@ import fs from 'node:fs'
 const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8')
 const inbox = fs.readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url), 'utf8')
 
+test('opening a lead renders the detailed review on desktop and phone', () => {
+  const routes = inbox.slice(inbox.indexOf('  if (sel) {'), inbox.indexOf('  const inboxPagination'))
+  assert.match(routes, /if \(phone && sel\.ai\).*<StructuredLeadDetail[^>]*phoneLayout/)
+  assert.match(routes, /if \(phone\).*<LegacyLeadDetail[^>]*phoneLayout/)
+  assert.match(routes, /<StructuredLeadDetail lead=\{sel\} converted=\{sel\.status === 'Converted'\}/)
+  assert.match(routes, /<LeadWorkflowBar lead=\{sel\}/)
+  assert.match(routes, /<LegacyLeadDetail lead=\{sel\}/)
+  assert.doesNotMatch(routes, /SimpleLeadDecisions/)
+})
+
 test('inbox description retains an accessible title under the shared top bar', () => {
   assert.match(inbox, /<div className="mailbox-head">\s*<div>\s*<h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="inbox" size=\{18\} \/> Lead inbox<\/h2>\s*<p className="hint">\{showArchive \? 'Discarded lead archive' : scope === 'my' \? 'Your assigned leads · AI structures, humans decide' : 'Common sales mailbox · AI structures, humans decide'\}<\/p>/)
   assert.match(css, /\.mailbox-head > div > \.hint \{ color: var\(--text-muted\); font-size: 13px; line-height: 1\.4; \}/)
@@ -364,8 +374,6 @@ test('customer KYC display honors verified lead-stage data and simulated mode', 
   assert.match(workbench, /item\.value \|\| .*verificationItem\(sourceLead\.verification, name\)\.value/)
   assert.match(workbench, /ID: \{item\.value \|\| verificationItem\(sourceLead\.verification, name\)\.value\}/)
   assert.match(register, /kyc: leadVerification\.status === 'Verified' \? 'Valid' : 'Pending'/)
-  assert.match(inbox, /const leadVerification = verificationSnapshot\(\{ \.\.\.lead, existingCustomerKyc: customer\?\.kyc === 'Valid' \}, customerStatus/)
-  assert.match(inbox, /kyc: leadVerification\.status === 'Verified' \? 'Valid' : 'Pending'/)
 })
 
 test('lead KYC upload scans before verification and keeps user confirmation', () => {

@@ -22,7 +22,7 @@ import { aiAttachmentPayload } from '../aiAttachments.js'
 import { extractDocText } from '../docText.js'
 import { fmtSize } from '../filestore.js'
 import { hold, add as holdMore, remove as removeHeldFile } from '../leadFiles.js'
-import { listFiles, getFile as getLeadFile } from '../leadBlobs.js'
+import { listFiles } from '../leadBlobs.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import { inboxViewCounts, matchesInboxView } from './inboxViews.js'
 import InboxToolbar from './InboxToolbar.jsx'
@@ -48,7 +48,6 @@ import { kycItemApproved, leadVerificationComplete, verificationDeadline, verifi
 import { checklistFor, classRule } from '../customerClasses.js'
 import { kycIdentityKey, simulatedKycValue, validateKycValue } from '../kycValidation.js'
 import { extractKycIdentityCandidate, normalizeKycCandidate } from '../kycExtraction.js'
-import { commercialTermsFromLead } from '../commercialTerms.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
@@ -117,74 +116,6 @@ function InboxLeadPreview({ lead }) {
   </aside>
 }
 export const isUnavailableAiSummary = lead => /^AI extraction was unavailable\b/i.test(String(lead?.ai?.summary || '').trim())
-
-// A qualified lead can be converted from its own decision page. Keep this
-// small, synchronous path here so the user does not have to pass through a
-// second registration screen just to create the opportunity.
-async function createOpportunityFromLeadPage({ store, lead, fields, decision, customer, customerStatus, regionalOwner }) {
-  if (store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false) throw new Error('Your role cannot create an opportunity from this lead.')
-  const today = new Date().toISOString().slice(0, 10)
-  const owner = decision.owner || regionalOwner || opportunityOwnerFor({
-    location: decision.eucLocation || decision.location || lead.location || lead.region,
-    region: lead.region,
-    config: store.config,
-  })
-  const id = await reserveOppId(store.opportunities, owner, store.config?.roleNames, store.config?.opportunityNumbering)
-  const { extracted, workbenchRows, bom } = buildLeadProposalData(lead, store.priceLists, store.adhocParts)
-  const identity = leadIdentity(lead, fields)
-  const sellTo = decision.sellTo || identity.sellTo || customer?.name || '—'
-  const eucName = decision.eucName || identity.eucName || ''
-  const eucLocation = decision.eucLocation || identity.eucLocation || lead.location || lead.region || ''
-  const contactPerson = decision.contactPerson || identity.contactPerson || customer?.contactPerson || ''
-  const contactPhone = decision.contactPhone || identity.contactPhone || customer?.contactPhone || ''
-  const category = fields.find(f => /category/i.test(f.k))?.v || lead.category || customer?.category || '—'
-  const acceptedFields = fields.filter(f => f.state === 'accepted' && String(f.v || '').trim())
-    .map(f => ({ key: f.k, value: String(f.v).trim(), confidence: f.conf, evidence: f.ev || '', note: f.note || '' }))
-  const leadVerification = verificationSnapshot({ ...lead, existingCustomerKyc: customer?.kyc === 'Valid' }, customerStatus, { config: store.config })
-  const opp = {
-    id, sourceLeadId: lead.id,
-    sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
-    sellTo, category, location: decision.location || eucLocation, sellToCustomerLocation: decision.sellToCustomerLocation || '',
-    customerStatus, leadVerification,
-    eucName, eucLocation,
-    oppName: lead.subject, opportunityScope: decision.scope,
-    owner, oppType: decision.oppType, inquiryType: decision.inquiryType, bu: decision.bu, segment: decision.segment, product: decision.product,
-    suggestedOwner: regionalOwner || owner, ownerOverrideReason: lead.ownerOverrideReason || '',
-    prob: 'Low', valueK: 0, cogsK: 0, rfqNumber: decision.rfqNumber || lead.ref || lead.rfqNumber || '', rfqDate: decision.rfqDate || lead.rfqDate || '',
-    extractedFields: acceptedFields, requestedItems: extracted,
-    createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
-    status: 'Open', stage: decision.inquiryType === 'Budgetary' ? 'Budgetary' : 'RFQ', milestone: 'Screening', closedReason: '',
-    contactPerson, contactPhone,
-    contactEmail: isInternalSender(lead.from, store.config) ? '' : (lead.from || ''), lastUpdated: today, forecast: false,
-    remarks: 'Registered from lead ' + lead.id, route: routeForType(decision.oppType, store.config),
-  }
-  store.addOpportunity(opp)
-  if (routeForType(decision.oppType, store.config) !== 'Service') {
-    store.addSparesLinesFromLead(id, workbenchRows)
-    const proposal = newProposal(id, opp, { validityDays: store.config?.proposalValidityDays })
-    store.saveProposal(id, { ...proposal, rfqNumber: opp.rfqNumber, subject: lead.subject || proposal.subject,
-      project: lead.subject || proposal.project, kindAttn: decision.contactPerson || proposal.kindAttn,
-      units: 1, terms: commercialTermsFromLead(lead),
-      ...(bom.length ? { leadImportId: lead.id } : {}), bom, extractedItems: extracted })
-  }
-  store.linkLeadApprovals(lead.id, id)
-  if (!customer) store.addCustomer({
-    name: sellTo,
-    category,
-    status: customerStatus,
-    kyc: leadVerification.status === 'Verified' ? 'Valid' : 'Pending',
-    payment: '—',
-  })
-  store.updateLead(lead.id, {
-    ...decision,
-    owner,
-    assignedOwner: owner,
-    suggestedOwner: owner,
-    status: 'Converted',
-    oppId: id,
-  }, 'Opportunity created from lead')
-  return id
-}
 
 const receivedTime = ts => {
   if (!ts) return '—'
@@ -1586,7 +1517,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const [reverting, setReverting] = useState(false)
   const [decisionErr, setDecisionErr] = useState('')
   const [directCreateBusy, setDirectCreateBusy] = useState(false)
-  const [directCreatedId, setDirectCreatedId] = useState('')
   const [reassignTo, setReassignTo] = useState(lead.suggestedOwner || OWNERS[0])
   const [reassignOpen, setReassignOpen] = useState(false)
   const [compareOpen, setCompareOpen] = useState(false)
@@ -1941,18 +1871,17 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     String(item?.description || item?.partNumber || item?.customerRef || '').trim()
   )
 
-  const createDirectly = async () => {
+  const openRegistration = async () => {
     if (store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false) return
     if (registrationBlocked || directCreateBusy || lead.status !== 'Qualified') return
     setDirectCreateBusy(true)
+    setDecisionErr('')
     try {
-      const id = await createOpportunityFromLeadPage({
-        store, lead, fields: ai.fields, decision: decisionDraft,
-        customer, customerStatus: previewCustomerStatus, regionalOwner,
-      })
-      setDirectCreatedId(id)
+      persistDecisionDraft(decisionDraft, { audit: true })
+      if (!await store.flushPersistence([{ entity: 'leads', id: lead.id }])) throw new Error('Lead was not saved. Review conflicts or retry.')
+      nav('/register/' + lead.id)
     } catch (error) {
-      setDecisionErr(error?.message || 'Opportunity could not be created. Please try again.')
+      setDecisionErr(error?.message || 'Registration could not be opened. Please try again.')
     } finally {
       setDirectCreateBusy(false)
     }
@@ -2310,9 +2239,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
 
   const detailContent = (
     <div className={compact ? 'compact-workflow-content' : ''}>
-    {directCreatedId && <div className="okbox lead-created-inline">
-      Opportunity <b>{directCreatedId}</b> created successfully. This lead is now converted.
-    </div>}
     {reassignOpen && <Modal title="Reassign lead" onClose={() => setReassignOpen(false)} className="reassign-modal">
       <p className="modal-intro">Choose the salesperson who should own this lead.</p>
       <label className="reassign-modal-field">Assigned owner
@@ -3203,7 +3129,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           )}
           {lead.status === 'Qualified' && (
             <>
-            <button className="primary ws-action registration-action lead-footer-button" disabled={registrationBlocked || directCreateBusy || Boolean(directCreatedId) || store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false}
+            <button className="primary ws-action registration-action lead-footer-button" disabled={registrationBlocked || directCreateBusy || store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false}
               title={registrationBlocked
                 ? verificationBlocked
                   ? `Complete ${previewCustomerStatus} customer verification first`
@@ -3211,8 +3137,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   ? 'Complete the mandatory customer, EUC and contact fields first'
                   : 'Resolve the low-confidence fields first'
                 : undefined}
-              onClick={createDirectly}>
-              {directCreateBusy ? 'Creating…' : directCreatedId ? 'Opportunity created' : 'Create opportunity'} {!directCreatedId && <Icon name="check" size={14} />}
+              onClick={openRegistration}>
+              {directCreateBusy ? 'Opening…' : 'Create opportunity'} <Icon name="check" size={14} />
             </button>
             </>
           )}
@@ -3309,7 +3235,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     { label: 'Re-run extraction', onClick: reExtract, disabled: reExtracting },
     { label: 'Add a document', onClick: () => docInput.current?.click(), disabled: addingDocs },
     ...(clarificationAvailable ? [{ label: 'Draft clarification', panel: 'details', onClick: draftClarificationMail }] : []),
-    ...(lead.status === 'Qualified' ? [{ label: 'Create opportunity', onClick: createDirectly, disabled: registrationBlocked || directCreateBusy || Boolean(directCreatedId) }] : []),
+    ...(lead.status === 'Qualified' ? [{ label: 'Create opportunity', onClick: openRegistration, disabled: registrationBlocked || directCreateBusy }] : []),
     ...(lead.status !== 'Qualified' && isFastTrackLead(previewLead, store.config, customer) ? [{ label: 'Fast-track to registration', disabled: qualifyBlocked, onClick: () => {
       store.updateLead(lead.id, { status: 'Qualified', customerStatus: previewCustomerStatus, redFlag: previewCustomerStatus === 'Red', fastTrack: true, fastTrackStartedAt: lead.fastTrackStartedAt || nowIST() }, 'Green customer fast-track started')
       nav('/register/' + lead.id)
@@ -3323,7 +3249,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     details={<>{detailContent}{reErr && <ErrBox>{reErr}</ErrBox>}{reNote && <p role="status">{reNote}</p>}</>}
     email={<LeadSourceContext lead={lead} canAct={canAct} phoneLayout />} actions={phoneActions}
     action={canAct ? lead.status === 'Qualified'
-      ? { label: 'Continue registration', onClick: () => nav('/register/' + lead.id), disabled: registrationBlocked, note: blockedNote }
+      ? { label: 'Continue registration', onClick: openRegistration, disabled: registrationBlocked || directCreateBusy, note: blockedNote }
       : { label: 'Qualify lead', onClick: () => store.updateLead(lead.id, { status: 'Qualified' }), disabled: qualifyBlocked, note: qualifyBlocked ? blockedNote : 'Qualification does not create an opportunity.' }
       : undefined} onBack={() => nav('/inbox')} />
     <input ref={docInput} type="file" multiple hidden onChange={event => { addDocuments(event.target.files); event.target.value = '' }} name="inbox-file-5" />
@@ -3352,28 +3278,22 @@ function LegacyLeadDetail({ lead, phoneLayout = false }) {
     reassignedFrom: lead.suggestedOwner || '', reassignedAt: nowIST(),
   })
 
-  // The lead stays 'New' until the intake form is actually submitted —
-  // IntakeForm flips it to Qualified and records the created oppId.
-  const qualify = () => {
-    const pick = k => p[k] ?? ''
-    nav('/new', {
-      state: {
-        leadId: lead.id,
-        prefill: {
-          sellTo: pick('sellTo'), category: pick('category'), location: pick('location'),
-          eucName: pick('eucName'), eucLocation: pick('eucLocation'), oppName: pick('oppName'),
-          owner: '', oppType: pick('oppType'), bu: pick('bu'), segment: pick('segment'),
-          inquiryType: lead.inquiryType || '', rfqNumber: lead.ref || lead.rfqNumber || '', rfqDate: lead.rfqDate || '',
-          product: pick('product'), contactPerson: pick('contactPerson'), contactPhone: pick('contactPhone'),
-          // The enquiry's sender becomes the proposal's recipient.
-          contactEmail: lead.from || '',
-        },
-      },
-    })
+  const [qualifyError, setQualifyError] = useState('')
+  const [qualifying, setQualifying] = useState(false)
+  const qualify = async () => {
+    if (qualifying || store.canPerform?.('leads.edit') === false || store.canPerform?.('opportunities.create') === false) return
+    setQualifying(true)
+    setQualifyError('')
+    try {
+      store.updateLead(lead.id, { status: 'Qualified' }, 'Lead qualified for registration')
+      if (!await store.flushPersistence([{ entity: 'leads', id: lead.id }])) throw new Error('Lead was not saved. Review conflicts or retry.')
+      nav('/register/' + lead.id)
+    } catch (error) { setQualifyError(error.message) } finally { setQualifying(false) }
   }
 
   const detailContent = (
     <div className="form-card" style={{ maxWidth: 760 }}>
+      {qualifyError && <ErrBox>{qualifyError}</ErrBox>}
       <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
         <b>{lead.subject}</b>
         <span className="spacer" style={{ flex: 1 }} />
@@ -3436,7 +3356,7 @@ function LegacyLeadDetail({ lead, phoneLayout = false }) {
 
       {lead.status === 'New' && !dropping && (
         <div className="toolbar" style={{ marginTop: 14, marginBottom: 0 }}>
-          <button className="primary" onClick={qualify}>
+          <button className="primary" disabled={qualifying} onClick={qualify}>
             <Icon name="check" size={13} /> Qualify → intake form
           </button>
           <button onClick={() => setDropping(true)}>
@@ -3489,69 +3409,13 @@ function LegacyLeadDetail({ lead, phoneLayout = false }) {
     actions={lead.status !== 'Dropped' && lead.status !== 'Converted' ? [{ label: 'Reassign lead', panel: 'details', onClick: () => setReassignOpen(true) },
       { label: 'Drop lead', panel: 'details', onClick: () => setDropping(true) }] : []}
     action={lead.status === 'Converted' && lead.oppId ? { label: 'Open opportunity', onClick: () => nav('/opp/' + lead.oppId) }
-      : ['New', 'Qualified'].includes(lead.status) ? { label: 'Continue to intake', onClick: qualify, note: 'Review the intake form before creating an opportunity.' } : undefined}
+      : ['New', 'Qualified'].includes(lead.status) ? { label: 'Continue registration', onClick: qualify, disabled: qualifying, note: 'Review registration before creating an opportunity.' } : undefined}
     onBack={() => nav('/inbox')} />
 }
 
 // ---------------------------------------------------------------------------
 // Inbox — table list, or per-lead detail when /inbox/:leadId matches.
 // ---------------------------------------------------------------------------
-function SimpleLeadDecisions({ lead }) {
-  const store = useStore()
-  const nav = useNavigate()
-  const { OWNERS, OPP_TYPES, labelFor } = useFieldLists()
-  const identity = leadIdentity(lead, lead.ai?.fields || [])
-  const [draft, setDraft] = useState(() => ({ ...identity,
-    source: lead.source || '', contactEmail: lead.contactEmail || lead.from || '',
-    sellToCustomerLocation: lead.sellToCustomerLocation || lead.location || '',
-    assignedOwner: lead.assignedOwner || lead.suggestedOwner || opportunityOwnerFor({location: lead.location, config: store.config}),
-    oppType: lead.oppType || lead.route || '', notes: lead.notes || '', customerStatus: customerStatusForLead(lead, store.customers),
-  }))
-  const editor = useRef(null)
-  const [error, setError] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [dropReason, setDropReason] = useState('')
-  const immutable = ['Converted', 'Dropped'].includes(lead.status)
-  const disabled = immutable || store.canPerform?.('leads.edit') === false
-  const set = key => event => setDraft(previous => ({...previous, [key]:event.target.value}))
-  const save = async qualify => {
-    setBusy(true); setError('')
-    try {
-      store.updateLead(lead.id, { ...draft, customerClassificationVersion: 2, ...(draft.customerStatus !== customerStatusForLead(lead, store.customers) ? {legacyCustomerClass: ''} : {}), ...(qualify ? {status:'Qualified'} : {}) }, qualify ? 'Lead qualified for registration' : 'Lead decisions saved')
-      releaseWorkspaceElementInputs(editor.current)
-      if (workspaceSyncState.enabled && !await store.flushPersistence([{entity:'leads',id:lead.id}])) throw new Error('Lead was not saved. Review conflicts or retry.')
-      if (qualify) nav('/register/' + lead.id)
-    } catch (error) { setError(error.message) } finally { setBusy(false) }
-  }
-  const transition = async (patch, detail) => {
-    setBusy(true);setError('')
-    try {store.updateLead(lead.id,patch,detail);releaseWorkspaceElementInputs(editor.current);if (workspaceSyncState.enabled && !await store.flushPersistence([{entity:'leads',id:lead.id}])) throw new Error('Change was not saved. Review conflicts or retry.')}
-    catch(error){setError(error.message)} finally {setBusy(false)}
-  }
-  return <div ref={editor} className="form-card" style={{margin:16}}>
-    <h2>Lead decisions</h2>
-    <p className="hint">Originator: {lead.originator?.name || lead.originator?.email || 'Not recorded'}</p>
-    <div className="registration-fields" style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:12}}>
-      {[['source','Source'],['sellTo','Company'],['contactPerson','Contact person'],['contactEmail','Email'],['contactPhone','Phone'],['sellToCustomerLocation','Customer location']].map(([key,label]) => <label className="afield" key={key}>{label}<input name={`lead-${key}`} value={draft[key] || ''} disabled={disabled} onChange={set(key)} /></label>)}
-      <label className="afield">Sales owner<select name="lead-assigned-owner" value={draft.assignedOwner} disabled={disabled} onChange={set('assignedOwner')}>{OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner',owner)}</option>)}</select></label>
-      <label className="afield">Opportunity type<select name="lead-opportunity-type" value={draft.oppType} disabled={disabled} onChange={set('oppType')}><option value="">Unspecified</option>{OPP_TYPES.map(type => <option key={type}>{type}</option>)}</select></label>
-      <label className="afield">Customer classification<select name="lead-customer-class" value={draft.customerStatus} disabled={disabled} onChange={set('customerStatus')}>{['Unclassified','Green','Yellow','Red'].map(status => <option key={status}>{status}</option>)}</select></label>
-      <label className="afield">Notes<textarea name="lead-notes" rows={3} value={draft.notes} disabled={disabled} onChange={set('notes')} /></label>
-    </div>
-    <h3>AI summary</h3><p>{lead.ai?.summary || 'No AI summary available.'}</p>
-    <details><summary>KYC — optional</summary><label className="afield">KYC documents (optional)<input name="lead-kyc-files" type="file" multiple disabled={disabled || busy} onChange={async event => { const selected = Array.from(event.target.files || []); if (!selected.length) return; setBusy(true); try { const records = await Promise.all(selected.map(readAttachment)); holdMore(lead.id, selected); store.updateLead(lead.id, {attachments:[...(lead.attachments || []), ...attachmentMeta(records)]}, 'Optional KYC documents attached'); } catch (error) {setError(error.message)} finally {setBusy(false)} }} /></label><p>KYC can be collected later. It does not prevent qualification or registration.</p><label className="afield">KYC notes<textarea name="lead-kyc-notes" disabled={disabled} value={draft.kycNotes ?? lead.kycNotes ?? ''} onChange={set('kycNotes')} /></label></details>
-    <details style={{marginTop:12}}><summary>Original enquiry and attachments</summary><h3>{lead.subject}</h3><p style={{whiteSpace:'pre-wrap'}}>{lead.body}</p>{(lead.attachments || []).map((file,index) => <div key={index}>{file.dataUrl ? <a href={file.dataUrl} download={file.name}>{file.name}</a> : <button type="button" onClick={async () => {const blob = await getLeadFile(lead.id,file.name); if (!blob) {setError('This attachment is unavailable on this device.');return} const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=file.name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}}>{file.name}</button>}</div>)}</details>
-    {error && <ErrBox>{error}</ErrBox>}
-    <div className="toolbar" style={{marginTop:16}}>
-      <button onClick={() => nav('/inbox')}>Back to inbox</button>
-      {!disabled && <><button disabled={busy} onClick={() => save(false)}>Save decisions</button><button className="primary" disabled={busy || store.canPerform?.('opportunities.create') === false} onClick={() => save(true)}>Qualify lead</button></>}
-      {lead.oppId && <button className="primary" onClick={() => nav('/opp/' + lead.oppId)}>Open opportunity</button>}
-      {lead.status === 'Dropped' && store.canPerform?.('leads.edit') !== false && <button onClick={() => transition({status:'New',reopenedAt:nowIST()},'Lead reopened; prior drop reason retained')}>Reopen lead</button>}
-    </div>
-    {!disabled && <details><summary>Drop lead</summary><label>Reason<textarea name="lead-drop-reason" value={dropReason} onChange={e => setDropReason(e.target.value)} /></label><button disabled={!dropReason.trim()} onClick={() => transition({status:'Dropped',droppedReason:dropReason.trim(),droppedAt:nowIST()},dropReason.trim())}>Confirm drop</button></details>}
-  </div>
-}
-
 export default function Inbox() {
   const { OPP_TYPES, labelFor } = useFieldLists()
 
@@ -3746,8 +3610,8 @@ export default function Inbox() {
   const { pagedRows: pageRows, pagination } = usePagedRows(mailboxRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF, activeInboxView, showArchive]), phone ? 10 : pageSize, pagerRef)
   useWorkspaceWatch((sel ? [sel] : pageRows).map(r=>({entity:'leads',id:r.id})), sel ? [] : [{entity:'leads',page:0,pageSize:50}])
   if (sel) {
-    if (phone && sel.ai) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><SimpleLeadDecisions key={sel.id} lead={sel} /></WorkspaceRecordBoundary>
-    if (phone) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><SimpleLeadDecisions key={sel.id} lead={sel} /></WorkspaceRecordBoundary>
+    if (phone && sel.ai) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><StructuredLeadDetail key={sel.id} lead={sel} converted={sel.status === 'Converted'} phoneLayout /></WorkspaceRecordBoundary>
+    if (phone) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><LegacyLeadDetail key={sel.id} lead={sel} phoneLayout /></WorkspaceRecordBoundary>
     const age = ageDays(sel.ts)
     return (
     <div className="lead-workspace">
@@ -3768,9 +3632,9 @@ export default function Inbox() {
           <span className={`pill ${PILL[sel.status] || 'Blue'}`}>{sel.status}</span>
       </div>
         {sel.ai
-          ? <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><SimpleLeadDecisions key={sel.id} lead={sel} /></WorkspaceRecordBoundary>
-          : <><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
-              <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><SimpleLeadDecisions key={sel.id} lead={sel} /></WorkspaceRecordBoundary>
+          ? <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><StructuredLeadDetail lead={sel} converted={sel.status === 'Converted'} /></WorkspaceRecordBoundary>
+          : <><LeadWorkflowBar lead={sel} /><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
+              <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><LegacyLeadDetail lead={sel} /></WorkspaceRecordBoundary>
             </div></section></div></>}
       </div>
     )

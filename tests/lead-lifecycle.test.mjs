@@ -10,6 +10,16 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 const inbox = read('src/pages/Inbox.jsx')
 const store = read('src/store.jsx')
 
+test('restored lead actions retain atomic conversion and registration', () => {
+  const registration = inbox.slice(inbox.indexOf('const openRegistration ='), inbox.indexOf('const missingInformationPanel'))
+  assert.match(registration, /await store\.flushPersistence\(/)
+  assert.match(registration, /nav\('\/register\/' \+ lead\.id\)/)
+  assert.doesNotMatch(registration, /store\.addOpportunity\(/)
+  const legacy = inbox.slice(inbox.indexOf('function LegacyLeadDetail'), inbox.indexOf('export default function Inbox'))
+  assert.match(legacy, /nav\('\/register\/' \+ lead\.id\)/)
+  assert.doesNotMatch(legacy, /nav\('\/new'/)
+})
+
 // Biji, 13 Aug: "there has to be a place for me to write the reason why you're
 // trying to disqualify." The reason was a pre-selected dropdown, so Confirm
 // always succeeded and "Other" offered no text box at all.
@@ -21,14 +31,6 @@ test('disqualifying requires a written reason', () => {
   assert.doesNotMatch(inbox, /droppedReason: dropReason \}/,
     'the category alone must not be the whole reason')
   assert.match(inbox, /droppedReason: `\$\{category\} — \$\{note\}`/)
-})
-
-test('simplified decisions require an explicit drop reason and preserve history on reopen', () => {
-  const simple = inbox.slice(inbox.indexOf('function SimpleLeadDecisions'), inbox.indexOf('export default function Inbox'))
-  assert.match(simple, /disabled=\{!dropReason\.trim\(\)\}/)
-  assert.match(simple, /droppedReason:dropReason\.trim\(\)/)
-  assert.match(simple, /reopenedAt:nowIST\(\)/)
-  assert.doesNotMatch(simple, /droppedReason:\s*''/)
 })
 
 // "By mistake I qualify — I should take it back to the lead list… then I can
