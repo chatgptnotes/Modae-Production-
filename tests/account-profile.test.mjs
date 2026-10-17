@@ -29,9 +29,10 @@ function loginHarness({ fastTimeout = false } = {}) {
   const refs = Object.fromEntries(['authEpochRef','externalLoginRef','pendingAuthUserRef','initialHydrationRef','sharedPullInFlightRef','lastSavedRef','bootRef','saveTimerRef'].map(k => [k, { current: k === 'authEpochRef' ? 0 : null }]))
   const ctx = vm.createContext({ ...refs, stateRef, ROLES, userRoles, matchesAccount, isActiveUser,
     authInvalidRef: { current: false }, hydratedRef: { current: true },
-    datastore: { setLocalDemoMode() {}, invalidateLoadCache() {}, settleWorkspaceReads: async () => {} },
+    datastore: { resetWorkspaceViewRecords() {}, setLocalDemoMode() {}, invalidateLoadCache() {}, settleWorkspaceReads: async () => {} },
     supabase: { auth: { getSession: async () => ({ data: { session: { user: { id: 'auth-lj' }, access_token: 'token' } } }) } },
     fetchWorkspace: () => { reads++; return new Promise((resolve, reject) => { resolveRead = resolve; rejectRead = reject }) },
+    setOverview() {}, setActiveDataView() {},
     setAuthReady: value => { ready = value }, setAuthProfileError: value => { error = value },
     setState: fn => { stateRef.current = typeof fn === 'function' ? fn(stateRef.current) : fn },
     withAudit: s => s, clearTimeout, setTimeout: (fn, ms) => setTimeout(fn, fastTimeout ? 5 : ms), Promise,

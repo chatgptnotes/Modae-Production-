@@ -8,12 +8,15 @@ export function OpportunityCellEditingProvider({ children }) {
   return <EditingContext.Provider value={active}>{children}</EditingContext.Provider>
 }
 
-export function EditableOpportunityRow({ children, ...props }) {
+export function EditableOpportunityRow({ children, prepareEdit, ...props }) {
   const coordinator = useContext(EditingContext)
   const fields = useRef(new Set())
   const element = useRef(null)
   const handle = useRef({ finish: () => true })
   const [editing, setEditing] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState('')
+  const preparing = useRef(false)
   const register = useCallback(field => { fields.current.add(field); return () => fields.current.delete(field) }, [])
   const finish = () => {
     if (![...fields.current].every(field => field.validate())) return false
@@ -23,7 +26,19 @@ export function EditableOpportunityRow({ children, ...props }) {
     return true
   }
   handle.current.finish = finish
-  const begin = () => {
+  const begin = async () => {
+    if (preparing.current) return
+    if (coordinator?.current && coordinator.current !== handle.current && !coordinator.current.finish()) return
+    if (prepareEdit) {
+      preparing.current = true
+      setLoading(true)
+      setLoadError('')
+      try {
+        if (!await prepareEdit()) throw new Error('Could not load opportunity details. Click Edit to retry.')
+      } catch (error) { setLoadError(error.message); return }
+      finally { preparing.current = false; setLoading(false) }
+    }
+    // A different row may have begun editing while this read was pending.
     if (coordinator?.current && coordinator.current !== handle.current && !coordinator.current.finish()) return
     if (coordinator) coordinator.current = handle.current
     setEditing(true)
@@ -32,7 +47,7 @@ export function EditableOpportunityRow({ children, ...props }) {
     if (editing) element.current?.querySelector('textarea,input,select')?.focus()
   }, [editing])
   useEffect(() => () => { if (coordinator?.current === handle.current) coordinator.current = null }, [coordinator])
-  return <RowContext.Provider value={{ editing, register, begin, finish }}>
+  return <RowContext.Provider value={{ editing, register, begin, finish, loading, loadError }}>
     <tr {...props} ref={element} data-editing={editing || undefined}>{children}</tr>
   </RowContext.Provider>
 }
@@ -46,12 +61,12 @@ export function OpportunityRowEditOnly({ children }) {
 export function OpportunityRowEditButton({ disabled, label }) {
   const row = useContext(RowContext)
   if (disabled || !row) return null
-  return <button type="button" className="opportunity-row-pencil" title={row.editing ? 'Done editing row' : 'Edit row'} aria-label={`${row.editing ? 'Done editing' : 'Edit'} opportunity ${label}`} aria-pressed={row.editing}
+  return <><button type="button" disabled={row.loading} aria-busy={row.loading || undefined} className="opportunity-row-pencil" title={row.editing ? 'Done editing row' : 'Edit row'} aria-label={`${row.editing ? 'Done editing' : 'Edit'} opportunity ${label}`} aria-pressed={row.editing}
     onClick={e => { e.stopPropagation(); row.editing ? row.finish() : row.begin() }}>
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
       {row.editing ? <path d="m4 12 5 5L20 6" /> : <path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z" />}
     </svg>
-  </button>
+  </button>{row.loadError && <span role="alert">{row.loadError}</span>}</>
 }
 
 function selectedLabel(children, value) {

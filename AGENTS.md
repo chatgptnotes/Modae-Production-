@@ -261,3 +261,18 @@ coalesced activation checks, and local committed snapshots. Keep HTTP 409 partia
 results intact. Existing form-local inputs require owner acknowledgement before
 merging or leaving. Ephemeral presence stays in Railway memory; do not resume
 browser heartbeat writes to `user_presence`. Multiple replicas need shared limits.
+
+## Demand-loaded workspace data
+
+- `view` reads at `/api/workspace/data` support overview, list, detail and full
+  scopes. Always apply `projectWorkspace` before building summaries or revisions.
+- Dashboard summary rows are read-only; never install them into canonical store
+  state or datastore revision baselines. Related detail collections are partial:
+  merge by opportunity, preserve unrelated loaded rows, and never infer deletion
+  from a collection that was not loaded. Partial stores use revision-aware saves
+  even when event-driven sync is disabled.
+- `WorkspaceDataBoundary` gates desktop and phone route editors. Row-edit and
+  Details drawer entry must load the selected opportunity's dependencies first.
+- View caching is session-local, coalesced and bounded to 15 seconds; writes and
+  account changes invalidate it. Activation refreshes only the visible view;
+  manual refresh bypasses the cache. Do not add idle or typing-triggered reads.

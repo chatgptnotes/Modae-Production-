@@ -82,7 +82,7 @@ export function createApp({
       if (!user?.profile) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
       const workspace = projectWorkspace({ ...await workspaceCache.bootstrap(), config: user.config || {} }, user.profile)
       res.setHeader('x-workspace-generation', workspaceCache.generationHeader())
-      return res.status(200).json({ ok: true, data: workspace })
+      return res.status(200).json({ ok: true, data: req.query.scope === 'identity' ? { users: workspace.users, config: workspace.config } : workspace })
     } catch (error) { return next(error) }
   })
   app.post('/api/workspace/save', async (req, res, next) => {

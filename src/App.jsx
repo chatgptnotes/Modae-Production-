@@ -1,3 +1,4 @@
+import WorkspaceDataBoundary from './ui/WorkspaceDataBoundary.jsx'
 import React, { Suspense, useEffect, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
@@ -256,6 +257,9 @@ function WorkspaceTopbar({ store, role, location, nav }) {
 }
 
 function AppShell() {
+  return <WorkspaceDataBoundary><LoadedAppShell /></WorkspaceDataBoundary>
+}
+function LoadedAppShell() {
   const store = useStore()
   const nav = useNavigate()
   const loc = useLocation()

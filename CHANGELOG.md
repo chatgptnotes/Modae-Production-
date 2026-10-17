@@ -1,3 +1,16 @@
+## 2026-10-16 — Load workspace data when opened
+
+- Fetch account identity separately from business data. Dashboard reads compact
+  opportunity summaries and server-calculated blocker/action signals; register
+  and opportunity detail views load when opened, including row editing/drawers.
+- Coalesce repeated view requests and reuse a session-local 15-second cache.
+  Refresh bypasses caching; writes invalidate it. No idle polling is added.
+- Carry actual row revisions with permission-projected view responses. Keep
+  summaries out of writable state, merge partial detail collections by opportunity,
+  retain draft baselines, and use revision-aware saves for partially loaded data.
+- Defer price lists until a workflow page needs them and remove the duplicate
+  whole-workspace refresh on opportunity entry. No database migration is required.
+
 ## 2026-10-14 — Phone header controls
 
 ## 2026-10-14 — Bundled Candara family

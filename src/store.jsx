@@ -1,3 +1,4 @@
+import { mergeWorkspaceView, workspaceViewForPath } from './workspaceViews.js'
 import { activeWorkspaceInput, appliedWorkspaceInput } from './workspaceInputOwnership.js'
 import { WorkspaceSyncRuntime } from './ui/WorkspaceSync.jsx'
 import { workspaceDrafts, SYNC_ENTITIES } from './workspaceDrafts.js'
@@ -301,6 +302,10 @@ export function StoreProvider({ children }) {
   datastore.setLocalDemoMode(isLocalDemoSession(state))
   const [authReady, setAuthReady] = useState(() => !supabase || isLocalDemoSession(state))
   const [authProfileError, setAuthProfileError] = useState('')
+  const [overview, setOverview] = useState(null)
+  const [activeDataView, setActiveDataView] = useState(null)
+  const viewRequestsRef = useRef(new Map())
+  const requestedViewRef = useRef(null)
   const authEpochRef = useRef(0)
   const externalLoginRef = useRef(null)
   const pendingAuthUserRef = useRef(null)
@@ -523,80 +528,54 @@ export function StoreProvider({ children }) {
   // record the user just made and watched appear (simulate a lead, reload
   // straight away, and it is gone). Same rule as applyServer, measured against
   // bootRef instead of lastSavedRef because we have not saved anything yet.
-  const hydrate = async () => {
+  const ensureWorkspaceView = (view, { force = false, activate = true } = {}) => {
+    if (!datastore.dbEnabled()) return Promise.resolve(true)
     const epoch = authEpochRef.current
-    const res = await datastore.loadCore()
-    if (epoch !== authEpochRef.current || authInvalidRef.current) return
-    if (!res) {
-      setSourcingDataStatus('error')
-      if (!supabaseConfigError) setLiveSyncStatus('error')
-      return
-    }
-    if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-    const sourcingError = res.error || null
-    const coreError = res.coreError || null
-    if (sourcingError) {
-      setSourcingDataStatus('error')
-      setSourcingDataError(sourcingError.message || 'Sourcing data could not be loaded')
-      invalidateSupabaseAuth(sourcingError)
-    } else {
-      setSourcingDataStatus('ready')
-      setSourcingDataError('')
-    }
-    if (coreError) {
-      if (!isSupabaseAuthError(coreError)) setLiveSyncStatus('error')
-      invalidateSupabaseAuth(coreError)
-    } else if (!sourcingError || !isSupabaseAuthError(sourcingError)) {
-      setLiveSyncStatus('live')
-    }
-    if (hydratedRef.current) return
-    const s = stateRef.current
-    if (res.empty) {
-      const clean = migrate({
-        ...emptyState(s),
-        demoData: false,
-        priceLists: {},
-        adhocParts: [],
-        rateSheets: {},
-        users: [],
-        audit: [],
-      })
-      lastSavedRef.current = syncedOf(clean)
-      hydratedRef.current = true
-      setLiveSyncStatus('live')
-      setSyncDiagnostics(diagnostics => ({ ...diagnostics, emptyWorkspaceAt: new Date().toISOString() }))
-      setState(clean)
-      setSourcingDataStatus(sourcingError ? 'error' : 'ready')
-    } else {
-      const serverSlices = syncedOf(res.slices)
-      const accepted = {}
-      for (const [key, value] of Object.entries(serverSlices)) {
-        // Preserve only a real edit made while the request was in flight. A
-        // browser snapshot that merely existed before boot is not an edit.
-        if (key in s && JSON.stringify(s[key]) !== JSON.stringify(bootRef.current[key])) continue
-        accepted[key] = value
+    const key = JSON.stringify([epoch, view, activate])
+    if (activate) requestedViewRef.current = key
+    if (viewRequestsRef.current.has(key)) return viewRequestsRef.current.get(key)
+    const current = () => epoch === authEpochRef.current && !authInvalidRef.current
+    const request = (async () => {
+      try {
+        const result = await datastore.loadWorkspaceView(view, { force, isCurrent: current })
+        if (!current() || !result || activate && requestedViewRef.current !== key) return false
+        registerDirtyRecords()
+        datastore.installWorkspaceViewRevisions(result, (entity, id) => hydratedRef.current && JSON.stringify(recordFrom(stateRef.current, entity, id)) !== JSON.stringify(recordFrom(lastSavedRef.current, entity, id)))
+        const slices = mergeWorkspaceView(lastSavedRef.current, result)
+        if (!hydratedRef.current) {
+          // No business editor mounts before this first authoritative response.
+          // Summary opportunities stay out of canonical state and save baselines.
+          const next = applyAuthoritativeProfile(migrate({ ...emptyState(stateRef.current),
+            audit: [], ...slices, demoData: false, priceLists: {},
+            auth: stateRef.current.auth, role: stateRef.current.role, roles: stateRef.current.roles,
+          }), slices.users)
+          approvalViewRevisionsRef.current = result.slices._approvalRevisions || {}
+          stateRef.current = next
+          lastSavedRef.current = syncedOf(next)
+          bootRef.current = syncedOf(next)
+          hydratedRef.current = true
+          setState(next)
+        } else applyServer(slices)
+        if (activate && requestedViewRef.current === key) {
+          setOverview(result.summary)
+          setActiveDataView(view)
+        }
+        setLiveSyncStatus('live')
+        setSourcingDataStatus(view.kind === 'detail' || view.kind === 'full' ? 'ready' : 'loading')
+        setSourcingDataError('')
+        return true
+      } catch (error) {
+        if (!current()) return false
+        if (error.code === 'WORKSPACE_PURGED') workspaceSyncState.suspended = true
+        if (!invalidateSupabaseAuth(error)) setLiveSyncStatus('error')
+        setSyncDiagnostics(d => ({ ...d, lastLoadError: { message: error.message } }))
+        return false
       }
-      const merged = reconcileApprovedSubmissions(migrate({
-        ...s,
-        ...accepted,
-        deletedLeadIds: [],
-        deletedOpportunityIds: [],
-        pendingOpportunitySyncIds: [],
-        leadSyncBaseline: accepted.leads || [],
-        clarificationSyncBaseline: accepted.clarifications || [],
-        opportunitySyncBaseline: accepted.opportunities || [],
-        sparesLinesSyncBaseline: accepted.sparesLines || [],
-      }))
-      // Every server slice is the baseline, including an explicitly empty
-      // slice. This prevents stale local values from becoming dirty and being
-      // written back on the next debounce or pagehide.
-      lastSavedRef.current = { ...syncedOf(merged), ...serverSlices }
-      hydratedRef.current = true
-      setState(applyAuthoritativeProfile(merged, accepted.users))
-      setSourcingDataStatus(sourcingError ? 'error' : 'ready')
-      setTimeout(flushSaves, 0)
-    }
+    })()
+    viewRequestsRef.current.set(key, request)
+    return request.finally(() => { if (viewRequestsRef.current.get(key) === request) viewRequestsRef.current.delete(key) })
   }
+  const hydrate = () => ensureWorkspaceView(workspaceViewForPath(window.location.pathname))
 
   // A server slice replaces only a clean local slice. This protects edits that
   // are still being saved while accepting a live update from another browser.
@@ -722,26 +701,8 @@ export function StoreProvider({ children }) {
     if (!force && sharedPullInFlightRef.current) return sharedPullInFlightRef.current
     const epoch = authEpochRef.current
     if (authInvalidRef.current) return false
-    const pull = (async () => {
-      if (!workspaceSyncState.enabled) await flushSaves()
-      registerDirtyRecords()
-      const res = await datastore.loadAll({ force: true })
-      if (epoch !== authEpochRef.current || authInvalidRef.current) return false
-      if (!res) { setLiveSyncStatus('error'); return false }
-      if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-      if (res.error) {
-        const authError = invalidateSupabaseAuth(res.error)
-        if (!authError) setLiveSyncStatus('error')
-        return false
-      }
-      if (res.empty) {
-        setLiveSyncStatus('degraded')
-        return true
-      }
-      setLiveSyncStatus('live')
-      applyServer(res.slices, res.diagnostics)
-      return true
-    })()
+    const pull = ensureWorkspaceView(workspaceViewForPath(window.location.pathname), { force })
+
     sharedPullInFlightRef.current = pull
     return pull.finally(() => {
       if (sharedPullInFlightRef.current === pull) sharedPullInFlightRef.current = null
@@ -754,7 +715,6 @@ export function StoreProvider({ children }) {
     if (initialHydrationRef.current === userId) return
     initialHydrationRef.current = userId
     hydrate()
-    loadApprovedPriceLists()
     const onFocus = () => {
       if (!hydratedRef.current) return
       if (!workspaceSyncState.enabled) void pullSharedData()
@@ -813,6 +773,12 @@ export function StoreProvider({ children }) {
 
   const api = {
     ...state,
+    opportunities: activeDataView?.kind === 'overview' && overview ? overview.opportunities : state.opportunities,
+    overviewSignals: ['overview', 'list'].includes(activeDataView?.kind) ? overview?.signals || {} : {},
+    ensureWorkspaceView,
+    loadOpportunityDetails: id => ensureWorkspaceView({ kind: 'detail', id }, { activate: false }),
+    loadedOpportunity: id => stateRef.current.opportunities.find(row => row.id === id),
+    ensurePriceLists: () => loadApprovedPriceLists(),
     flushPersistence,
     async saveSelectedRecords(records) {
       if (!workspaceSyncState.enabled || workspaceSyncState.suspended) return false
@@ -2824,24 +2790,7 @@ export function StoreProvider({ children }) {
     },
 
     async refreshSharedData() {
-      const epoch = authEpochRef.current
-      if (!datastore.dbEnabled() || authInvalidRef.current) return false
-      const res = await datastore.loadAll({ force: true })
-      if (epoch !== authEpochRef.current || authInvalidRef.current) return false
-    if (!res) { setLiveSyncStatus('error'); return false }
-      if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-      if (res.error) {
-      if (!invalidateSupabaseAuth(res.error)) setLiveSyncStatus('error')
-      return false
-    }
-    if (Array.isArray(res.slices?.sparesLines)) {
-      setSourcingDataStatus('ready')
-      setSourcingDataError('')
-    }
-    if (res.empty) { setLiveSyncStatus('degraded'); return false }
-      setLiveSyncStatus('live')
-      applyServer(res.slices, res.diagnostics)
-      return true
+      return ensureWorkspaceView(workspaceViewForPath(window.location.pathname), { force: true })
     },
 
     // Sourcing has its own fast-load contract. Retrying it should not make
@@ -2961,7 +2910,7 @@ export function StoreProvider({ children }) {
               if (result.error) throw result.error
               const verifiedSession = result.data?.session
               if (!verifiedSession?.access_token || verifiedSession.user?.id !== user.id) throw new Error('Your session changed. Sign in again.')
-              const workspace = await fetchWorkspace(verifiedSession.access_token, undefined, { isCurrent: current })
+              const workspace = await fetchWorkspace(verifiedSession.access_token, undefined, { isCurrent: current, identityOnly: true })
               await datastore.settleWorkspaceReads()
               return workspace
             })(),
@@ -2977,9 +2926,11 @@ export function StoreProvider({ children }) {
             config: switching ? workspace.config || {} : { ...base.config, accessPolicy: workspace.config?.accessPolicy },
             auth: { source: 'supabase', user: { id: user.id, email: user.email } },
           }, workspace.users)
-          if (switching) workspaceDrafts.reset()
+          if (switching) { workspaceDrafts.reset(); datastore.resetWorkspaceViewRecords() }
           datastore.setLocalDemoMode(false)
           datastore.invalidateLoadCache()
+          setOverview(null)
+          setActiveDataView(null)
           // Hydration may have been started by an earlier session. Start a new
           // read; preserve same-account draft baselines on ordinary revalidation.
           if (switching || !hydratedRef.current) {

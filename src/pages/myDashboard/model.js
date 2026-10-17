@@ -105,9 +105,10 @@ export function dashboardModel(store, { scope = 'global', owner = 'all', period 
   const pendingIds = new Set(pending.map(a => a.oppId).filter(Boolean))
   const getProposal = id => store.getProposal?.(id) || store.proposals?.[id]
   const work = opportunities.filter(o => o.status === 'Open').map(opp => {
-    const blockers = readiness(opp, getProposal(opp.id), store)
-    const action = nextActionWith(opp, getProposal(opp.id), store)
-    const clarificationDue = actionableClarifications(opp, store)
+    const summary = store.overviewSignals?.[opp.id]
+    const blockers = summary?.blockers || readiness(opp, getProposal(opp.id), store)
+    const action = summary?.action || nextActionWith(opp, getProposal(opp.id), store)
+    const clarificationDue = summary ? summary.clarificationDue : actionableClarifications(opp, store)
       .filter(row => !isClarificationResolved(row) && !isClarificationCoveredByAnswer(opp, row, store.clarifications || []))
       .map(row => row.due).filter(Boolean).sort()[0]
     const mine = opp.owner === role || action.owner === role || pendingIds.has(opp.id)

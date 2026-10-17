@@ -1,3 +1,6 @@
+import { workspaceView } from '../src/workspaceViews.js'
+import { readiness, nextActionWith, actionableClarifications, isClarificationResolved, isClarificationCoveredByAnswer } from '../src/gates.js'
+import { newProposal } from '../src/seed.js'
 import { workspaceSync, admitSync, admitSyncActor } from './_workspace-sync.js'
 import { assertReservedOpportunityIds } from './_opportunity-reservations.js'
 import { getAdminSupabaseClient } from './_supabase-client.js'
@@ -92,11 +95,35 @@ export function createWorkspaceDataHandler({ getClient = getAdminSupabaseClient,
       }
       const profile = await activeProfile(client, auth.data.user)
       if (!profile) fail('This account no longer has workspace access.', 403, 'WORKSPACE_ACCESS_REVOKED')
-      const reader = getReader()
+      const reader = getReader({ includeRevisions: req.body?.operation === 'view' })
       if (!reader) fail('Workspace data is not configured.', 503)
       const state = await reader()
       const config = state.config || {}
       const input = req.body || {}
+      if (input.operation === 'view') {
+        if (!['overview', 'list', 'detail', 'full'].includes(input.view?.kind) || input.view.kind === 'detail' && (typeof input.view.id !== 'string' || !input.view.id || input.view.id.length > 200)) fail('Invalid workspace view.', 400)
+        const { _revisions, ...business } = state
+        const projected = projectWorkspace(business, profile)
+        const signals = Object.fromEntries((projected.opportunities || []).map(opp => {
+          const proposal = projected.proposals?.[opp.id] || newProposal(opp.id, opp, { validityDays: config.proposalValidityDays, currencyRates: config.currencyRates, costingDefaults: config.costingDefaults })
+          return [opp.id, { blockers: readiness(opp, proposal, projected), action: nextActionWith(opp, proposal, projected),
+            clarificationDue: actionableClarifications(opp, projected).filter(row => !isClarificationResolved(row) && !isClarificationCoveredByAnswer(opp, row, projected.clarifications || [])).map(row => row.due).filter(Boolean).sort()[0] || '' }]
+        }))
+        const result = workspaceView(projected, input.view, signals)
+        // Revisions accompany only rows actually returned, after permission projection.
+        const revisions = []
+        for (const [table, entries] of Object.entries(_revisions || {})) {
+          const key = table === 'settings' ? 'config' : keys[table] || table
+          for (const row of entries) {
+            const slice = table === 'records' ? result.slices[row.id] : result.slices[key]
+            const data = table === 'records' || table === 'settings' ? slice : Array.isArray(slice) ? slice.find(item => item.id === row.id) : slice?.[row.id]
+            if (data !== undefined && (table !== 'records' || row.entity === 'state')) revisions.push({ entity: table === 'records' ? 'state' : table, id: row.id, rev: Number(row.rev) || 0 })
+          }
+        }
+        result.slices._approvalRevisions = Object.fromEntries(revisions.filter(row => row.entity === 'approvals').map(row => [row.id, row.rev]))
+        res.setHeader?.('Cache-Control', 'no-store')
+        return res.status(200).json({ ...result, revisions, generation: String(state.workspaceGeneration || 0) })
+      }
       if (input.operation === 'select' || input.operation === 'select_many') {
         const queries = input.operation === 'select' ? [input] : input.queries
         if (!Array.isArray(queries) || !queries.length || queries.length > 20) fail('Choose between one and twenty read queries.', 400)

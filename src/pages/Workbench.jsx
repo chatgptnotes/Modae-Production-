@@ -312,23 +312,6 @@ function WorkbenchRecord() {
   const [recovery, setRecovery] = useState('idle')
   const [sharedRefreshError, setSharedRefreshError] = useState('')
 
-  useEffect(() => {
-    if (!store.authReady || !['live', 'degraded'].includes(store.liveSyncStatus)) return undefined
-    let active = true
-    const refreshSharedData = () => {
-      if (document.visibilityState === 'hidden') return
-      void store.refreshSharedData().then(ok => {
-        if (!active) return
-        setSharedRefreshError(ok ? '' : 'Shared workspace data could not be refreshed.')
-      }).catch(() => {
-        if (active) setSharedRefreshError('Shared workspace data could not be refreshed.')
-      })
-    }
-    refreshSharedData()
-    return () => {
-      active = false
-    }
-  }, [oppId, store.authReady, store.liveSyncStatus])
 
   const retrySharedRefresh = () => {
     setSharedRefreshError('')

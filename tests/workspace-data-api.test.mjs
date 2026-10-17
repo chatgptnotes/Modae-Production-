@@ -159,3 +159,35 @@ test('a forbidden audit rewrite is denied without invalidating the session', asy
   assert.equal(isSupabaseAuthError({ status: res.statusCode, code: res.body.code }), false)
   assert.equal(f.calls.length, 0)
 })
+
+test('view reads authenticate and defer heavy data while preserving authorized revision metadata', async () => {
+  const f = fixture('ADMIN')
+  f.state.proposals = { O1: { bom: [{ secretCost: 400 }] }, OTHER: { bom: [2] } }
+  f.state.sparesLines = [{ id: 'S1', oppId: 'O1' }, { id: 'S2', oppId: 'OTHER' }]
+  f.state._revisions = { opportunities: f.database.opportunities, proposals: [{ id: 'O1', rev: 7, data: f.state.proposals.O1 }] }
+  const overview = response()
+  await f.handler(f.request({ operation: 'view', view: { kind: 'overview' } }), overview)
+  assert.equal(overview.statusCode, 200)
+  assert.equal(overview.body.slices.opportunities, undefined)
+  assert.equal(overview.body.slices.proposals, undefined)
+  assert.equal(overview.body.revisions.some(row => row.entity === 'opportunities'), false)
+  assert.equal(JSON.stringify(overview.body).includes('secretCost'), false)
+  const detail = response()
+  await f.handler(f.request({ operation: 'view', view: { kind: 'detail', id: 'O1' } }), detail)
+  assert.equal(detail.statusCode, 200)
+  assert.deepEqual(Object.keys(detail.body.slices.proposals), ['O1'])
+  assert.deepEqual(detail.body.slices.sparesLines.map(row => row.id), ['S1'])
+  assert.deepEqual(detail.body.revisions.find(row => row.entity === 'proposals'), { entity: 'proposals', id: 'O1', rev: 7 })
+  f.profile.status = 'Disabled'
+  const denied = response()
+  await f.handler(f.request({ operation: 'view', view: { kind: 'full' } }), denied)
+  assert.equal(denied.statusCode, 403)
+})
+test('view summaries cannot restore commercial fields redacted by access policy', async () => {
+  const f = fixture()
+  const res = response()
+  await f.handler(f.request({ operation: 'view', view: { kind: 'overview' } }), res)
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.body.summary.opportunities[0].value, undefined)
+  assert.equal(res.body.summary.opportunities[0].oppName, 'Shared opportunity')
+})

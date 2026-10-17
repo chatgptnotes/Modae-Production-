@@ -6,6 +6,15 @@ submission, and follow-up.
 
 ## What the application does
 
+- Workspace data loads on demand. Dashboard opens with opportunity summaries and
+  calculated work signals; Opportunities loads the register when visited. Opening
+  an opportunity, its Details drawer, or its row-edit pencil loads that record's
+  proposal and related work data before enabling editing. Read requests share a
+  session-local 15-second cache; successful saves invalidate it. Returning to a
+  screen or the browser refreshes the visible view when the cache expires, and
+  manual Refresh bypasses the cache. Numbers are not continuously live. Other
+  workflow pages retain complete workspace reads for their cross-record actions.
+
 - Personal settings → Appearance lets each signed-in user choose Candara (default),
   Inter, Roboto, Open Sans, Merriweather, Lora or their device's system font. Account-backed choices follow the user across
   devices; local/demo choices remain per user on that browser. Open settings from

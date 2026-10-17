@@ -739,7 +739,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
           </thead>
           <tbody ref={pageListRef}>
             {pageRows.map((o, index) => (
-              <EditableOpportunityRow key={o.id}>
+              <EditableOpportunityRow key={o.id} prepareEdit={() => store.loadOpportunityDetails?.(o.id) ?? true}>
                 <td className="rowhead">{firstRow + index}</td>
                 <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <span className="tracker-oppid-actions" title={`Customer class: ${customerStatusFor(o)}`}>
