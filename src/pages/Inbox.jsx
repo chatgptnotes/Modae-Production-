@@ -1,3 +1,4 @@
+import { isLocalDemoSession } from '../authMode.js'
 import { workspaceSyncState } from '../workspaceSyncState.js'
 import { releaseWorkspaceElementInputs } from '../workspaceInputOwnership.js'
 import { WorkspaceRecordBoundary, useWorkspaceWatch } from '../ui/WorkspaceSync.jsx'
@@ -34,7 +35,6 @@ import './phoneEnquiry.css'
 import usePhoneDialogViewport from '../tablet/usePhoneDialogViewport.js'
 import useListState from '../tablet/useListState.js'
 import { findDuplicates } from '../insights.js'
-import { leadWorkflow } from '../leadWorkflow.js'
 import { parseLeadLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue, extractLeadIdentityFacts } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
@@ -44,7 +44,7 @@ import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
   clarificationSender, draftClarification, draftKycRejection, draftPatch, senderLabel, sentPatch,
 } from '../leadClarification.js'
-import { kycItemApproved, leadVerificationComplete, verificationDeadline, verificationItem, verificationSnapshot, redClearanceFor, isRedCleared } from '../leadVerification.js'
+import { kycItemApproved, kycVerificationComplete, leadVerificationComplete, verificationItem } from '../leadVerification.js'
 import { checklistFor, classRule } from '../customerClasses.js'
 import { kycIdentityKey, simulatedKycValue, validateKycValue } from '../kycValidation.js'
 import { extractKycIdentityCandidate, normalizeKycCandidate } from '../kycExtraction.js'
@@ -52,7 +52,7 @@ import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
 import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
-import { deriveOpportunityScope } from '../leadScope.js'
+import { deriveOpportunityScope, scopeForReview } from '../leadScope.js'
 import { normalizeLocationValue, useGlobalLocationSearch } from '../locations.js'
 import { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 import { LEAD_LABELS, extractLabeledValue } from '../leadLabels.js'
@@ -286,7 +286,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       || labeled(String.raw`deliver(?:y|ed)\\s+to|${LEAD_LABELS.eucLocation}`)
     const phone = customerPhoneFromText(text)
     const contactPerson = customerContactFromText(text)
-    const scopeValue = cleanDisplayValue(body)
+    const scopeValue = deriveOpportunityScope([], body)
       .replace(/^dear[^\n]*\n+/i, '')
       .replace(/^\s*(?:customer|euc|eun|end\s+user|ultimate\s+customer|beneficiary|site|plant|station|project\s+site|installation\s+site|contact\s+person|contact\s+phone)[^\n:]*\s*:[^\n]*\n?/gim, '')
       .replace(/\n\s*(?:regards|best regards|kind regards),[\s\S]*$/i, '')
@@ -473,17 +473,6 @@ function LeadVerification({ lead, customerStatus, store }) {
   // opportunity unchanged, but allow the source lead's document evidence to
   // be uploaded, simulated, replaced, or cancelled. Dropped leads stay locked.
   const editable = lead.status !== 'Dropped' && store.canPerform?.('leads.edit') !== false
-  const deadline = verificationDeadline(lead, customerStatus, store.config)
-  // Was a hardcoded "within 1 week" on both cards, which ignored the
-  // configured deadline entirely.
-  const windowLabel = deadline?.days ? `within ${deadline.days} day${deadline.days === 1 ? '' : 's'}` : 'on request'
-  const dateLabel = value => value
-    ? (formatISTDate(value) || '—')
-    : '—'
-  const deadlineLabel = deadline
-    ? deadline.expired ? 'Overdue' : `${deadline.remaining} day${deadline.remaining === 1 ? '' : 's'} remaining`
-    : ''
-
   const cancelPendingUpload = item => {
     // Cancelling is deliberately local to the file picker. It must not cancel
     // the customer's KYC request or alter any other checklist item.
@@ -621,23 +610,6 @@ function LeadVerification({ lead, customerStatus, store }) {
     setKycMailDraft(null)
   }
 
-  const simulateAllKyc = () => {
-    const verifiedAt = nowIST()
-    const items = checklistFor(store.config, customerStatus)
-    const kyc = Object.fromEntries(items.map(item => {
-      const value = simulatedKycValue(item)
-      return [item, {
-        state: 'Verified', mode: 'simulated', verifiedAt,
-        ...(value ? { value } : {}),
-      }]
-    }))
-    setKycValues(values => Object.fromEntries(items.map(item => [item, simulatedKycValue(item) || values[item] || ''])))
-    store.updateLead(lead.id, {
-      verification: { ...verification, kycRequestStatus: 'pending', kyc, kycVerifiedAt: verifiedAt },
-      kycCompletedAt: verifiedAt,
-    }, 'All KYC documents marked verified (simulated)')
-  }
-
   const confirmPayment = mode => {
     const now = nowIST()
     store.updateLead(lead.id, {
@@ -647,64 +619,37 @@ function LeadVerification({ lead, customerStatus, store }) {
   }
 
   const policy = classRule(store.config, customerStatus)
-  if (policy?.defaultAction === 'No Bid' && policy.verification?.requires !== 'jointApproval') return <div className="warnbox" style={{ marginTop: 10 }}>No Bid — the customer policy does not allow quoting. An administrator must change the policy or confirm a different customer classification before proceeding.</div>
-
-  if (policy?.verification?.requires === 'documents' && customer?.kyc === 'Valid') return (
-    <div className="okbox" style={{ marginTop: 10 }}>
-      Existing verified customer — KYC is already complete and will not be requested again.
-    </div>
-  )
-
-  if (policy?.verification?.required === false || policy?.verification?.requires === 'none') return (
-    <div className="okbox" style={{ marginTop: 10 }}>
-      {customerStatus} customer — no verification is required by the saved policy.
-    </div>
-  )
-
-  if (policy?.verification?.requires === 'fee') {
-    const confirmed = verification.payment?.state === 'Confirmed'
-    return (
+  return <>
+    {policy?.verification?.requires === 'fee' && (
       <div className="lead-decision-card" style={{ marginTop: 12 }}>
-        <div className="lead-decision-head"><div><b>Amber customer — fee request</b><span>Customer pays the processing fee {windowLabel}</span></div>
-          <span className={confirmed ? 'lead-decision-saved' : 'lead-decision-note'}>{confirmed ? 'Confirmed' : 'Pending'}</span></div>
-      <div className="verification-deadline">
-          <span><b>Deadline started:</b> {dateLabel(deadline?.requestedAt)}</span>
-          <span><b>Documents due:</b> {dateLabel(deadline?.dueAt)}</span>
-          <span className={deadline?.expired ? 'deadline-overdue' : ''}><b>{deadlineLabel}</b></span>
-        </div>
-        {confirmed
+        <div className="lead-decision-head"><div><b>Amber customer — fee request</b><span>Customer pays the processing fee</span></div>
+          <span className={(verification.payment?.state === 'Confirmed') ? 'lead-decision-saved' : 'lead-decision-note'}>{(verification.payment?.state === 'Confirmed') ? 'Confirmed' : 'Pending'}</span></div>
+        {(verification.payment?.state === 'Confirmed')
           ? <div className="okbox">Customer paid the fee — confirmed at Lead stage ({verification.payment.mode === 'simulated' ? 'simulated' : 'recorded'}).</div>
           : editable && <div className="lead-decision-actions">
             <button onClick={() => confirmPayment('recorded')}>Record payment received</button>
           </div>}
-        {!confirmed && <p className="lead-decision-note">Registration is blocked until payment is confirmed.</p>}
+        {!(verification.payment?.state === 'Confirmed') && <p className="lead-decision-note">Processing fee awaiting confirmation.</p>}
       </div>
-    )
-  }
+    )}
 
-  if (policy?.verification?.requires === 'documents') return (
     <div className="lead-decision-card" style={{ marginTop: 12 }}>
-      <div className="lead-decision-head"><div><b>Blue customer — KYC request</b><span>Customer shares KYC documents {windowLabel}</span></div>
+      <div className="lead-decision-head"><div><b>KYC documents — optional</b><span>Documents and identity values can be added now or later.</span></div>
         <div className="lead-decision-head-actions">
-        <span className={verification.kycRequestStatus === 'cancelled' ? 'lead-decision-note' : verification.kycRequestStatus === 'deferred' ? 'lead-decision-note' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'lead-decision-saved' : 'lead-decision-note'}>
-            {verification.kycRequestStatus === 'cancelled' ? 'Cancelled' : verification.kycRequestStatus === 'deferred' ? 'Skipped for now' : leadVerificationComplete(lead, customerStatus, { config: store.config }) ? 'KYC Approved' : 'Pending Review'}
+        <span className={verification.kycRequestStatus === 'cancelled' ? 'lead-decision-note' : verification.kycRequestStatus === 'deferred' ? 'lead-decision-note' : kycVerificationComplete(lead, store.config) ? 'lead-decision-saved' : 'lead-decision-note'}>
+            {verification.kycRequestStatus === 'cancelled' ? 'Cancelled' : verification.kycRequestStatus === 'deferred' ? 'Skipped for now' : kycVerificationComplete(lead, store.config) ? 'KYC Approved' : 'Pending Review'}
           </span>
-          {editable && !['cancelled', 'deferred'].includes(verification.kycRequestStatus) && !leadVerificationComplete(lead, customerStatus, { config: store.config }) && (
+          {editable && !['cancelled', 'deferred'].includes(verification.kycRequestStatus) && !kycVerificationComplete(lead, store.config) && (
             <button type="button" onClick={() => store.skipLeadKyc(lead.id)}>Skip for now</button>
           )}
           {editable && ['cancelled', 'deferred'].includes(verification.kycRequestStatus) && (
             <button type="button" onClick={() => store.reopenLeadKyc(lead.id)}>Reopen KYC request</button>
           )}
         </div></div>
-      <div className="verification-deadline">
-        <span><b>Deadline started:</b> {dateLabel(deadline?.requestedAt)}</span>
-        <span><b>Documents due:</b> {dateLabel(deadline?.dueAt)}</span>
-        <span className={deadline?.expired ? 'deadline-overdue' : ''}><b>{deadlineLabel}</b></span>
-      </div>
       {verification.kycRequestStatus === 'cancelled' && <div className="lead-decision-note">This request is cancelled. Reopen it to upload KYC documents again.</div>}
-      {verification.kycRequestStatus === 'deferred' && <div className="warnbox">KYC skipped for now. It is required before commercial approval or order processing.</div>}
-      {verification.kycRequestStatus !== 'cancelled' && !leadVerificationComplete(lead, customerStatus, { config: store.config }) && (
-        <div className="lead-decision-note">Waiting for customer KYC documents. Nothing has been uploaded yet.</div>
+      {verification.kycRequestStatus === 'deferred' && <div className="warnbox">KYC skipped for now. You can add documents later.</div>}
+      {verification.kycRequestStatus !== 'cancelled' && !kycVerificationComplete(lead, store.config) && (
+        <div className="lead-decision-note">Optional: leave these fields empty to continue saving, qualifying or registering the lead.</div>
       )}
       {lead.status === 'Converted' && (
         <div className="lead-decision-note">This lead is already converted. Completing KYC here updates the lead record only; the linked opportunity remains unchanged.</div>
@@ -717,7 +662,12 @@ function LeadVerification({ lead, customerStatus, store }) {
             <Icon name={kycItemApproved(row) ? 'check' : row.state === 'Rejected' ? 'alert' : 'fileText'} size={14} />
             <span style={{ flex: 1 }}>{item} — <b>{kycItemApproved(row) ? `Approved (${row.mode === 'simulated' ? 'simulated' : 'uploaded'})` : row.state}</b>
               {kycIdentityKey(item) && <input className="kyc-identity-value" value={kycValues[item] || ''} disabled={!editable || kycItemApproved(row)} placeholder={`Enter ${kycIdentityKey(item)}`} aria-label={`${item} value`}
-                onChange={e => setKycValues(values => ({ ...values, [item]: e.target.value.toUpperCase() }))} name="inbox-input-4" />}
+                onChange={e => setKycValues(values => ({ ...values, [item]: e.target.value.toUpperCase() }))}
+                onBlur={() => {
+                  const value = (kycValues[item] || '').trim()
+                  if (value === (row.value || '')) return
+                  store.updateLeadDraft(lead.id, { verification: { ...verification, kyc: { ...(verification.kyc || {}), [item]: { ...row, value, state: value ? 'Pending Review' : 'Missing', verifiedAt: '' } }, kycVerifiedAt: '' }, kycCompletedAt: null })
+                }} name="inbox-input-4" />}
             </span>
             {editable && verification.kycRequestStatus !== 'cancelled' && (
               kycItemApproved(row)
@@ -763,7 +713,7 @@ function LeadVerification({ lead, customerStatus, store }) {
                         <input type="file" disabled={busy === item} style={{ display: 'none' }}
                           onChange={e => { const file = e.target.files?.[0]; e.target.value = ''; setMenuFor(''); if (file) { setDownloadedFor(''); setPendingUpload({ item, file }) } }} name="inbox-file" />
                       </label>
-                      <button type="button" role="menuitem" onClick={async () => { setMenuFor(''); await saveKyc(item, null, 'simulated') }}><Icon name="bot" size={12} /> Simulate verification</button>
+                      {isLocalDemoSession(store) && <button type="button" role="menuitem" onClick={async () => { setMenuFor(''); await saveKyc(item, null, 'simulated') }}><Icon name="bot" size={12} /> Simulate verification</button>}
                     </span>
                   )}
                 </span>}
@@ -776,7 +726,7 @@ function LeadVerification({ lead, customerStatus, store }) {
         })}
       </div>
       {kycError && <div className="errbox" role="alert">{kycError}</div>}
-      {!leadVerificationComplete(lead, customerStatus, { config: store.config }) && <p className="lead-decision-note">Customer KYC is not complete — Opportunity creation is blocked.</p>}
+      {!kycVerificationComplete(lead, store.config) && <p className="lead-decision-note">KYC documents are optional and do not block opportunity registration.</p>}
       {pendingCancel && <ConfirmModal title="Remove KYC file" tone="danger"
         message={`Cancel the ${pendingCancel.item} file only? Other KYC documents and the KYC request will remain unchanged.`}
         confirmLabel="Remove file" onClose={() => setPendingCancel(null)}
@@ -790,17 +740,7 @@ function LeadVerification({ lead, customerStatus, store }) {
       {kycMailDraft && <KycRejectionEmailModal draft={kycMailDraft} busy={kycMailBusy} error={kycMailError}
         onChange={setKycMailDraft} onSend={sendKycRejectionMail} onClose={() => setKycMailDraft(null)} />}
     </div>
-  )
-
-  if (policy?.verification?.requires === 'jointApproval') return (
-    <div className="lead-decision-card" style={{ marginTop: 12 }}>
-      <div className="lead-decision-head"><div><b>{customerStatus} customer — approval clearance</b><span>Payment confirmation is not required at Lead stage</span></div>
-        <span className="lead-decision-saved">Not required</span></div>
-      <div className="okbox">The customer policy requires the configured approval clearance. Opportunity creation can continue once that approval and the remaining lead decisions are complete.</div>
-    </div>
-  )
-
-  return null
+  </>
 }
 
 // One picked file → the attachment record. PDF, Word and plain-text contents
@@ -1089,50 +1029,6 @@ const fieldChip = (f, med) => {
     : <span className="decision-status-icon blocked" role="status" aria-label="Blocks stage" title="Blocks stage"><Icon name="alert" size={11} /></span>
 }
 
-function LeadWorkflowBar({ lead, customerStatus }) {
-  const store = useStore()
-  const customer = matchCustomer(store.customers, lead)
-  const progress = leadWorkflow(lead, {
-    customerStatus: customerStatus || lead.customerStatus || customer?.status || '',
-    med: store.config.aiThresholds?.med ?? 75,
-  })
-  const active = progress.steps[progress.activeIndex]
-  const percent = progress.steps.filter(step => step.state === 'complete').length / progress.steps.length * 100
-
-  return (
-    <section className="lead-flow-card" aria-label="Lead workflow progress">
-      <div className="lead-flow-head">
-        <div>
-          <div className="lead-flow-kicker">Lead workflow</div>
-          <b>{progress.terminal === 'dropped' ? 'Lead workflow stopped — discarded' : progress.complete ? 'Lead workflow complete' : `Current step: ${active.label}`}</b>
-        </div>
-        <span className={`lead-flow-status ${progress.terminal === 'dropped' ? 'blocked' : progress.complete ? 'complete' : progress.blocked ? 'blocked' : 'current'}`}>
-          {progress.terminal === 'dropped' ? `Discarded${lead.droppedReason ? ` — ${lead.droppedReason}` : ''}` : progress.complete ? 'Ready for opportunity workflow' : progress.blocked || 'In progress'}
-        </span>
-      </div>
-      <div className="lead-flow-track" aria-hidden="true"><span style={{ width: `${percent}%` }} /></div>
-      <div className="lead-flow-steps">
-        {progress.steps.map((step, index) => (
-          <div key={step.id} className={`lead-flow-step ${step.state}`}>
-            <span className="lead-flow-dot">{step.state === 'complete' ? '✓' : index + 1}</span>
-            <span className="lead-flow-step-text"><b>{step.id}</b><span>{step.short}</span></span>
-          </div>
-        ))}
-      </div>
-      {progress.terminal === 'dropped' ? (
-        <p className="lead-flow-note">No further lead steps are required. Reopen the lead only if the discard decision was incorrect.</p>
-      ) : !progress.complete && (
-        <p className="lead-flow-note">
-          Update the editable fields below and save each decision to advance the lead.
-        </p>
-      )}
-      {progress.complete && lead.oppId && (
-        <p className="lead-flow-note">Opportunity {displayOpportunityId(lead.oppId)} is linked. Continue in the Opportunity Workflow.</p>
-      )}
-    </section>
-  )
-}
-
 function LeadSourceContext({ lead, canAct, phoneLayout = false }) {
   const store = useStore()
   const attachments = lead.attachments || []
@@ -1396,7 +1292,10 @@ function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) 
   const identity = leadIdentity(lead, fields)
   if (phoneLayout) {
     const actualItems = lead.ai?.lineItems || []
-    if (!converted) return <AiLeadDetail key={lead.id} lead={lead} compact compactItems={actualItems} phoneLayout />
+    if (!converted) return <div className="lead-workspace lead-workspace--two-card">
+      <div className="ws-topbar"><button className="ws-back" onClick={() => nav('/inbox')}><Icon name="inbox" size={13} /> Back to inbox</button><div className="ws-topbar-title"><h2>{lead.subject || 'Lead review'}</h2></div></div>
+      <div className="structured-active-sections"><AiLeadDetail key={lead.id} lead={lead} compact compactItems={actualItems} phoneLayout /></div>
+    </div>
     return <PhoneLeadDetail key={lead.id} lead={lead}
       summary={{ customer: identity.sellTo, contact: identity.contactPerson, scope: identity.scope || lead.ai?.summary,
         delivery: lead.deliveryAddress || identity.eucLocation, owner: lead.assignedOwner || lead.suggestedOwner }}
@@ -1421,7 +1320,7 @@ function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) 
   const missing = lead.ai?.missing || []
 
   return (
-    <section className="converted-summary" aria-label="Converted lead summary">
+    <section className={`converted-summary${converted ? '' : ' lead-workspace--two-card'}`} aria-label={converted ? 'Converted lead summary' : 'Lead review'}>
       {converted ? (
         <header className="converted-statusbar">
           <span className="converted-status"><Icon name="checkCircle" size={15} /> Converted to Opportunity {displayOpportunityId(oppId)}</span>
@@ -1433,13 +1332,11 @@ function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) 
             )}
           </span>
         </header>
-      ) : (
-        <div className="structured-active-workflow"><LeadWorkflowBar lead={lead} /></div>
-      )}
+      ) : null}
 
       <div className={`converted-grid ${converted ? '' : 'active-structured-grid'}`}>
         <main className="converted-main">
-          <div className="structured-rfq-header">
+          {converted && <div className="structured-rfq-header">
             <div className="converted-heading">
               <div>
                 <span className="converted-kicker">Structured RFQ details</span>
@@ -1453,7 +1350,7 @@ function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) 
               <div><dt>Contact</dt><dd>{contact}</dd></div>
               <div><dt>Delivery</dt><dd>{delivery}</dd></div>
             </dl>
-          </div>
+          </div>}
 
           {converted && <ReadOnlyDecisionForm lead={lead} items={items} />}
           {converted && <StructuredItemsTable items={items} />}
@@ -1540,7 +1437,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     return ({
     sellTo: identity.sellTo || sourceValue('Sell-to customer'),
     sellToCustomerLocation: lead.sellToCustomerLocation || customer?.location || sourceValue('Sell-to customer location') || '',
-    scope: lead.opportunityScope || mappedLeadFieldValue(ai.fields, 'scope') || sourceValue('Opportunity scope') || '',
+    scope: scopeForReview(lead, mappedLeadFieldValue(ai.fields, 'scope') || sourceValue('Opportunity scope')),
     location: initialLocation,
     region: initialRegion,
     eucName: identity.eucName || sourceValue('EUC Name'),
@@ -1675,27 +1572,12 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const previewCustomerStatus = previewCustomer?.status || leadCustomerStatus
   const previewLead = { ...lead, customerStatus: previewCustomerStatus, redFlag: previewCustomerStatus === 'Red' }
   const createDecisionCustomer = name => {
-    const created = { name, category: 'EUC', status: 'Blue', kyc: 'Pending', payment: '—' }
+    const created = { name, category: 'EUC', status: 'Unclassified', kyc: 'Pending', payment: '—' }
     store.addCustomer(created)
-    setDecisionDraft(previous => ({ ...previous, sellTo: name, customerStatus: 'Blue' }))
+    setDecisionDraft(previous => ({ ...previous, sellTo: name, customerStatus: 'Unclassified' }))
     setDecisionSaved(false)
     return created
   }
-  const isRed = previewCustomerStatus === 'Red'
-  const redApproval = redClearanceFor(store.approvals, lead.id, store.config, previewCustomerStatus)
-  const redCleared = isRedCleared(redApproval, store.config, previewCustomerStatus)
-  // A Returned clearance is not a decision, it is a request for rework — so the
-  // salesperson must be able to raise it again. Without this the ErrBox showed
-  // "Returned" with nowhere to go, and the Approvals page had no route back
-  // either because every needed role had already decided.
-  const redRequestable = !redApproval || redApproval.status === 'Returned'
-  const requestRedClearance = () => store.requestApproval({
-    leadId: lead.id, oppId: '', type: 'Red customer clearance',
-    detail: `${customer?.name || lead.sender || lead.from} (Red) — ${lead.subject}. Continuation needs joint LJS + AH clearance before any opportunity ID is generated.`
-      + (redApproval ? ` Re-raised after ${redApproval.id} was returned.` : ''),
-    approver: 'LJS', needed: ['LJS', 'AH'],
-  })
-
   const decisionFieldPatterns = {
     location: /^(city\s*\/\s*location|location|region)$/i,
     sellTo: /sell[- ]?to|customer\s*name|^customer$/i,
@@ -1840,8 +1722,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const rule = (store.config.ownershipRules || []).find(r => r.owner === regionalOwner)
   const ownerRuleLabel = rule ? `${rule.region} rule` : 'Ownership rule'
 
-  const qualifyBlocked = isRed && !redCleared
-  const verificationComplete = leadVerificationComplete({ ...lead, existingCustomerKyc: previewCustomer?.kyc === 'Valid' }, previewCustomerStatus, { redCleared, config: store.config })
+  const verificationComplete = leadVerificationComplete({ ...lead, existingCustomerKyc: previewCustomer?.kyc === 'Valid' }, previewCustomerStatus, { config: store.config })
   const verificationDeferred = previewCustomerStatus === 'Blue' && lead.verification?.kycRequestStatus === 'deferred'
   const verificationBlocked = !verificationComplete && !verificationDeferred
   const registrationRequired = new Set(registrationFields(store.config).map(([key]) => key))
@@ -2066,7 +1947,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     const changed = Object.keys(draft)
       .filter(key => previous[key] !== draft[key])
       .map(key => `${key}: ${previous[key] || '—'} → ${draft[key] || '—'}`)
-    const shouldAudit = audit && (changed.length || decisionAuditPendingRef.current)
+    const scopeRepair = audit && draft.scope !== String(lead.opportunityScope || mappedLeadFieldValue(ai.fields, 'scope') || '')
+    const shouldAudit = audit && (changed.length || decisionAuditPendingRef.current || scopeRepair)
     if (!changed.length && !shouldAudit) {
       setDecisionSaved(true)
       return false
@@ -2303,7 +2185,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
       </div>
       <div className="lead-decision-compare-actions"><button type="button" onClick={() => setCompareOpen(false)}>Close</button></div>
     </Modal>}
-    <LeadWorkflowBar lead={lead} customerStatus={previewCustomerStatus} />
     <div className="lead-detail-layout">
     <div className="lead-detail-main">
     <OptionalLeadFields phone={phoneLayout} title="Additional extracted fields">
@@ -2520,7 +2401,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                 }}
                 onCreate={createDecisionCustomer}
                 disabled={lead.status === 'Dropped'}
-                label=""
+                label="" ariaLabel="Sell to customer"
               />
               {decisionAiStatus('sellTo')}
             </div>
@@ -2534,7 +2415,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             </label>
           <label><span className="decision-field-heading">EUC Name {registrationRequired.has('eucName') && <span className="required-mark">*</span>} {decisionAiMeta('eucName', false)}</span>
             <div className="decision-value-row"><CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
-              onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" />{decisionAiStatus('eucName')}</div>
+              onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" ariaLabel="EUC name" />{decisionAiStatus('eucName')}</div>
             </label>
           <label><span className="decision-field-heading">EUC Location {registrationRequired.has('eucLocation') && <span className="required-mark">*</span>} {decisionAiMeta('eucLocation', false)}</span>
             <div className="euc-location-search">
@@ -2899,7 +2780,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             <div className="lead-decision-grid">
               <label>Sell To Customer {registrationRequired.has('sellTo') && <span className="required-mark">*</span>} {decisionAiMeta('sellTo')}
                 <CustomerPicker customers={store.customers} value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
-                  onChange={value => updateDecisionField('sellTo', value)} allowCreate={false} label="" />
+                  onChange={value => updateDecisionField('sellTo', value)} allowCreate={false} label="" ariaLabel="Sell to customer" />
               </label>
               <label>Sell To Customer Location {registrationRequired.has('sellToCustomerLocation') && <span className="required-mark">*</span>}
                 <input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
@@ -2911,7 +2792,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               </label>
               <label>EUC Name {registrationRequired.has('eucName') && <span className="required-mark">*</span>} {decisionAiMeta('eucName')}
                 <CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
-                  onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" />
+                  onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" ariaLabel="EUC name" />
               </label>
               <label>EUC Location {registrationRequired.has('eucLocation') && <span className="required-mark">*</span>} {decisionAiMeta('eucLocation')}
                 <div className="euc-location-search">
@@ -3046,26 +2927,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             </>
           )}
 
-          {isRed && !redCleared && (
-            <div data-phone-field="Continuation approval"><ErrBox>
-              <b>Red-class customer</b> — continuation needs joint LJS + AH approval (AP-1).
-              No opportunity ID until approved.{' '}
-              {redApproval && <>Approval <b>{redApproval.id}</b> is <b>{redApproval.status}</b>.{' '}
-                <button onClick={() => nav('/approvals')}>Open approvals</button>{' '}</>}
-              {redRequestable && <button disabled={store.canPerform?.('approvals.request') === false} onClick={requestRedClearance}>
-                {redApproval ? 'Re-request joint approval' : 'Request joint approval'}
-              </button>}
-            </ErrBox></div>
-          )}
-          {isRed && redCleared && (
-            <div className="okbox">
-              Red gate cleared — {redApproval.id} <b>{redApproval.status}</b>.
-              {redApproval.status === 'Approved with conditions' && ' Proceed on prepayment-only conditions.'}
-            </div>
-          )}
-
-          <details data-phone-field="Customer verification" className="compact-rail-section compact-verification-rail" name={phoneLayout ? undefined : 'lead-rail-accordion'} open={!compact}>
-            <summary><span><Icon name={previewCustomerStatus === 'Blue' ? 'fileText' : 'checkCircle'} size={13} /> KYC documents</span><Icon name="chevronDown" size={13} /></summary>
+          <details data-phone-field="Customer verification" className="compact-rail-section compact-verification-rail" name={phoneLayout ? undefined : 'lead-rail-accordion'} open>
+            <summary><span><Icon name={previewCustomerStatus === 'Blue' ? 'fileText' : 'checkCircle'} size={13} /> KYC documents (optional)</span><Icon name="chevronDown" size={13} /></summary>
             <div className="compact-rail-body"><LeadVerification lead={lead} customerStatus={previewCustomerStatus} store={store} /></div>
           </details>
 
@@ -3100,12 +2963,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           </div>}
         </div>
 
-        <footer className={`ws-foot${phoneLayout ? ' phone-hidden-action' : ''}`}>
+        <footer className={`ws-foot${phoneLayout && !compact ? ' phone-hidden-action' : ''}`}>
           {canAct && lead.status !== 'Qualified' && (
             <>
               {isFastTrackLead(previewLead, store.config, customer) && (
-                <button className="primary ws-action" disabled={qualifyBlocked}
-                  title={qualifyBlocked ? 'Blocked: Red continuation approval required first' : undefined}
+                <button className="primary ws-action" disabled={store.canPerform?.('leads.edit') === false}
                   onClick={() => {
                     store.updateLead(lead.id, {
                       status: 'Qualified',
@@ -3119,12 +2981,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   <Icon name="arrowRight" size={14} /> Fast-track to registration
                 </button>
               )}
-              <button className="primary ws-action" disabled={qualifyBlocked || store.canPerform?.('leads.edit') === false}
-                title={qualifyBlocked ? 'Blocked: Red continuation approval required first' : undefined}
+              <button className="primary ws-action" disabled={store.canPerform?.('leads.edit') === false}
                 onClick={() => store.updateLead(lead.id, { status: 'Qualified' })}>
                 <Icon name="check" size={14} /> Qualify lead
               </button>
-              {qualifyBlocked && <p className="ws-foot-note">Blocked — Red continuation approval required first.</p>}
             </>
           )}
           {lead.status === 'Qualified' && (
@@ -3216,7 +3076,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     </div>
     </div>
   )
-  if (!phoneLayout) return detailContent
+  if (!phoneLayout || compact) return detailContent
   const issues = [
     ...missingIdentity.map(label => ({ label, note: 'Needed before registration' })),
     ...(inquiryMissing ? [{ label: 'Inquiry type', note: 'Complete the enquiry type and any required RFQ reference/date' }] : []),
@@ -3225,10 +3085,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
       return { label: `Review ${field.k}`, field: REQUIRED_IDENTITY_FIELDS.find(([name]) => name === key)?.[1] || 'Additional extracted fields', note: 'Confirm this low-confidence identity field before registration' }
     }),
     ...(verificationBlocked ? [{ label: 'Customer verification', note: 'Complete the existing customer verification checks' }] : []),
-    ...(qualifyBlocked ? [{ label: 'Continuation approval', note: 'Red customer approval required before qualification' }] : []),
   ]
-  const blockedNote = qualifyBlocked ? 'Red continuation approval required first.'
-    : registrationBlocked ? 'Complete the checks in Needs attention before registration.' : ''
+  const blockedNote = registrationBlocked ? 'Complete the checks in Needs attention before registration.' : ''
   const phoneActions = canAct ? [
     { label: 'Reassign lead', onClick: () => setReassignOpen(true) },
     { label: 'Compare with original', onClick: () => setCompareOpen(true) },
@@ -3236,7 +3094,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     { label: 'Add a document', onClick: () => docInput.current?.click(), disabled: addingDocs },
     ...(clarificationAvailable ? [{ label: 'Draft clarification', panel: 'details', onClick: draftClarificationMail }] : []),
     ...(lead.status === 'Qualified' ? [{ label: 'Create opportunity', onClick: openRegistration, disabled: registrationBlocked || directCreateBusy }] : []),
-    ...(lead.status !== 'Qualified' && isFastTrackLead(previewLead, store.config, customer) ? [{ label: 'Fast-track to registration', disabled: qualifyBlocked, onClick: () => {
+    ...(lead.status !== 'Qualified' && isFastTrackLead(previewLead, store.config, customer) ? [{ label: 'Fast-track to registration', disabled: store.canPerform?.('leads.edit') === false, onClick: () => {
       store.updateLead(lead.id, { status: 'Qualified', customerStatus: previewCustomerStatus, redFlag: previewCustomerStatus === 'Red', fastTrack: true, fastTrackStartedAt: lead.fastTrackStartedAt || nowIST() }, 'Green customer fast-track started')
       nav('/register/' + lead.id)
     } }] : []),
@@ -3250,7 +3108,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     email={<LeadSourceContext lead={lead} canAct={canAct} phoneLayout />} actions={phoneActions}
     action={canAct ? lead.status === 'Qualified'
       ? { label: 'Continue registration', onClick: openRegistration, disabled: registrationBlocked || directCreateBusy, note: blockedNote }
-      : { label: 'Qualify lead', onClick: () => store.updateLead(lead.id, { status: 'Qualified' }), disabled: qualifyBlocked, note: qualifyBlocked ? blockedNote : 'Qualification does not create an opportunity.' }
+      : { label: 'Qualify lead', onClick: () => store.updateLead(lead.id, { status: 'Qualified' }), disabled: store.canPerform?.('leads.edit') === false, note: 'Qualification does not create an opportunity.' }
       : undefined} onBack={() => nav('/inbox')} />
     <input ref={docInput} type="file" multiple hidden onChange={event => { addDocuments(event.target.files); event.target.value = '' }} name="inbox-file-5" />
     {docErr && <p role="alert">{docErr}</p>}
@@ -3633,7 +3491,7 @@ export default function Inbox() {
       </div>
         {sel.ai
           ? <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><StructuredLeadDetail lead={sel} converted={sel.status === 'Converted'} /></WorkspaceRecordBoundary>
-          : <><LeadWorkflowBar lead={sel} /><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
+          : <><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
               <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><LegacyLeadDetail lead={sel} /></WorkspaceRecordBoundary>
             </div></section></div></>}
       </div>

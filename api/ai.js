@@ -443,6 +443,7 @@ documentation/compliance asks (Compliance); BU and Segment (Customer); any
 installed-base or known-project reference (Known Project). Return every
 requested material as lineItems with one row per item, preserving description,
 part number, customer reference, quantity, UOM and specifications separately.
+Opportunity scope must be one short sentence describing only the requested equipment or work (about 20 words). Keep dates, quotation instructions, prices, payment, freight, warranty and supporting paperwork in their separate fields. Never copy the entire enquiry into scope.
 Ask only for information absent from the complete enquiry, not absent from one
 non-final chunk. For Opp type, classify procurement of physical items with part
 numbers, quantities, sensors, probes, cables or spare materials as Spares, even

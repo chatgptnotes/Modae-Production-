@@ -1,3 +1,16 @@
+## 2026-10-17 — Focused two-card lead review
+
+- Remove the workflow progress strip and repeated RFQ heading from active lead
+  review. Show decisions beside the review rail, stacked on phones.
+- Extract a concise equipment/work scope and repair recognized old automatic
+  scope copies in the review draft while preserving custom scope edits.
+- Keep optional KYC document rows and uploads visible for every classification.
+  Missing documents do not block qualification or registration, and empty rows
+  never claim verification. Remove the lead-stage Red joint-approval requirement;
+  opportunity commercial and proposal approval rules remain in force.
+- Keep Customer/EUC dropdowns within the viewport, close inactive lists, wrap
+  long names, support keyboard selection and preserve unmatched typed names.
+
 ## 2026-10-17 — Restore detailed lead review
 
 - Restore the existing detailed lead review on desktop and phone, including

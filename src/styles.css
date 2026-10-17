@@ -1,5 +1,6 @@
 @import "tailwindcss/theme.css";
 @import "tailwindcss/utilities.css";
+@import "./CustomerPicker.css";
 
 * { box-sizing: border-box; }
 
@@ -19485,4 +19486,52 @@ html[data-workspace-theme="dark"], html[data-workspace-theme="dark"] body {
   .lead-registration-page .afield input,
   .lead-registration-page .afield select,
   .lead-registration-page .afield textarea { font-size: 16px; }
+}
+
+/* Lead review: the decision form and review rail are the two primary cards. */
+.lead-workspace--two-card .compact-routing-panel > .lead-decision-card {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.lead-workspace--two-card .lead-detail-layout {
+  align-items: start;
+}
+.lead-workspace--two-card .compact-verification-rail .lead-decision-card {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.lead-workspace--two-card .compact-verification-rail .check-row {
+  align-items: flex-start;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.lead-workspace--two-card .compact-verification-rail .check-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lead-workspace--two-card .compact-verification-rail .kyc-identity-value {
+  max-width: 100%;
+}
+@media (max-width: 820px) {
+  .lead-workspace--two-card .lead-detail-layout {
+    display: flex !important;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .lead-workspace--two-card .compact-routing-panel,
+  .lead-workspace--two-card .compact-action-col {
+    width: 100%;
+    min-width: 0;
+  }
+  .lead-workspace--two-card .compact-routing-panel .lead-decision-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lead-workspace--two-card .compact-action-col > .ws-body {
+    max-height: none;
+    overflow: visible;
+  }
 }

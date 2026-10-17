@@ -1,0 +1,75 @@
+.customer-picker {
+  display: block;
+  min-width: 0;
+  width: 100%;
+}
+.customer-picker > input {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.customer-picker-menu.customer-picker-popup {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  z-index: 12000;
+  box-sizing: border-box;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  color: var(--text, #182235);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.customer-picker-popup button[role="option"] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  width: 100%;
+  height: auto;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+  text-align: left;
+  line-height: 1.45;
+  color: inherit;
+  border-radius: 4px;
+}
+.customer-picker-popup button[role="option"] > strong,
+.customer-picker-popup button[role="option"] > span {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.customer-picker-popup button[role="option"].is-active {
+  background: var(--surface-muted, #f1f5f9);
+  outline: 1px solid var(--border, #cbd5e1);
+  outline-offset: -1px;
+}
+.customer-picker-popup .customer-picker-empty {
+  padding: 8px 9px;
+  white-space: normal;
+}
+
+/* The picker has its own marker; the shared modal host must stay persistent. */
+html[data-workspace-theme="dark"] [data-customer-picker-portal] .customer-picker-popup {
+  background: var(--surface-default, #1b1c20);
+  border-color: var(--border-default, #3b3d44);
+  color: var(--text-primary, #fff);
+  color-scheme: dark;
+}
+html[data-workspace-theme="dark"] [data-customer-picker-portal] .customer-picker-popup button[role="option"] {
+  color: var(--text-primary, #fff);
+}
+html[data-workspace-theme="dark"] [data-customer-picker-portal] .customer-picker-popup button[role="option"]:hover,
+html[data-workspace-theme="dark"] [data-customer-picker-portal] .customer-picker-popup button[role="option"].is-active {
+  background: var(--action-secondary-hover, #34363d);
+}
+html[data-workspace-theme="dark"] [data-customer-picker-portal] .customer-picker-popup button span,
+html[data-workspace-theme="dark"] [data-customer-picker-portal] .customer-picker-empty {
+  color: var(--text-secondary, #bac0ca);
+}

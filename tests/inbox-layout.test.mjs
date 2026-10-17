@@ -10,7 +10,7 @@ test('opening a lead renders the detailed review on desktop and phone', () => {
   assert.match(routes, /if \(phone && sel\.ai\).*<StructuredLeadDetail[^>]*phoneLayout/)
   assert.match(routes, /if \(phone\).*<LegacyLeadDetail[^>]*phoneLayout/)
   assert.match(routes, /<StructuredLeadDetail lead=\{sel\} converted=\{sel\.status === 'Converted'\}/)
-  assert.match(routes, /<LeadWorkflowBar lead=\{sel\}/)
+  assert.doesNotMatch(routes, /<LeadWorkflowBar/)
   assert.match(routes, /<LegacyLeadDetail lead=\{sel\}/)
   assert.doesNotMatch(routes, /SimpleLeadDecisions/)
 })
@@ -422,10 +422,9 @@ test('Opportunity Customer/KYC tab can complete optional customer details', () =
   assert.match(css, /@media \(max-width: 760px\) \{[\s\S]*\.customer-commercial-grid \{ grid-template-columns: 1fr; \}/)
 })
 
-test('red leads explain why payment confirmation is not shown', () => {
-  assert.match(inbox, /customerStatus\} customer — approval clearance/)
-  assert.match(inbox, /Payment confirmation is not required at Lead stage/)
-  assert.match(inbox, /configured approval clearance/)
+test('lead KYC is visibly optional for every customer class', () => {
+  assert.match(inbox, /KYC documents — optional/)
+  assert.match(inbox, /Optional: leave these fields empty/)
 })
 
 test('active structured lead details use the full page width', () => {
@@ -441,7 +440,7 @@ test('active structured lead details use the full page width', () => {
 test('compact lead review uses one decision form and a bounded review rail', () => {
   assert.match(inbox, /compact \? 'Lead decisions' : 'Qualification &amp; ownership'/)
   assert.match(inbox, /compact \? 'Review summary' : 'AI summary & actions'/)
-  assert.match(inbox, /> KYC documents<\/span>/)
+  assert.match(inbox, /> KYC documents \(optional\)<\/span>/)
   assert.match(inbox, /aria-label=\{compact \? 'Review summary'/)
   assert.match(inbox, /className="icon-action act-accept" aria-label=\{`Accept \$\{field\.k\}`\}/)
   assert.match(inbox, /className="decision-status-icon accepted" role="status" aria-label="Accepted"/)

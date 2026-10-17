@@ -62,6 +62,12 @@ submission, and follow-up.
   Sent messages and stored document snapshots
   retain their original content. Other sessions see roster changes on their next
   workspace refresh.
+- Lead review uses two cards: decisions and supporting review information,
+  stacked on phones. Opportunity scope is a short equipment/work summary.
+  KYC documents and identity values stay visible and optional for every class.
+  Red customers can qualify/register without lead-stage joint approval; later
+  opportunity commercial and proposal approvals remain in force. Customer/EUC
+  search menus close when focus moves and keep long names readable.
 - Sales users review Lead Decisions, choose customer classification manually,
   and qualify a lead before explicitly registering its opportunity. KYC remains
   visible and optional throughout; verification labels still require evidence.

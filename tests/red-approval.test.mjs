@@ -170,12 +170,10 @@ test('Register no longer stacks an unclearable duplicate blocker', () => {
   assert.equal(/lead\.customerStatus \|\| customer\?\.status \|\| 'Blue'/.test(source), false)
 })
 
-test('a Returned clearance can be raised again from the inbox', () => {
+test('lead review no longer requires or requests joint Red approval', () => {
   const source = read('src/pages/Inbox.jsx')
-  assert.match(source, /const redRequestable = !redApproval \|\| redApproval\.status === 'Returned'/)
-  assert.match(source, /Re-request joint approval/)
+  assert.doesNotMatch(source, /requestRedClearance|qualifyBlocked|Red-class customer/)
   assert.match(source, /customerStatusForLead\(lead, store\.customers\)/)
-  assert.equal(/lead\.customerStatus \|\| customer\?\.status \|\| 'Blue'/.test(source), false)
 })
 
 test('only a needed role can decide, and a converted lead never regresses', () => {
