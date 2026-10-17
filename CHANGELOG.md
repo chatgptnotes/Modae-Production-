@@ -1,3 +1,9 @@
+## 2026-10-17 — Ignore missing subjects in duplicate detection
+
+- Prevent unrelated leads with “(no subject)” from producing duplicate warnings,
+  including leads from the same sender. Preserve real subject and buyer-reference
+  matches; existing leads benefit without modifying their saved data.
+
 ## 2026-10-17 — Editable lead and opportunity forecast details
 
 - Add editable lead source, contact email and remarks, carrying saved decisions

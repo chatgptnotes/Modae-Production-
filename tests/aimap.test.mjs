@@ -90,6 +90,32 @@ test('distinct enquiries are not flagged as duplicates', () => {
   }
 })
 
+test('missing and placeholder subjects do not identify duplicate leads', () => {
+  for (const subject of ['', undefined, '(no subject)', '  (NO SUBJECT)  ', 'No subject']) {
+    for (const from of ['one@example.com', 'two@example.com']) {
+      const a = { id: 'A', from: 'one@example.com', subject }
+      const b = { id: 'B', from, subject }
+      assert.deepEqual(findDuplicates(a, [a, b]), [], `Subject ${subject}, sender ${from}`)
+    }
+  }
+})
+
+test('buyer references still identify duplicates with placeholder subjects', () => {
+  const a = { id: 'A', subject: '(no subject)', rfqNumber: 'RFQ/123' }
+  const b = { id: 'B', subject: '(no subject)', ref: 'RFQ-123' }
+  assert.deepEqual(findDuplicates(a, [a, b]), [
+    { leadId: 'B', confidence: 0.97, note: 'Same buyer reference RFQ-123' },
+  ])
+})
+
+test('real subjects still identify duplicates across different senders', () => {
+  const a = { id: 'A', from: 'one@example.com', subject: 'No subject restrictions for pump ABC123' }
+  const b = { id: 'B', from: 'two@example.com', subject: a.subject }
+  assert.deepEqual(findDuplicates(a, [a, b]), [
+    { leadId: 'B', confidence: 0.8, note: '100% subject overlap' },
+  ])
+})
+
 test('a dropped lead is not offered as a duplicate', () => {
   const a = { id: 'A', ref: 'X/1', from: 'a@b.c', subject: 'RFQ pumps' }
   const b = { id: 'B', ref: 'X/1', from: 'a@b.c', subject: 'RFQ pumps', status: 'Dropped' }

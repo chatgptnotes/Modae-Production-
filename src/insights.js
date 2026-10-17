@@ -63,6 +63,10 @@ const STOP = new Set(['the', 'for', 'and', 'of', 'to', 'a', 'an', 'in', 'on', 'w
 const tokens = s => String(s || '').toLowerCase().match(/[a-z0-9][a-z0-9-]{1,}/g)?.filter(t => !STOP.has(t)) || []
 
 const overlap = (a, b) => {
+  // Intake stores this placeholder when no subject was supplied. It is not
+  // evidence of a shared enquiry, even when the sender is the same.
+  const missingSubject = s => /^(?:\(no subject\)|no subject)$/i.test(String(s || '').trim())
+  if (missingSubject(a) || missingSubject(b)) return 0
   const A = new Set(tokens(a))
   const B = new Set(tokens(b))
   if (!A.size || !B.size) return 0
