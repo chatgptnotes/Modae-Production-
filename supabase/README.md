@@ -1,5 +1,27 @@
 # Supabase production schema
 
+## Admin permissions, backups and AI integrations
+
+After the existing atomic approval migration, apply in order:
+
+1. `migrations/20261017061731_individual_account_permissions.sql`
+2. `migrations/20261017061909_full_workspace_backups.sql`
+3. `migrations/20261017110000_ai_integrations.sql`
+
+Individual permissions extend the revision-checked access policy with stable
+roster IDs. `workspace_backup_snapshot` and `restore_workspace_backup` are
+service-only: restore compares the reviewed snapshot under transaction locks,
+retains current account lifecycle and audit rows, preserves maximum opportunity
+counters/reservations, writes file bytes atomically and advances generation.
+`save_ai_integrations` commits encrypted credentials, settings and audit together.
+AI and backup receipt namespaces reject ordinary forged audit inserts. Restore receipts
+list recovered file identities. `/api/restored-files` permits only authorized record
+owners/readers to access those copies; ordinary uploader-only file RLS stays unchanged.
+No production table names are added. Keys stay outside exported workbooks and
+backups. See [deployment setup](../DEPLOYMENT.md) for server encryption and signing
+keys. Run disposable local PostgreSQL transaction checks before release; never
+point fixture scripts at a shared Supabase project.
+
 ## Atomic approval commands
 
 After migration 023, apply

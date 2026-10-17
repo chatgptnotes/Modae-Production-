@@ -12,6 +12,8 @@ import { ConfirmModal } from '../ui.jsx'
 import { supabase } from '../supabase.js'
 import { usePagedRows } from '../ui/Pagination.jsx'
 import { useViewportPageSize } from '../ui/useViewportPageSize.js'
+import AccountActionMenu from '../ui/AccountActionMenu.jsx'
+import { canPreviewAsUser } from '../localPreviewAdmin.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -55,6 +57,7 @@ export default function Users() {
     (statusFilter === 'All' || user.status === statusFilter) &&
     (roleFilter === 'All' || applicationRoleFor(user) === roleFilter))
   const canManage = isAdminRole(store.roles || store.role)
+  const canPreview = canPreviewAsUser(store, shared)
   const [editingUserId, setEditingUserId] = useState(null)
   const [userDraft, setUserDraft] = useState(null)
   const [userErr, setUserErr] = useState('')
@@ -84,6 +87,10 @@ export default function Users() {
   const accountsFit = useViewportPageSize(filteredUsers.length, { enabled: canManage && usersView === 'accounts' && !openActionId && !editingUserId && !resettingUserId, rootRef: accountsRegionRef })
   const { pagedRows: pagePending, pagination: pendingPagination } = usePagedRows(pending, store.users.length, pendingFit.pageSize, pendingFit.pagerRef)
   const { pagedRows: pageUsers, pagination: usersPagination } = usePagedRows(filteredUsers, `${query}:${statusFilter}:${roleFilter}`, accountsFit.pageSize, accountsFit.pagerRef)
+
+  useEffect(() => {
+    if (openActionId && !pageUsers.some(user => user.id === openActionId)) setOpenActionId(null)
+  }, [openActionId, pageUsers])
 
   useEffect(() => {
     let active = true
@@ -451,6 +458,7 @@ export default function Users() {
                         {!LEVEL3_ROLE_IDS.includes(userDraft.applicationRole) && <option value={userDraft.applicationRole} disabled>Legacy role — choose Standard or Management User</option>}
                         {LEVEL3_ROLE_IDS.map(r => <option key={r} value={r}>{LEVEL3_ROLES[r].name}</option>)}
                       </select>
+                      {userDraft.applicationRole === 'MANAGEMENT' && <small>Saving Management access also grants Admin permissions.</small>}
                     </td>
                     <td><select disabled={userBusy} value={userDraft.status} onChange={e => { setUserDraft(d => ({ ...d, status: e.target.value })); setUserErr('') }} aria-label={`Status for ${u.name}`} name="users-status">
                       {['Active', 'Pending', 'Suspended'].map(status => <option key={status} value={status}>{status}</option>)}
@@ -488,19 +496,20 @@ export default function Users() {
                 )}
                 {canManage && (
                   <td className="users-account-actions">
-                    <details className="users-action-menu" onToggle={e => { const open = e.currentTarget.open; setOpenActionId(current => open ? u.id : current === u.id ? null : current) }} onKeyDown={e => { if (e.key === 'Escape') { e.currentTarget.open = false; e.currentTarget.querySelector('summary').focus() } }}>
-                      <summary aria-label={`Actions for ${u.name}`}>Actions ▾</summary>
-                      <div>
-                        <button disabled={actionBusy || editingUserId !== null || Boolean(u.deletionPendingAt)} onClick={() => startUserEdit(u)}>Edit</button>
-                        <button disabled={actionBusy || Boolean(u.deletionPendingAt)} onClick={() => startPasswordReset(u)}>Reset password</button>
-                        {!shared && isActiveUser(u) && <button disabled={actionBusy} onClick={() => { store.signInAs(u.id); nav('/opportunities') }}>Preview as user</button>}
-                        <button disabled={actionBusy || Boolean(accountChangeError(store.users, actor, u, { status: u.status === 'Active' ? 'Suspended' : 'Active' }))}
+                    <AccountActionMenu name={u.name} open={openActionId === u.id} onOpenChange={open => setOpenActionId(open ? u.id : null)}>
+                        <button type="button" role="menuitem" disabled={actionBusy || Boolean(u.deletionPendingAt)} onClick={() => nav(`/admin?permissionUser=${encodeURIComponent(u.id)}`)}>Permissions</button>
+                        <button type="button" role="menuitem" disabled={actionBusy || editingUserId !== null || Boolean(u.deletionPendingAt)} onClick={() => startUserEdit(u)}>Edit</button>
+                        <button type="button" role="menuitem" disabled={actionBusy || Boolean(u.deletionPendingAt)} onClick={() => startPasswordReset(u)}>Reset password</button>
+                        {canPreview && isActiveUser(u) && <button type="button" role="menuitem" disabled={actionBusy} onClick={() => {
+                          try { if (store.signInAs(u.id)) nav('/opportunities') }
+                          catch (error) { setActionError(error.message || 'Could not preview this account.') }
+                        }}>Preview as user</button>}
+                        <button type="button" role="menuitem" disabled={actionBusy || Boolean(accountChangeError(store.users, actor, u, { status: u.status === 'Active' ? 'Suspended' : 'Active' }))}
                           title={accountChangeError(store.users, actor, u, { status: u.status === 'Active' ? 'Suspended' : 'Active' })}
                           onClick={() => changeAccess(u, u.status === 'Active' ? 'Suspended' : 'Active')}>{u.status === 'Active' ? 'Suspend' : 'Reactivate'}</button>
-                        <button className="users-delete" disabled={actionBusy || Boolean(accountChangeError(store.users, actor, u, {}, true))}
+                        <button type="button" role="menuitem" className="users-delete" disabled={actionBusy || Boolean(accountChangeError(store.users, actor, u, {}, true))}
                           title={accountChangeError(store.users, actor, u, {}, true)} onClick={() => setDeleting(u)}>{u.deletionPendingAt ? 'Retry delete' : 'Delete'}</button>
-                      </div>
-                    </details>
+                    </AccountActionMenu>
                   </td>
                 )}
               </tr>

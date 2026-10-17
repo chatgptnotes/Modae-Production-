@@ -3,21 +3,23 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import vm from 'node:vm'
 import { ROLES, userRoles } from '../src/seed.js'
-import { matchesAccount, isActiveUser } from '../src/userManagement.js'
+import { accountProfileFor, isActiveUser } from '../src/userManagement.js'
 
 const source = fs.readFileSync(new URL('../src/store.jsx', import.meta.url), 'utf8')
 const profileSource = source.slice(source.indexOf('function applyAuthoritativeProfile('), source.indexOf('\nconst workflowTransition'))
-const context = vm.createContext({ ROLES, userRoles, matchesAccount, isActiveUser })
+const context = vm.createContext({ ROLES, userRoles, accountProfileFor, isActiveUser })
 vm.runInContext(`${profileSource}; globalThis.apply = applyAuthoritativeProfile`, context)
 const profile = { id: 'LJ', authId: 'auth-lj', email: 'lj@example.com', name: 'LJ Swaminathan', role: 'LJS', roles: ['ADMIN'], status: 'Active' }
 const state = () => ({ users: [], role: 'RS', roles: ['RS'], auth: { source: 'supabase', user: { id: 'auth-lj', email: profile.email, name: profile.email, role: 'RS' } }, opportunities: [{ id: 'draft', subject: 'Unsaved input' }] })
 
 test('authoritative profile corrects the fallback identity together and preserves drafts and auth UUID', () => {
   const before = state()
+  before.auth.user.email = 'old-address@example.com'
   const after = context.apply(before, [profile])
   assert.equal(after.role, 'LJS')
   assert.equal(after.auth.user.role, 'LJS')
   assert.equal(after.auth.user.name, profile.name)
+  assert.equal(after.auth.user.email, profile.email)
   assert.equal(after.auth.user.id, 'auth-lj')
   assert.equal(after.roles[0], 'ADMIN')
   assert.equal(after.opportunities, before.opportunities)
@@ -27,11 +29,12 @@ function loginHarness({ fastTimeout = false } = {}) {
   let resolveRead, rejectRead, reads = 0, ready = true, error = ''
   const stateRef = { current: state() }
   const refs = Object.fromEntries(['authEpochRef','externalLoginRef','pendingAuthUserRef','initialHydrationRef','sharedPullInFlightRef','lastSavedRef','bootRef','saveTimerRef'].map(k => [k, { current: k === 'authEpochRef' ? 0 : null }]))
-  const ctx = vm.createContext({ ...refs, stateRef, ROLES, userRoles, matchesAccount, isActiveUser,
+  const ctx = vm.createContext({ ...refs, stateRef, ROLES, userRoles, accountProfileFor, isActiveUser,
     authInvalidRef: { current: false }, hydratedRef: { current: true },
-    datastore: { setLocalDemoMode() {}, invalidateLoadCache() {}, settleWorkspaceReads: async () => {} },
+    datastore: { resetWorkspaceViewRecords() {}, setLocalDemoMode() {}, invalidateLoadCache() {}, settleWorkspaceReads: async () => {} },
     supabase: { auth: { getSession: async () => ({ data: { session: { user: { id: 'auth-lj' }, access_token: 'token' } } }) } },
     fetchWorkspace: () => { reads++; return new Promise((resolve, reject) => { resolveRead = resolve; rejectRead = reject }) },
+    setOverview() {}, setActiveDataView() {},
     setAuthReady: value => { ready = value }, setAuthProfileError: value => { error = value },
     setState: fn => { stateRef.current = typeof fn === 'function' ? fn(stateRef.current) : fn },
     withAudit: s => s, clearTimeout, setTimeout: (fn, ms) => setTimeout(fn, fastTimeout ? 5 : ms), Promise,

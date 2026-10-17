@@ -78,7 +78,14 @@ let activeRoleNames = {}
 export const setRoleNameConfig = config => { activeRoleNames = config?.roleNames || {} }
 let permissionContext = null
 export const setPermissionContext = (profile, config) => { permissionContext = profile ? { profile, config } : null }
-const permissionSubject = role => permissionContext && role === permissionContext.profile.role ? permissionContext.profile : role
+const permissionSubject = role => {
+  if (!permissionContext) return role
+  const profile = permissionContext.profile
+  if (role === profile.role) return profile
+  if (Array.isArray(role) && Array.isArray(profile.roles)
+    && role.length === profile.roles.length && role.every(id => profile.roles.includes(id))) return profile
+  return role
+}
 const actionGrant = (role, action, config) => config || permissionContext
   ? policyCanPerform(permissionSubject(role), action, config || permissionContext.config) : null
 

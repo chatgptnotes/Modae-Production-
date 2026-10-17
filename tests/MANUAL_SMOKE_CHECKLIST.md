@@ -481,3 +481,25 @@ Our Ref 2511096RS) are retained with the local reference documents.
 - Switch accounts during a save/read: old results do not enter the new workspace.
 - Deploy while the app stays focused: an old-deployment mutation is rejected.
 - Disable BroadcastChannel: no fallback polling; activation still revalidates.
+
+## Admin permissions, integrations and full backup
+
+- Open Accounts → Permissions for a Sales account. Deny one page/action, save
+  with a reason, refresh as that account and check both navigation and API denial.
+  Restore Inherit. Confirm Admin/Management and Non-sales boundaries remain intact.
+- In a connected staging workspace, add an AI provider key; load its models,
+  select text/document defaults and test an actual extraction. Check invalid keys,
+  model failures and disabling a selected provider produce actionable errors.
+  Confirm browser responses and logs contain no stored keys.
+- Export records with lead attachments, converted-lead opportunity documents and
+  local uploads. Inspect readable Excel and original bytes inside the ZIP. Confirm
+  passwords, API keys and session tokens are absent. Missing original files must
+  block full export.
+- Review a backup against an empty disposable workspace. Change a setting after
+  review and verify restore refuses the stale review. Restore after another review;
+  verify booking/approval evidence, file bytes, audit and numbering reservations.
+- Confirm local archives cannot restore connected workspaces, signatures reject
+  modified shared archives, and shared backups from another workspace are rejected.
+- Interrupt a local restore, reload and verify recovery restores a consistent
+  records/files set. Open a second tab during restore to check serialized recovery.
+  Test on phone and desktop. Do not use production for restore smoke checks.

@@ -26,7 +26,7 @@ test('access matrix exposes each configurable grant for both roles while protect
 test('authoritative load gates editing and non-administrators cannot submit', () => {
   for (const canEdit of [true, false]) {
     const html = render({}, canEdit)
-    assert.equal((html.match(/<fieldset disabled=""/g) || []).length, 2)
+    assert.equal((html.match(/<fieldset disabled=""/g) || []).length, 3)
     assert.match(html, /disabled="">Save access rules/)
   }
   assert.match(render({}, false), /Only administrators can load and change these rules/)

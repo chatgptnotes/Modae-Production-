@@ -1,6 +1,6 @@
 import { useFieldLists } from '../useFieldLists.js'
-import React, { useLayoutEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { MILESTONES, seedConfig } from '../seed.js'
 
@@ -24,6 +24,9 @@ import { mintId } from '../ids.js'
 import { BUILT_IN_PROPOSAL_TEMPLATES, loadProposalTemplateBuffer, resolveProposalTemplate } from '../proposal/templateRegistry.js'
 import { runTaskResult } from '../ai.js'
 
+const IntegrationsPanel = lazy(() => import('../admin/IntegrationsPanel.jsx'))
+const BackupRestorePanel = lazy(() => import('../admin/BackupRestorePanel.jsx'))
+
 // Admin — every runtime rule the app obeys, in one card grid. Data lives in
 // store.config; all changes are audited by the store mutators.
 
@@ -41,6 +44,8 @@ const ADMIN_TABS = [
   { id: 'workflow', label: 'Workflow & governance', icon: 'shield' },
   { id: 'fields', label: 'Field Lists', icon: 'list' },
   { id: 'documents', label: 'Documents & templates', icon: 'upload' },
+  { id: 'integrations', label: 'Integrations', icon: 'gear' },
+  { id: 'backups', label: 'Backup & restore', icon: 'download' },
 ]
 const WORKFLOW_SUB_TABS = [
   { id: 'access', label: 'Access & routing', description: 'Users, ownership rules, and region mappings', icon: 'target' },
@@ -161,6 +166,7 @@ export default function Admin() {
 
   const store = useStore()
   const nav = useNavigate()
+  const location = useLocation()
   const role = store.role
   const canEdit = isAdminRole(role) || role === 'LJS'
   const canEditPricing = canManagePriceLists(role)
@@ -192,6 +198,10 @@ export default function Admin() {
   const [regionSearch, setRegionSearch] = useState('')
   const [routingReview, setRoutingReview] = useState(null)
   const [routingReviewBusy, setRoutingReviewBusy] = useState(false)
+  const permissionUser = new URLSearchParams(location.search).get('permissionUser') || ''
+  useEffect(() => {
+    if (permissionUser) { setAdminView('workflow'); setWorkflowView('access') }
+  }, [permissionUser])
 
   // Route-level gate AFTER the hooks (an early return before them would change
   // the hook count when the persona flips while /admin is mounted). Approval
@@ -448,7 +458,7 @@ export default function Admin() {
         <div className="admin-setting-groups">
         <section id="admin-subpanel-access" className="admin-setting-group" role="tabpanel" aria-labelledby="admin-subtab-access" hidden={workflowView !== 'access'}>
           <div className="admin-setting-grid admin-access-layout">
-          <AccessRulesEditor store={store} canEdit={isAdminRole(store.roles || role)} />
+          <AccessRulesEditor key={permissionUser || 'role-policy'} store={store} canEdit={isAdminRole(store.roles || role)} />
           <BusinessRulesEditor store={store} canEdit={canEdit} />
           <section className="admin-access-controls-panel" aria-labelledby="admin-access-controls-title">
             <header className="admin-access-controls-head">
@@ -882,6 +892,12 @@ export default function Admin() {
         </div>
         </section>
 
+        {adminView === 'integrations' && <section id="admin-panel-integrations" className="admin-panel is-active" role="tabpanel" aria-labelledby="admin-tab-integrations">
+          <Suspense fallback={<p role="status">Loading integrations…</p>}><IntegrationsPanel store={store} /></Suspense>
+        </section>}
+        {adminView === 'backups' && <section id="admin-panel-backups" className="admin-panel is-active" role="tabpanel" aria-labelledby="admin-tab-backups">
+          <Suspense fallback={<p role="status">Loading backup tools…</p>}><BackupRestorePanel store={store} restoreLocal={store.restoreLocalBackup} /></Suspense>
+        </section>}
       </div>
 
       {templatePreview && (

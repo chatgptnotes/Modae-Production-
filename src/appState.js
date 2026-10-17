@@ -1,4 +1,7 @@
 import * as datastore from './datastore.js'
+import { supabase } from './supabase.js'
+import { isLocalDemoSession } from './authMode.js'
+import { installLocalPreviewAdmin } from './localPreviewAdmin.js'
 import {
   seedOpportunities, seedPriceLists, seedAdhocParts,
   seedCustomers, seedUsers, seedLeads, seedApprovals,
@@ -202,17 +205,20 @@ export function migrate(s) {
   // NOT gated: it is what the app needs to stay usable in either mode.
   if (s.demoData === undefined) s.demoData = true
   const demo = s.demoData !== false
-  if (!Array.isArray(s.users)) s.users = seedUsers
-  s.users = s.users.map(u => (datastore.dbEnabled() || u.pw || u.deletedAt || u.status === 'Deleted' ? u : { ...u, pw: 'Demo@1234' }))
-  // Backfill new seed accounts (TECH/CUST) by email; saved states may already
-  // hold self-registered users on the same U-nnn ids, so reassign on collision.
-  const nextUserId = () =>
-    'U-' + String(Math.max(0, ...s.users.map(u => parseInt(String(u.id).replace(/\D/g, ''), 10) || 0)) + 1).padStart(3, '0')
-  for (const su of seedUsers) {
-    if (!s.users.some(u => u.email.toLowerCase() === su.email.toLowerCase())) {
-      s.users.push(s.users.some(u => u.id === su.id) ? { ...su, id: nextUserId() } : su)
+  const localRoster = (!supabase && s.auth?.source !== 'supabase') || isLocalDemoSession(s)
+  if (localRoster) {
+    if (!Array.isArray(s.users)) s.users = localRoster ? seedUsers : []
+    s.users = s.users.map(u => (datastore.dbEnabled() || u.pw || u.deletedAt || u.status === 'Deleted' ? u : { ...u, pw: 'Demo@1234' }))
+    // Backfill new seed accounts (TECH/CUST) by email; saved states may already
+    // hold self-registered users on the same U-nnn ids, so reassign on collision.
+    const nextUserId = () =>
+      'U-' + String(Math.max(0, ...s.users.map(u => parseInt(String(u.id).replace(/\D/g, ''), 10) || 0)) + 1).padStart(3, '0')
+    for (const su of seedUsers) {
+      if (!s.users.some(u => u.email.toLowerCase() === su.email.toLowerCase())) {
+        s.users.push(s.users.some(u => u.id === su.id) ? { ...su, id: nextUserId() } : su)
+      }
     }
-  }
+  } else if (!Array.isArray(s.users)) s.users = []
   // Repair states saved before the collision guard existed: duplicate ids get
   // fresh ones (first occurrence keeps its id — it may be referenced elsewhere).
   {
@@ -227,6 +233,11 @@ export function migrate(s) {
     })
   }
   if (!ROLES[s.role]) s.role = 'SUPER'
+  if (localRoster) {
+    const installed = installLocalPreviewAdmin(s)
+    s.users = installed.users
+    s.oneTimeCleanups = installed.oneTimeCleanups
+  }
   // Hydration can combine a newer server slice with an older local snapshot.
   // Keep map-shaped slices usable before route components render.
   for (const key of ['files', 'proposals', 'communications']) {

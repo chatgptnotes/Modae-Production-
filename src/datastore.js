@@ -806,7 +806,7 @@ async function saveNormalizedRowsNow(entity, rows, retainedIds = new Set()) {
   // Audit is append-only. Never echo redacted command receipts or historical
   // events back as updates/deletes when a new local event is appended.
   if (entity === 'audit') {
-    const fresh = rows.filter(row => row.kind !== 'approval_command' && !String(row.id).startsWith('APPROVAL-COMMAND:') && !normalizedRecords.has(normalizedKey(entity, row.id)))
+    const fresh = rows.filter(row => !['approval_command','ai_integration_command','backup_restore_command'].includes(row.kind) && !['APPROVAL-COMMAND:','AI-INTEGRATIONS:','BACKUP-RESTORE:'].some(prefix => String(row.id).startsWith(prefix)) && !normalizedRecords.has(normalizedKey(entity, row.id)))
     if (!fresh.length) return
     const result = await supabase.rpc('save_rows', { p_entity: entity, p_rows: fresh.map(data => ({ id: data.id, data, rev: 0, by: actor })) })
     if (result.error) throw annotateRpcError(entity, result.error)

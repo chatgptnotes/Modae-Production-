@@ -2,8 +2,11 @@ import React, { useEffect, useState } from 'react'
 import { FONT_CHOICES } from '../userFontPreferences.js'
 import { fontAvailable } from '../workspaceFonts.js'
 import { useWorkspaceFont } from '../ui/WorkspaceFontContext.jsx'
+import { useStore } from '../store.jsx'
+import ChangePasswordSettings from '../ui/ChangePasswordSettings.jsx'
 
 export default function PersonalSettings() {
+  const store = useStore()
   const preferences = useWorkspaceFont()
   const { font, rev, loaded, loading, saving, error, remote, save, refresh } = preferences
   const [draft, setDraft] = useState(font)
@@ -47,5 +50,6 @@ export default function PersonalSettings() {
         {remote && <button type="button" disabled={saving || loading} onClick={() => { setNotice(''); void refresh() }}>Reload settings</button>}
       </div>
     </div>
+    {store.auth?.user && <ChangePasswordSettings key={`${store.auth.source}:${store.auth.user.id}`} />}
   </section>
 }

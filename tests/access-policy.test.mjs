@@ -2,6 +2,41 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { ACCESS_ACTIONS, defaultAccessPolicy, effectiveAccess, canAccessPage, canPerform, validateAccessPolicy } from '../src/accessPolicy.js'
 
+test('individual permissions use stable account IDs, add grants and remove role defaults', () => {
+  const user = { id: 'person-1', role: 'RS', roles: ['STANDARD_USER'] }
+  const policy = defaultAccessPolicy()
+  policy.users = { 'person-1': { pages: { inbox: 'deny', audit: 'allow' }, actions: { 'commercial.view': 'allow', 'opportunities.edit': 'deny' } } }
+  const config = { accessPolicy: policy }
+  assert.equal(canAccessPage(user, 'inbox', config), false)
+  assert.equal(canAccessPage(user, 'audit', config), true)
+  assert.equal(canPerform(user, 'commercial.view', config), true)
+  assert.equal(canPerform(user, 'opportunities.edit', config), false)
+  assert.equal(canPerform({ ...user, name: 'Renamed person' }, 'commercial.view', config), true)
+  assert.equal(canPerform({ ...user, id: 'person-2' }, 'commercial.view', config), false)
+  assert.equal(canPerform(user.roles, 'commercial.view', config), false)
+  assert.equal(validateAccessPolicy(policy, [user]).valid, true)
+  assert.equal(validateAccessPolicy(policy, []).valid, false)
+  assert.equal(validateAccessPolicy(policy, [user, { ...user, authId: 'another-login' }]).valid, false)
+})
+
+test('individual grants cannot restrict administrators or broaden non-sales access', () => {
+  const policy = defaultAccessPolicy()
+  policy.users = { person: { pages: { inbox: 'deny', tracker: 'allow' }, actions: { 'opportunities.edit': 'deny', 'commercial.view': 'allow' } } }
+  const config = { accessPolicy: policy }
+  assert.equal(canAccessPage({ id: 'person', roles: ['MANAGEMENT', 'ADMIN'] }, 'inbox', config), true)
+  assert.equal(canPerform({ id: 'person', roles: ['ADMIN'] }, 'opportunities.edit', config), true)
+  assert.deepEqual(effectiveAccess({ id: 'person', roles: ['NON_SALES', 'ADMIN'] }, config).pages, ['newLead'])
+  assert.equal(canPerform({ id: 'person', roles: ['NON_SALES'] }, 'commercial.view', config), false)
+})
+
+test('malformed individual permission maps fail closed', () => {
+  for (const users of [[], null, { person: { pages: { admin: 'allow' } } }, { person: { actions: { 'leads.edit': 'inherit' } } }, { person: { role: 'ADMIN' } }]) {
+    const accessPolicy = { ...defaultAccessPolicy(), users }
+    assert.equal(validateAccessPolicy(accessPolicy).valid, false)
+    assert.deepEqual(effectiveAccess({ id: 'person', roles: ['STANDARD_USER'] }, { accessPolicy }).actions, [])
+  }
+})
+
 test('explicit application roles override operational authority and revocation', () => {
   const user = { role: 'LJS', roles: ['STANDARD_USER'] }
   const config = { accessPolicy: defaultAccessPolicy() }

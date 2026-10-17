@@ -21,20 +21,22 @@ export function defaultAccessPolicy() {
   } }
 }
 const mapLegacy = role => ['ADMIN', 'SUPER', 'LJS'].includes(role) ? 'ADMIN' : role === 'AH' ? 'MANAGEMENT' :
-  ['STANDARD_USER', 'TEAM_LEAD', 'RS', 'PP', 'SS', 'PJS', 'RJS', 'SR', 'AN', 'TECH'].includes(role) ? 'STANDARD_USER' : role === 'MANAGEMENT' ? 'MANAGEMENT' : null
+  ['STANDARD_USER', 'TEAM_LEAD', 'RS', 'PP', 'SS', 'PJS', 'RJS', 'SR', 'AN', 'TECH'].includes(role) ? 'STANDARD_USER' : role === 'MANAGEMENT' ? 'MANAGEMENT' : role === 'NON_SALES' ? 'NON_SALES' : null
 export function accessRoles(userOrRoles) {
   const raw = typeof userOrRoles === 'object' && userOrRoles !== null && !Array.isArray(userOrRoles)
     ? (Array.isArray(userOrRoles.roles) ? userOrRoles.roles : [userOrRoles.role])
     : Array.isArray(userOrRoles) ? userOrRoles : [userOrRoles]
   // An explicit application assignment wins even when a legacy ID is also present.
   const normalized = raw.map(x => String(x || '').trim().toUpperCase())
-  const assigned = normalized.filter(x => ['ADMIN', 'STANDARD_USER', 'MANAGEMENT', 'TEAM_LEAD'].includes(x))
+  const assigned = normalized.filter(x => ['ADMIN', 'STANDARD_USER', 'MANAGEMENT', 'TEAM_LEAD', 'NON_SALES'].includes(x))
   return [...new Set((assigned.length ? assigned : normalized).map(mapLegacy).filter(Boolean))]
 }
-export function validateAccessPolicy(policy) {
+// Submit-only is a deliberate restriction even if a stale mixed assignment remains.
+export const isNonSalesUser = user => accessRoles(user).includes('NON_SALES')
+export function validateAccessPolicy(policy, users) {
   const errors = []
   if (!policy || typeof policy !== 'object' || Array.isArray(policy) || policy.version !== 1) errors.push('Access policy version must be 1.')
-  if (policy && Object.keys(policy).some(key => !['version', 'roles'].includes(key))) errors.push('Unknown access policy field.')
+  if (policy && Object.keys(policy).some(key => !['version', 'roles', 'users'].includes(key))) errors.push('Unknown access policy field.')
   const roles = policy?.roles
   if (!roles || typeof roles !== 'object' || Array.isArray(roles)) errors.push('Role permissions are required.')
   else {
@@ -49,10 +51,24 @@ export function validateAccessPolicy(policy) {
       }
     }
   }
+  if (policy?.users !== undefined) {
+    if (!policy.users || typeof policy.users !== 'object' || Array.isArray(policy.users)) errors.push('Individual permissions must be an account map.')
+    else for (const [id, override] of Object.entries(policy.users)) {
+      if (!id || id.length > 200 || id.trim() !== id || ['__proto__', 'constructor', 'prototype'].includes(id)) errors.push('Invalid permission account ID.')
+      if (users && users.filter(user => user.id === id).length !== 1) errors.push(`Unknown or ambiguous permission account: ${id}.`)
+      if (!override || typeof override !== 'object' || Array.isArray(override) || Object.keys(override).some(key => !['pages', 'actions'].includes(key))) { errors.push(`Invalid permissions for ${id}.`); continue }
+      for (const [kind, ids] of [['pages', pageIds], ['actions', actionIds]]) {
+        const grants = override[kind]
+        if (grants === undefined) continue
+        if (!grants || typeof grants !== 'object' || Array.isArray(grants) || Object.entries(grants).some(([permission, choice]) => !ids.includes(permission) || !['allow', 'deny'].includes(choice))) errors.push(`Invalid ${id} ${kind} overrides.`)
+      }
+    }
+  }
   return { valid: errors.length === 0, errors, policy: errors.length ? null : structuredClone(policy) }
 }
 export function effectiveAccess(userOrRoles, config) {
   const roles = accessRoles(userOrRoles)
+  if (roles.includes('NON_SALES')) return { roles: ['NON_SALES'], isAdmin: false, pages: ['newLead'], actions: ['leads.create'] }
   const isAdmin = roles.includes('ADMIN')
   // Missing policy is backward compatible. A malformed saved policy fails closed.
   const candidate = config?.accessPolicy ?? defaultAccessPolicy()
@@ -60,7 +76,7 @@ export function effectiveAccess(userOrRoles, config) {
   const raw = userOrRoles && typeof userOrRoles === 'object' && !Array.isArray(userOrRoles)
     ? (Array.isArray(userOrRoles.roles) ? userOrRoles.roles : [userOrRoles.role])
     : Array.isArray(userOrRoles) ? userOrRoles : [userOrRoles]
-  const explicit = raw.some(role => ['ADMIN', 'STANDARD_USER', 'MANAGEMENT', 'TEAM_LEAD'].includes(String(role || '').toUpperCase()))
+  const explicit = raw.some(role => ['ADMIN', 'STANDARD_USER', 'MANAGEMENT', 'TEAM_LEAD', 'NON_SALES'].includes(String(role || '').toUpperCase()))
   // Existing technical personas keep their baseline until a policy is configured
   // or an application role is explicitly assigned. Configured revocations win.
   if (!config?.accessPolicy && !explicit && policy) {
@@ -70,10 +86,17 @@ export function effectiveAccess(userOrRoles, config) {
       policy.roles.STANDARD_USER.actions = policy.roles.STANDARD_USER.actions.filter(id => id !== 'proposals.price')
     }
   }
+  const override = typeof userOrRoles?.id === 'string' && Object.hasOwn(policy?.users || {}, userOrRoles.id) ? policy.users[userOrRoles.id] : null
+  const grantsFor = kind => {
+    const grants = new Set(roles.flatMap(role => policy?.roles[role]?.[kind] || []))
+    for (const [permission, choice] of Object.entries(override?.[kind] || {})) if (choice === 'allow') grants.add(permission)
+    for (const [permission, choice] of Object.entries(override?.[kind] || {})) if (choice === 'deny') grants.delete(permission)
+    return [...grants]
+  }
   return {
     roles, isAdmin,
-    pages: isAdmin ? [...pageIds, 'admin', 'users', 'portal'] : [...new Set(roles.flatMap(role => policy?.roles[role]?.pages || []))],
-    actions: isAdmin ? [...actionIds] : [...new Set(roles.flatMap(role => policy?.roles[role]?.actions || []))],
+    pages: isAdmin ? [...pageIds, 'admin', 'users', 'portal'] : grantsFor('pages'),
+    actions: isAdmin ? [...actionIds] : grantsFor('actions'),
   }
 }
 export const canAccessPage = (userOrRoles, page, config) => effectiveAccess(userOrRoles, config).pages.includes(page === 'order' ? 'po' : page)

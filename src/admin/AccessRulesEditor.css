@@ -1,4 +1,7 @@
 .access-rules-editor { min-width: 0; }
+.access-rules-account { display: grid; gap: 6px; max-width: 560px; }
+.access-rules-account select, .access-rules-matrix select { width: 100%; min-width: 0; min-height: 40px; }
+.access-rules-inherited { display: block; margin-top: 4px; font-weight: 400; color: var(--muted, #677184); }
 .access-rules-fields { min-width: 0; margin: 18px 0; padding: 0; border: 0; }
 .access-rules-fields legend { margin-bottom: 10px; font-weight: 650; }
 .access-rules-matrices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }

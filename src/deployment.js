@@ -1,6 +1,7 @@
 import { workspaceSyncState } from './workspaceSyncState.js'
 import { clearSupabaseSession } from './supabase.js'
 import { clearLocalAll as clearLocalLeadBlobs } from './leadBlobs.js'
+import { clearLocalDocumentFiles } from './localDocumentFiles.js'
 import { DEPLOYMENT_MARKER_KEY, recordDeploymentMarker, shouldResetForDeployment } from './deploymentMarker.js'
 
 // Vite replaces this at build time. Local development deliberately uses a
@@ -54,6 +55,17 @@ export async function resetBrowserForDeployment() {
   resetInProgress = true
   try { await clearSupabaseSession() } catch { /* local cleanup must continue */ }
   try { await clearLocalLeadBlobs() } catch { /* local cleanup must continue */ }
+  try { await clearLocalDocumentFiles() } catch { /* local cleanup must continue */ }
+  // A deployment invalidates any interrupted local restore, including its
+  // recovery copy of files and credentials from the previous browser session.
+  try {
+    await new Promise((resolve, reject) => {
+      const request = indexedDB.deleteDatabase('wintrack-backup-recovery')
+      request.onsuccess = resolve
+      request.onerror = reject
+      request.onblocked = reject
+    })
+  } catch { /* another tab may still hold the database */ }
   await clearOriginCaches()
   clearAccessibleCookies()
   try { localStorage.clear() } catch { /* storage is optional */ }

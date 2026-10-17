@@ -261,3 +261,18 @@ coalesced activation checks, and local committed snapshots. Keep HTTP 409 partia
 results intact. Existing form-local inputs require owner acknowledgement before
 merging or leaving. Ephemeral presence stays in Railway memory; do not resume
 browser heartbeat writes to `user_presence`. Multiple replicas need shared limits.
+
+## Admin extensions
+
+- Migrations `20261017061731_individual_account_permissions.sql`,
+  `20261017061909_full_workspace_backups.sql` and
+  `20261017110000_ai_integrations.sql` extend the existing contract without new
+  tables. Per-account grants are keyed by stable roster IDs, with Admin precedence
+  and Non-sales restrictions retained. Resolve authenticated profiles uniquely,
+  preferring exact auth bindings over eligible email fallbacks.
+- Full backups exclude secrets and require original bytes. Connected archives
+  are signed and restricted to the same workspace; only service-owned restoration
+  may insert historical guarded receipts. Never restore account credentials or
+  lifecycle state, decrease sequence counters, or replace retained audit evidence.
+- AI credentials use server-only `INTEGRATIONS_ENCRYPTION_KEY`; archive signatures
+  use `BACKUP_SIGNING_KEY`. Never add either secret to browser state or backups.

@@ -6,6 +6,28 @@ submission, and follow-up.
 
 ## What the application does
 
+- Admin → Workflow & governance → Access rules supports per-account page and
+  action permissions: Inherit, Allow or Deny. Accounts → Permissions opens that
+  person's settings. Admin and Management retain administrator access; Non-sales
+  stays limited to lead submission and personal settings. Changes require a reason
+  and a current policy revision.
+- Admin → Integrations manages Gemini, OpenAI, Anthropic, xAI, DeepSeek, Mistral
+  and OpenRouter connections in a connected workspace. Keys are encrypted on the
+  server. Choose text and document models from provider catalogues; activation
+  tests the connection and document transport. Local demos cannot save provider
+  keys. See [DEPLOYMENT.md](DEPLOYMENT.md) for server setup.
+- Admin → Backup & restore exports one ZIP containing a readable Excel workbook,
+  exact restoration data and original uploaded files. Passwords, provider keys and
+  authentication secrets are excluded. Keep the complete ZIP unchanged. Restore
+  requires review and an empty business workspace. Existing accounts, passwords
+  and lifecycle status stay authoritative; missing logins need separate provisioning.
+  Signed shared backups restore only to the same connected workspace; local
+  backups restore only locally. Shared restore is transactional; browser restore
+  keeps a recovery journal before replacing records and file bytes. Limits are
+  100 MB ZIP, 300 MB expanded, 10,000 entries and 10 MB per shared file. Missing
+  original file bytes block full export. SharePoint files require a signed-in
+  SharePoint connection during export.
+
 - Personal settings → Appearance lets each signed-in user choose Candara (default),
   Inter, Roboto, Open Sans, Merriweather, Lora or their device's system font. Account-backed choices follow the user across
   devices; local/demo choices remain per user on that browser. Open settings from
@@ -479,3 +501,7 @@ must be applied with that form's Save action before the shared draft can merge.
 Discard lists related records that reset together. No Supabase Realtime is used.
 See [deployment guidance](DEPLOYMENT.md#optional-event-driven-workspace-synchronization)
 for limits and rollout requirements.
+
+## Local Admin login
+
+The dedicated local Admin is installed once, with a versioned repair for legacy inactive setup. Later password, name and lifecycle edits persist. It is never provisioned in Supabase; connected integrations require an existing connected Admin. Preview as user is limited to this local account. Personal settings also supports changing your own password.

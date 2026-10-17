@@ -138,3 +138,27 @@ export function clearLocalAll() {
     dbPromise = null
   })
 }
+
+// Backups must fail loudly instead of treating inaccessible storage as empty.
+export async function backupLocalLeadFiles() {
+  const db = await openDb()
+  if (!db) throw new Error('Local attachment storage is unavailable. A full backup cannot be verified.')
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE, 'readonly')
+    const request = transaction.objectStore(STORE).getAll()
+    request.onsuccess = () => resolve(request.result || [])
+    request.onerror = () => reject(new Error('Could not read local attachment storage.'))
+    transaction.onabort = () => reject(new Error('Local attachment inventory was interrupted.'))
+  })
+}
+export async function replaceLocalLeadFiles(rows) {
+  const db = await openDb()
+  if (!db) throw new Error('Local attachment storage is unavailable.')
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(STORE, 'readwrite'), store = transaction.objectStore(STORE)
+    store.clear()
+    for (const row of rows) store.put(row, keyOf(row.leadId, row.name))
+    transaction.oncomplete = () => resolve()
+    transaction.onabort = transaction.onerror = () => reject(new Error('Could not restore local attachment bytes.'))
+  })
+}

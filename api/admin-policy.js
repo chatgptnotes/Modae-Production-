@@ -1,5 +1,5 @@
 import { getAdminSupabaseClient } from './_supabase-client.js'
-import { activeProfile } from './_user-roster.js'
+import { activeProfile, readRoster } from './_user-roster.js'
 import { isAccountAdmin } from '../src/userManagement.js'
 import { validateAccessPolicy } from '../src/accessPolicy.js'
 import { validateOpportunityNumbering } from '../src/opportunityNumbering.js'
@@ -18,7 +18,8 @@ export function createAdminPolicyHandler(getClient = getAdminSupabaseClient) {
       if (!actor || !isAccountAdmin(actor)) return res.status(403).json({ error: 'Only active administrators can manage access rules.' })
       if (req.method === 'POST') {
         const { accessPolicy, opportunityNumbering, rev, reason } = req.body || {}
-        const policy = validateAccessPolicy(accessPolicy)
+        const roster = await readRoster(client)
+        const policy = validateAccessPolicy(accessPolicy, roster.users)
         let numbering
         const errors = [...policy.errors]
         try { numbering = validateOpportunityNumbering(opportunityNumbering) } catch (error) { errors.push(error.message) }
@@ -33,7 +34,7 @@ export function createAdminPolicyHandler(getClient = getAdminSupabaseClient) {
       if (current.error) throw current.error
       return res.status(200).json({ config: current.data?.data || {}, rev: Number(current.data?.rev) || 0 })
     } catch (error) {
-      const status = error.code === '40001' ? 409 : error.code === '42501' ? 403 : 503
+      const status = error.code === '40001' ? 409 : error.code === '42501' ? 403 : error.code === '22023' ? 400 : 503
       return res.status(status).json({ error: status === 409 ? 'Settings changed in another session. Reload before saving.' : 'Could not save access rules. Check the database migrations and retry.' })
     }
   }

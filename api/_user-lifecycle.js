@@ -1,4 +1,4 @@
-import { accountChangeError, deletedProfile, isDeletedUser, matchesAccount } from '../src/userManagement.js'
+import { accountChangeError, deletedProfile, isDeletedUser, accountProfileFor } from '../src/userManagement.js'
 import { readRoster, saveRoster } from './_user-roster.js'
 
 const fail = (message, status = 400) => { throw Object.assign(new Error(message), { status }) }
@@ -19,7 +19,7 @@ async function targetAuth(client, profile) {
 export async function changeAccount(client, auth, body, patch = {}) {
   let roster = await readRoster(client)
   let target = roster.users.find(user => user.id === body.profileId)
-  const actor = roster.users.find(user => matchesAccount(user, auth))
+  const actor = accountProfileFor(roster.users, auth)
   const deleting = body.action === 'delete'
   const problem = accountChangeError(roster.users, actor, target, patch, deleting)
   if (problem) fail(problem, 403)

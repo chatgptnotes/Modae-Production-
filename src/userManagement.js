@@ -7,6 +7,16 @@ export const isAccountAdmin = user => effectiveAccess(user).isAdmin
 export const matchesAccount = (profile, auth) => Boolean(profile && auth && (
   (auth.id && (profile.authId === auth.id || profile.id === auth.id)) || (!profile.authId && profile.email && auth.email && profile.email.toLowerCase() === auth.email.toLowerCase())
 ))
+// Resolve identity before checking lifecycle: an inactive exact match must never
+// fall through to a different account that happens to share an email address.
+export function accountProfileFor(users = [], auth) {
+  if (!auth) return null
+  const exact = auth.id ? users.filter(profile => profile.authId === auth.id || profile.id === auth.id) : []
+  if (exact.length) return exact.length === 1 ? exact[0] : null
+  const email = String(auth.email || '').trim().toLowerCase()
+  const fallback = email ? users.filter(profile => !profile.authId && String(profile.email || '').trim().toLowerCase() === email) : []
+  return fallback.length === 1 ? fallback[0] : null
+}
 export function accountChangeError(users, actor, target, patch = {}, deleting = false) {
   if (!isActiveUser(actor) || !isAccountAdmin(actor)) return 'Only active administrators can manage accounts.'
   if (!target) return 'Account not found.'

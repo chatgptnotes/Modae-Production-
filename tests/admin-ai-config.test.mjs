@@ -4,11 +4,12 @@ import fs from 'node:fs'
 
 const admin = fs.readFileSync('src/pages/Admin.jsx', 'utf8')
 
-test('Admin integrations and AI configuration are not rendered', () => {
-  assert.doesNotMatch(admin, /Integrations &amp; AI/)
-  assert.doesNotMatch(admin, /admin-panel-integrations/)
-  assert.doesNotMatch(admin, /SharePoint connector/)
-  assert.doesNotMatch(admin, /AI model configuration/)
+test('Admin exposes dedicated integrations and full backup panels', () => {
+  assert.match(admin, /admin-panel-integrations/)
+  assert.match(admin, /admin-panel-backups/)
+  assert.match(admin, /IntegrationsPanel store=\{store\}/)
+  assert.match(admin, /BackupRestorePanel store=\{store\}/)
+  assert.match(admin, /Suspense/)
 })
 
 test('Admin workflow and documents tabs remain available', () => {

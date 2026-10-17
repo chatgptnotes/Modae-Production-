@@ -92,7 +92,7 @@ function DocumentsBrowser({ store, scope, user }) {
   const spConnected = backend === 'sharepoint'
   // Cloud deletes run best-effort behind the store update; a failure surfaces
   // in the explorer bar but never blocks the UI.
-  const cloud = fn => { if (backend !== 'mock') fn().catch(e => setCloudErr(`Cloud delete failed: ${e.message}`)) }
+  const cloud = fn => { fn().catch(e => setCloudErr(`File delete failed: ${e.message}`)) }
 
   // Cloud-backed files are the source of truth — merge the listing into the
   // local metadata cache so the subfolder views survive a reload.
@@ -103,7 +103,7 @@ function DocumentsBrowser({ store, scope, user }) {
       if (!alive || !map) return
       Object.entries(map).forEach(([sf, rows]) => {
         const have = ((store.files?.[opp.id] || {})[sf] || []).map(f => f.name)
-        rows.forEach(r => { if (!have.includes(r.name)) store.addFile(opp.id, sf, r) })
+        rows.forEach(r => { if (!have.includes(r.name) || r.backend === 'supabase') store.addFile(opp.id, sf, r) })
       })
     }).catch(e => { if (alive) setCloudErr(e.message) })
     return () => { alive = false }
@@ -124,9 +124,6 @@ function DocumentsBrowser({ store, scope, user }) {
     setBusy(false)
   }
 
-  const addMockFile = () => {
-    setPrompt({ kind: 'file', title: 'Add mock file', message: 'Enter the file name to add to this folder.', defaultValue: 'Customer_Spec.pdf' })
-  }
   const savePrompt = name => {
     setPrompt(null)
     if (!name?.trim()) return
@@ -274,16 +271,12 @@ function DocumentsBrowser({ store, scope, user }) {
         {folderPath}
         <header className="documents-heading documents-detail-heading">
           <div><h1>{subfolder}</h1><p>{opp.oppName || opp.sellTo}</p></div>
-          {backend !== 'mock' ? (
             <>
               <input ref={fileInput} type="file" multiple style={{ display: 'none' }} onChange={onUpload} name="folders-file" />
               <button onClick={() => fileInput.current?.click()} disabled={busy}>
                 <Icon name="upload" size={13} /> {busy ? 'Uploading…' : 'Upload'}
               </button>
             </>
-          ) : (
-            <button onClick={addMockFile}><Icon name="upload" size={13} /> Upload (mock)</button>
-          )}
         </header>
         {cloudErr && <p role="alert" className="documents-error">{cloudErr}</p>}
         <div className="documents-file-list">
@@ -298,17 +291,17 @@ function DocumentsBrowser({ store, scope, user }) {
               )}
               {(files[subfolder] || []).map(fl => {
                 const isWorkbook = subfolder === 'Proposal' && fl.name.endsWith('.xlsx')
-                const href = fl.webUrl || fl.url
+                const href = fl.backend === 'supabase' ? '' : fl.webUrl || fl.url || fl.dataUrl
                 const delId = `${opp.id}/${subfolder}/${fl.name}`
                 return (
                   <tr key={fl.name}
                     onMouseLeave={disarm(delId)}
-                    title={isWorkbook ? 'Open the proposal workbook' : fl.webUrl ? 'Opens in SharePoint' : undefined}>
+                    title={isWorkbook ? 'Open the proposal workbook' : href?.startsWith('data:') ? 'Download attachment' : fl.webUrl ? 'Opens in SharePoint' : undefined}>
                     <td>
                       <Icon name={isWorkbook ? 'fileSheet' : 'fileText'} size={13} />{' '}
                       {isWorkbook ? <Link to={`/proposal/${opp.id}`}>{fl.name}</Link>
-                        : href ? <a href={href} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>{fl.name}</a>
-                        : backend === 'supabase' ? <a href="#" onClick={e => openSupabaseFile(fl, e)}>{fl.name}</a>
+                        : href ? <a href={href} download={href.startsWith('data:') ? fl.name : undefined} target={href.startsWith('data:') ? undefined : '_blank'} rel="noreferrer" onClick={e => e.stopPropagation()}>{fl.name}</a>
+                        : fl.backend === 'supabase' || ['supabase', 'mock'].includes(backend) ? <a href="#" onClick={e => openSupabaseFile(fl, e)}>{fl.name}</a>
                         : fl.name}
                     </td>
                     <td>{fl.date}</td><td>{fl.size}</td>

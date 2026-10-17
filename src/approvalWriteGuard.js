@@ -2,6 +2,8 @@ const same = (a,b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 const deny = () => { throw Object.assign(new Error('Use the approval decision command; decision evidence is server-owned.'), { status: 403, code: 'PT403' }) }
 // Called at both generic server write boundaries, including administrators.
 export function assertNoApprovalCommandWrite(entity, before, after, recordId = after?.id) {
+  if (entity === 'audit' && ([recordId, before?.id, after?.id].some(id => String(id || '').startsWith('BACKUP-RESTORE:')) || before?.kind === 'backup_restore_command' || after?.kind === 'backup_restore_command')) throw Object.assign(new Error('Backup restoration audit receipts are server-owned.'), { status: 403, code: 'PT403' })
+  if (entity === 'audit' && ([recordId, before?.id, after?.id].some(id => String(id || '').startsWith('AI-INTEGRATIONS:')) || before?.kind === 'ai_integration_command' || after?.kind === 'ai_integration_command')) throw Object.assign(new Error('AI integration audit receipts are server-owned.'), { status: 403, code: 'PT403' })
   if (entity === 'audit' && (String(recordId || '').startsWith('APPROVAL-COMMAND:') || String(after?.id || '').startsWith('APPROVAL-COMMAND:') || after?.kind === 'approval_command')) deny()
   if (entity === 'approvals') {
     if (!before) {

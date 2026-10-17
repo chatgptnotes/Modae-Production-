@@ -8,6 +8,7 @@ import { FormulaBarProvider } from './formulabar.jsx'
 import { DrawerProvider } from './drawer.jsx'
 import { registerSW } from './pwa.js'
 import { deploymentNeedsReset, resetAndReload, watchDeployment } from './deployment.js'
+import { KEY } from './appState.js'
 import './styles.css'
 import './ui/workspaceHeadings.css'
 import './tablet/phoneDarkTheme.css'
@@ -17,6 +18,15 @@ import './tablet/phoneReadability.css'
 async function boot() {
   if (deploymentNeedsReset()) {
     await resetAndReload()
+    return
+  }
+  try {
+    if (localStorage.getItem('wintrack-backup-restore-pending')) {
+      const { recoverLocalBackupRestore } = await import('./localBackupJournal.js')
+      await recoverLocalBackupRestore(KEY)
+    }
+  } catch {
+    ReactDOM.createRoot(document.getElementById('root')).render(<main role="alert"><h1>Backup recovery needs attention</h1><p>Close other WinTrack tabs and reload to retry recovery. Keep this browser’s storage intact until recovery completes.</p><button onClick={() => window.location.reload()}>Retry recovery</button></main>)
     return
   }
   registerSW()

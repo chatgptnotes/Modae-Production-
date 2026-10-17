@@ -1,6 +1,9 @@
 import { projectWorkspace } from '../workspaceAccess.js'
 import { createWorkspaceDataHandler } from '../../api/workspace-data.js'
 import adminPolicyHandler from '../../api/admin-policy.js'
+import adminIntegrationsHandler from '../../api/admin-integrations.js'
+import adminBackupsHandler from '../../api/admin-backups.js'
+import restoredFilesHandler from '../../api/restored-files.js'
 import userPreferencesHandler from '../../api/user-preferences.js'
 import opportunityNumberHandler from '../../api/opportunity-number.js'
 import { controller } from './controllers/legacy.js'
@@ -63,6 +66,8 @@ export function createApp({
   app.disable('x-powered-by')
   app.set('trust proxy', 1)
   app.use(cors(corsOptions))
+  app.use('/api/admin-integrations', express.json({ limit: '32kb' }))
+  app.use('/api/admin-backups', express.json({ limit: '150mb' }))
   app.use('/api/workspace/data', express.json({ limit: '32mb' }))
   app.use('/api/send-proposal-email', express.json({ limit: '32mb' }))
   app.use(express.json({ limit: '2mb' }))
@@ -116,6 +121,14 @@ export function createApp({
   })
   app.post('/api/workspace/data', controller(createWorkspaceDataHandler({ invalidate: () => workspaceCache.invalidate() })))
   app.get('/api/admin-policy', controller(adminPolicyHandler))
+  app.post('/api/restored-files', controller(restoredFilesHandler))
+  app.get('/api/admin-integrations', controller(adminIntegrationsHandler))
+  app.post('/api/admin-integrations', controller(adminIntegrationsHandler))
+  app.post('/api/admin-backups', async (req, res, next) => {
+    try { await adminBackupsHandler(req, res) } catch (error) { next(error) } finally {
+      if (req.body?.operation === 'restore') workspaceCache.invalidate()
+    }
+  })
   app.get('/api/user-preferences', controller(userPreferencesHandler))
   app.put('/api/user-preferences', controller(userPreferencesHandler))
   app.post('/api/admin-policy', async (req, res, next) => {

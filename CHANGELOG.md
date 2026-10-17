@@ -1,3 +1,32 @@
+## 2026-10-17 — Repair local Admin login setup
+
+- Repair legacy local Admin setup that reused an inactive/deleted account and
+  blocked login. Apply recovery once with a versioned receipt; retain other users,
+  business records, active-account passwords and subsequent lifecycle changes.
+- Connected account lifecycle and credentials are unchanged.
+
+## 2026-10-17 — Admin permissions, integrations and complete backups
+
+- Add account-specific Inherit/Allow/Deny controls with revision checks and audit.
+  Keep administrator and submit-only boundaries. Resolve exact authenticated
+  identities before email fallbacks and reject ambiguous roster matches.
+- Add encrypted server-managed AI connections, provider model catalogues, text and
+  document selection, capability probes and explicit connection disable controls.
+- Add ZIP backups with readable Excel, exact restoration data and uploaded bytes.
+  Exclude credentials; sign shared archives and restore only into an empty workspace.
+  Preserve current accounts, audit evidence and opportunity numbering reservations.
+- Restore connected records and bytes in one revision-checked SQL transaction.
+  Journal browser restorations and recover before hydration after interruption.
+  Persist original local document bytes and complete local business snapshots.
+- Add service-only permissions, backup and AI integration migrations, which must be
+  applied explicitly before enabling connected features. No shared database changes
+  or deployment are performed by this implementation.
+
+- Keep recovered files accessible to authorized record users through a server path
+  bound to protected restoration receipts, preserving ordinary private-file RLS.
+- Retire recovered file copies after successful SharePoint replacements and keep
+  restored authoritative bytes when exporting another full backup.
+
 ## 2026-10-14 — Phone header controls
 
 ## 2026-10-14 — Bundled Candara family

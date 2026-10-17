@@ -9,7 +9,7 @@ import { getWorkspaceGeneration, fetchWorkspace } from './workspaceApi.js'
 import { previewOpportunityNumber, validateOpportunityNumbering } from './opportunityNumbering.js'
 import { canPerform as policyCanPerform, effectiveAccess, validateAccessPolicy } from './accessPolicy.js'
 import { readAdminPolicy, saveAdminPolicy } from './adminPolicyApi.js'
-import { accountChangeError, deletedProfile, isActiveUser, isDeletedUser, matchesAccount } from './userManagement.js'
+import { accountChangeError, deletedProfile, isActiveUser, isDeletedUser, accountProfileFor } from './userManagement.js'
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import * as filestore from './filestore.js'
 import * as datastore from './datastore.js'
@@ -44,8 +44,11 @@ import {
 } from './proposal/sparesBoq.js'
 import { createKycOverride } from './kycPolicy.js'
 import { releaseState, transitionBlockers } from './gates.js'
-import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
+import { changeSupabasePassword, clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
+import { changeLocalPassword, validatePasswordChange } from './passwordChange.js'
+import { canPreviewAsUser } from './localPreviewAdmin.js'
 import { isLocalDemoSession } from './authMode.js'
+import { mergeLocalBackupState } from './localBackupState.js'
 import { workspaceSyncStatus } from './syncStatus.js'
 import { readLiveData } from './liveSync.js'
 import { purgeWorkspace } from './workspacePurge.js'
@@ -58,11 +61,11 @@ import { approvePurchaseOrder, recordBooking, confirmSalesTarget, stagePODetails
 const StoreCtx = createContext(null)
 function applyAuthoritativeProfile(state, users) {
   if (!Array.isArray(users) || !state.auth?.user) return state
-  const profile = users.find(user => matchesAccount(user, state.auth.user))
+  const profile = accountProfileFor(users, state.auth.user)
   const roles = isActiveUser(profile) ? userRoles(profile) : []
   if (!isActiveUser(profile) || !ROLES[profile.role]) return { ...state, role: null, roles: [], auth: { ...state.auth, user: null } }
   return { ...state, role: profile.role, roles, auth: { ...state.auth, user: {
-    ...state.auth.user, name: profile.name || state.auth.user.email, role: profile.role, roles,
+    ...state.auth.user, name: profile.name || state.auth.user.email, email: profile.email || state.auth.user.email, role: profile.role, roles,
   } } }
 }
 const workflowTransition = (from, to, reason = '', id = null) => ({
@@ -177,6 +180,14 @@ const localSnapshot = state => ({
   viewModePinnedAt: state.viewModePinnedAt,
   viewModePreferenceRev: state.viewModePreferenceRev,
   inboxShowAll: state.inboxShowAll,
+  oneTimeCleanups: state.oneTimeCleanups,
+  ...(!datastore.dbEnabled() ? {
+    audit: state.audit, files: state.files, communications: state.communications,
+    clarifications: state.clarifications, svcEstimates: state.svcEstimates,
+    vendorQuotes: state.vendorQuotes, surveys: state.surveys, competitors: state.competitors,
+    sparesAlternatives: state.sparesAlternatives, kyc: state.kyc,
+    bSteps: state.bSteps, bStepOwners: state.bStepOwners,
+  } : {}),
 })
 
 let localCacheWarningShown = false
@@ -311,7 +322,8 @@ export function StoreProvider({ children }) {
   const [sourcingDataError, setSourcingDataError] = useState('')
   const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null })
   setRoleNameConfig(state.config)
-  setPermissionContext({ ...state.auth?.user, role: state.role, roles: state.roles }, state.config)
+  const permissionProfile = accountProfileFor(state.users, state.auth?.user) || state.auth?.user
+  setPermissionContext(permissionProfile ? { ...permissionProfile, role: state.role, roles: state.roles } : null, state.config)
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
   const stateRef = useRef(state)
   stateRef.current = state
@@ -910,7 +922,8 @@ export function StoreProvider({ children }) {
     },
     canPerform(action) {
       const current = stateRef.current
-      return policyCanPerform(current.roles || current.role, action, current.config)
+      const profile = accountProfileFor(current.users, current.auth?.user)
+      return policyCanPerform(profile || current.roles || current.role, action, current.config)
     },
     async getAccessRules() {
       const current = stateRef.current
@@ -924,7 +937,7 @@ export function StoreProvider({ children }) {
       const current = stateRef.current
       if (!effectiveAccess(current.roles || current.role, current.config).isAdmin) throw new Error('Only administrators can manage access rules.')
       if (!reason?.trim()) throw new Error('A reason is required.')
-      const checked = validateAccessPolicy(patch.accessPolicy)
+      const checked = validateAccessPolicy(patch.accessPolicy, current.users)
       if (!checked.valid) throw new Error(checked.errors.join('; '))
       const changes = { accessPolicy: checked.policy, opportunityNumbering: validateOpportunityNumbering(patch.opportunityNumbering) }
       if (!datastore.dbEnabled()) {
@@ -1049,7 +1062,7 @@ export function StoreProvider({ children }) {
       // those changes; every change remains audited and approval snapshots
       // are refreshed by the existing proposal sync path.
       const role = stateRef.current.role
-      const canEdit = before && (before.owner === role || ROLES[role]?.admin)
+      const canEdit = before && (before.owner === role || effectiveAccess(stateRef.current.roles || role, stateRef.current.config).isAdmin)
       const detailFields = new Set([
         'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'cogsK', 'gmK', 'gmPct', 'fqFy',
         'sellTo', 'category', 'location', 'customerStatus', 'eucName',
@@ -1769,7 +1782,7 @@ export function StoreProvider({ children }) {
     updateUser(id, patch) {
       const current = stateRef.current
       if (datastore.dbEnabled()) throw new Error('Use server account management for shared accounts.')
-      const problem = accountChangeError(current.users, current.users.find(u => matchesAccount(u, current.auth?.user)), current.users.find(u => u.id === id), patch)
+      const problem = accountChangeError(current.users, accountProfileFor(current.users, current.auth?.user), current.users.find(u => u.id === id), patch)
       if (problem) throw new Error(problem)
       setState(s => {
         if (!isAdminRole(s.roles || s.role)) return s
@@ -1802,7 +1815,7 @@ export function StoreProvider({ children }) {
     removeUserAccount(id) {
       const s = stateRef.current
       if (datastore.dbEnabled()) throw new Error('Use server account management for shared accounts.')
-      const actor = s.users.find(u => matchesAccount(u, s.auth?.user))
+      const actor = accountProfileFor(s.users, s.auth?.user)
       const target = s.users.find(u => u.id === id)
       const problem = accountChangeError(s.users, actor, target, {}, true)
       if (problem) throw new Error(problem)
@@ -2913,6 +2926,26 @@ export function StoreProvider({ children }) {
       }
     },
 
+    async changeOwnPassword(currentPassword, password, confirmation) {
+      validatePasswordChange(currentPassword, password, confirmation)
+      const starting = stateRef.current
+      const account = accountProfileFor(starting.users, starting.auth?.user)
+      if (!isActiveUser(account)) throw new Error('Sign in with an active account to change your password.')
+      const epoch = authEpochRef.current
+      const isCurrent = () => epoch === authEpochRef.current && stateRef.current.auth?.user?.id === starting.auth?.user?.id
+      if (supabase && !isLocalDemoSession(starting)) {
+        await changeSupabasePassword(starting.auth.user.id, currentPassword, password, confirmation, isCurrent)
+        if (!isCurrent()) throw new Error('Your session changed. Sign in again.')
+        return
+      }
+      // Self-service does not call the administrator-only updateUser action.
+      changeLocalPassword(starting, currentPassword, password, confirmation)
+      setState(s => {
+        if (s.auth?.user?.id !== starting.auth?.user?.id || s.auth?.source !== starting.auth?.source) return s
+        return withAudit(changeLocalPassword(s, currentPassword, password, confirmation), 'Password changed', account.id, 'Self-service password change')
+      })
+    },
+
     // ---- Auth (demo login — plaintext by design, disclaimed on screen) ----
     login(email, pw, source = 'local') {
       const s = stateRef.current
@@ -2968,7 +3001,7 @@ export function StoreProvider({ children }) {
             new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Account verification timed out. Retry.')), 15000) }),
           ])
           if (!current()) return { ok: false, err: 'Session changed.' }
-          const profile = workspace.users?.find(row => matchesAccount(row, user))
+          const profile = accountProfileFor(workspace.users, user)
           if (!isActiveUser(profile) || !ROLES[profile.role]) throw new Error('An active workspace profile is required. Contact your administrator or retry.')
           const previous = stateRef.current
           const switching = previous.auth?.user?.id !== user.id
@@ -3050,17 +3083,53 @@ export function StoreProvider({ children }) {
       return { ok: true }
     },
     signInAs(userId) {
-      if (datastore.dbEnabled() || !isAdminRole(stateRef.current.roles || stateRef.current.role)) return
+      if (!canPreviewAsUser(stateRef.current, datastore.dbEnabled())) throw new Error('Only the dedicated Admin account can preview another user in a local workspace.')
+      if (!isActiveUser(stateRef.current.users.find(user => user.id === userId))) throw new Error('Choose an active account to preview.')
+      authEpochRef.current++
       setState(st => {
+        if (!canPreviewAsUser(st, datastore.dbEnabled())) return st
         const u = st.users.find(x => x.id === userId)
-        if (!u || u.status !== 'Active') return st
+        if (!isActiveUser(u)) return st
         return {
-          ...withAudit(st, 'Signed in as', u.email, `by ${st.role}`),
+          ...withAudit(st, 'Signed in as', u.email, `by account ${st.auth.user.id}`),
           auth: { source: st.auth?.source, user: { id: u.id, name: u.name, email: u.email, role: u.role, roles: userRoles(u) } },
           roles: userRoles(u),
           role: ROLES[u.role] ? u.role : st.role,
         }
       })
+      return true
+    },
+
+    getLocalBackupState() {
+      return localSnapshot(stateRef.current)
+    },
+    async restoreLocalBackup(imported) {
+      const { isEmptyBackupWorkspace, localBackupState } = await import('./workspaceBackup.js')
+      const current = stateRef.current
+      const actor = accountProfileFor(current.users, current.auth?.user)
+      if (datastore.dbEnabled() || (supabase && !isLocalDemoSession(current))) throw new Error('Use the server to restore a connected workspace.')
+      if (!isActiveUser(actor) || !effectiveAccess(actor, current.config).isAdmin) throw new Error('Only an active administrator can restore a backup.')
+      if (!isEmptyBackupWorkspace(current)) throw new Error('Restore requires an empty business workspace.')
+      const beforeSaved = localStorage.getItem(KEY)
+      const next = withAudit(migrate(mergeLocalBackupState(current, localBackupState(imported))), 'Full backup restored', 'workspace', 'Business records and original files restored; current accounts retained')
+      // Quota errors must abort so the journal can roll back file bytes too.
+      localStorage.setItem(KEY, JSON.stringify(localSnapshot(next)))
+      clearTimeout(saveTimerRef.current)
+      clearTimeout(localCacheTimerRef.current)
+      workspaceDrafts.reset()
+      approvalCommandsRef.current.clear()
+      datastore.invalidateLoadCache()
+      lastSavedRef.current = syncedOf(next)
+      stateRef.current = next
+      setState(next)
+      return () => {
+        clearTimeout(localCacheTimerRef.current)
+        if (beforeSaved === null) localStorage.removeItem(KEY)
+        else localStorage.setItem(KEY, beforeSaved)
+        lastSavedRef.current = syncedOf(current)
+        stateRef.current = current
+        setState(current)
+      }
     },
 
     // Drop the saved state entirely — initialState() then rebuilds from
