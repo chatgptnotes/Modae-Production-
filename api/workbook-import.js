@@ -1,3 +1,4 @@
+import { parseProbabilityPct } from '../src/opportunityProbability.js'
 import { isActiveUser, isAccountAdmin, accountProfileFor } from '../src/userManagement.js'
 import { createHash } from 'node:crypto'
 import { getAdminSupabaseClient } from './_supabase-client.js'
@@ -23,6 +24,12 @@ export function createWorkbookImportHandler(getClient = getAdminSupabaseClient) 
       || new Set(importData.opportunities.map(row => row.id)).size !== importData.opportunities.length) {
       return res.status(400).json({ ok: false, error: 'A valid workbook with unique opportunity IDs is required.' })
     }
+    try {
+      for (const row of importData.opportunities) {
+        if (row.probabilityPct == null) continue
+        if (parseProbabilityPct(row.probabilityPct) !== row.probabilityPct) throw new Error('Probability must be a number between 0 and 100, or blank.')
+      }
+    } catch (error) { return res.status(400).json({ ok: false, error: error.message }) }
     try {
       const auth = await client.auth.getUser(token)
       if (auth.error || !auth.data?.user?.email) return res.status(401).json({ ok: false, error: 'The session has expired.' })

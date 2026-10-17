@@ -1,3 +1,5 @@
+import { parseProbabilityPct } from '../opportunityProbability.js'
+import { fiscalQuarter } from '../excelLogic.js'
 import { useFieldLists } from '../useFieldLists.js'
 import React, { useState, useMemo, useRef } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -14,6 +16,7 @@ import CustomerPicker from '../CustomerPicker.jsx'
 const empty = {
   sellTo: '', sellToCustomerLocation: '', category: '', location: '', eucName: '', eucLocation: '',
   oppName: '', owner: '', oppType: '', bu: '', segment: '', product: [],
+  prob: '', probabilityPct: '', orderDate: '',
   source: '', notes: '', inquiryType: '', contactPerson: '', contactPhone: '', contactEmail: '', valueK: '', rfqNumber: '', rfqDate: '',
 }
 
@@ -129,6 +132,7 @@ export default function IntakeForm({ destinationPicker = null }) {
   const [touched, setTouched] = useState({})
   const submitLock = useRef(false)
   const [submitting, setSubmitting] = useState(false)
+  const [forecastError, setForecastError] = useState('')
   const [pendingId, setPendingId] = useState('')
 
   // Document upload and AI processing state
@@ -183,6 +187,12 @@ export default function IntakeForm({ destinationPicker = null }) {
   const submit = async e => {
     e.preventDefault()
     if (!validation.isComplete || submitLock.current || store.canPerform?.('opportunities.create') === false) return
+    let parsedProbability
+    try {
+      parsedProbability = parseProbabilityPct(f.probabilityPct)
+      if (f.orderDate && !fiscalQuarter(f.orderDate)) throw new Error('Enter a valid expected order date.')
+      setForecastError('')
+    } catch (error) { setForecastError(error.message); return }
     submitLock.current = true
     setSubmitting(true)
     const today = new Date().toISOString().slice(0, 10)
@@ -220,15 +230,14 @@ export default function IntakeForm({ destinationPicker = null }) {
       eucName: f.eucName, eucLocation: f.eucLocation, oppName: f.oppName,
       owner, oppType: f.oppType, bu: f.bu, segment: f.segment,
       product: selectedProducts,
-      // prob is salesperson-set later — the form does not collect it (audio 00:24)
-      prob: '',
+      prob: f.prob, probabilityPct: parsedProbability,
       valueK: +f.valueK || 0, cogsK: 0,
       inquiryType: f.inquiryType, rfqNumber: f.rfqNumber || '', rfqDate: f.rfqDate || '',
       extractedFields, requestedItems,
-      createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
+      createDate: today, proposalDate: '', orderDate: f.orderDate, invoiceDate: '',
       status: 'Open', stage: f.inquiryType === 'Budgetary' ? 'Budgetary' : 'RFQ', closedReason: '',
       contactPerson: f.contactPerson, contactPhone: f.contactPhone, contactEmail: f.contactEmail || '',
-      lastUpdated: today, forecast: false, remarks: '', nextActionOwner: '',
+      lastUpdated: today, forecast: false, remarks: f.notes || '', nextActionOwner: '',
     })
     setPendingId(id)
     for (const attachment of attachments) store.addFile(id,'Customer Specs',{...attachment,webUrl:attachment.dataUrl,date:today})
@@ -706,6 +715,17 @@ export default function IntakeForm({ destinationPicker = null }) {
         </div>
 
         <div className="forms-columns"><label className="q">Source<Input field="source" /></label><label className="q">Notes<Input field="notes" /></label></div>
+        <div className="forms-columns">
+          <label className="q">Probability band (optional)<Select field="prob" options={['High', 'Medium', 'Low']} placeholder="Unspecified" /></label>
+          <label className="q">Win probability (%)
+            <input type="number" min="0" max="100" step="any" value={f.probabilityPct} onChange={e => { set('probabilityPct')(e); setForecastError('') }} placeholder="Optional" onInvalid={() => setForecastError('Enter a win probability between 0 and 100, or leave it blank.')} name="intake-form-probability-pct" />
+          </label>
+          <label className="q">Expected order date
+            <input type="date" value={f.orderDate} onChange={e => { set('orderDate')(e); setForecastError('') }} name="intake-form-order-date" />
+          </label>
+          <label className="q">Fiscal quarter / year<input readOnly value={fiscalQuarter(f.orderDate)} placeholder="—" name="intake-form-fiscal-quarter" /></label>
+        </div>
+        {forecastError && <p className="warnbox" role="alert">{forecastError}</p>}
         <div className="forms-actions">
           {pendingId && <button type="button" onClick={async () => {if (await store.flushPersistence([{entity:'opportunities',id:pendingId}]) && await store.saveOtherWorkspaceChanges()) nav(`/opp/${pendingId}?created=1`)}}>Retry saving created opportunity</button>}
           <button type="button" onClick={resetForm} className="secondary">Clear Form</button>

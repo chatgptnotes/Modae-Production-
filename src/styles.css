@@ -19535,3 +19535,23 @@ html[data-workspace-theme="dark"], html[data-workspace-theme="dark"] body {
     overflow: visible;
   }
 }
+
+/* Converted lead history uses the page scroll, rather than clipping tall columns. */
+.shell .lead-workspace.lead-workspace--converted {
+  height: auto;
+  min-height: 100%;
+  overflow: visible;
+}
+.lead-workspace--converted .converted-summary,
+.lead-workspace--converted .converted-grid,
+.lead-workspace--converted .converted-main,
+.lead-workspace--converted .converted-sidebar {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.lead-workspace--converted .converted-source-copy,
+.phone-lead-email .converted-source-copy {
+  max-height: none;
+  overflow: visible;
+}

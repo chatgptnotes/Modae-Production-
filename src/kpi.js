@@ -1,4 +1,5 @@
-import { probabilityWeight, fieldBase } from './workbookGovernance.js'
+import { opportunityProbabilityWeight } from './opportunityProbability.js'
+import { fieldBase } from './workbookGovernance.js'
 import { ageDays, monthKey, monthLabel, canViewCommercial, isSalesOwner } from './utils.js'
 import { OWNERS, routeForType } from './seed.js'
 import { bookingRegister, targetPlan, businessDate } from './orderBookings.js'
@@ -151,7 +152,7 @@ export function pipelineSeries(store, comm, months = 6) {
 
   const open = opps.filter(o => o.status === 'Open')
   const total = open.reduce((s, o) => s + (+o.valueK || 0), 0)
-  const weighted = open.reduce((s, o) => s + (+o.valueK || 0) * probabilityWeight(store.config, o.prob), 0)
+  const weighted = open.reduce((s, o) => s + (+o.valueK || 0) * opportunityProbabilityWeight(store.config, o), 0)
 
   const [prev, last] = [points[points.length - 2], points[points.length - 1]]
   const deltaPct = prev && prev.value && last ? Math.round(((last.value - prev.value) / prev.value) * 100) : null
@@ -175,7 +176,7 @@ export function analyticsSnapshot(store, role = store.role, { scope = 'role' } =
   const lost = scoped.filter(o => o.stage === 'Lost').length
   const decided = won + lost
   const pipelineK = sum(open)
-  const weightedK = open.reduce((total, o) => total + (+o.valueK || 0) * probabilityWeight(store.config, o.prob), 0)
+  const weightedK = open.reduce((total, o) => total + (+o.valueK || 0) * opportunityProbabilityWeight(store.config, o), 0)
   const byOwner = [...new Set(open.map(o => o.owner).filter(Boolean))]
     .map(name => {
       const rows = open.filter(o => o.owner === name)

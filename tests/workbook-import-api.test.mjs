@@ -50,3 +50,18 @@ test('changed workspace invalidates the review before any write', async () => {
   assert.equal((await request(handler, { action: 'commit', importData: payload, reviewToken: preview.result.reviewToken })).status, 409)
   assert.equal(f.writes.length, 0)
 })
+
+test('reviewed percentage import validates input and preserves zero through the atomic save', async () => {
+  const f = clientFixture(); const handler = createWorkbookImportHandler(() => f.client)
+  for (const probabilityPct of [-1, 101, '60']) {
+    const invalid = { ...payload, opportunities: [{ id: 'new', probabilityPct }] }
+    const result = await request(handler, { action: 'preview', importData: invalid })
+    assert.equal(result.status, 400)
+    assert.match(result.result.error, /probability/i)
+  }
+  const importData = { ...payload, opportunities: [{ id: 'new', prob: 'High', probabilityPct: 0 }] }
+  const preview = await request(handler, { action: 'preview', importData })
+  const saved = await request(handler, { action: 'commit', importData, reviewToken: preview.result.reviewToken })
+  assert.equal(saved.status, 200)
+  assert.equal(f.writes[0].p_batches.find(batch => batch.entity === 'opportunities').rows[0].data.probabilityPct, 0)
+})

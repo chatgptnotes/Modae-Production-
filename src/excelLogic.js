@@ -11,12 +11,12 @@ const columns = [
   ['invoiceDate', 'Invoice Date*', 7], ['status', 'Status*', 5], ['stage', 'Stage*', 11],
   ['closedReason', 'Closed Reason*', 6], ['contactPerson', 'Contact Person*', 7],
   ['contactPhone', 'Contact Phone #*', 6], ['lastUpdated', 'Last Updated', 5],
-  ['forecast', 'Forecast', 3], ['remarks', 'Update/Remarks', 10],
+  ['forecast', 'Forecast', 3], ['probabilityPct', 'Probability (%)', 9], ['remarks', 'Update/Remarks', 10],
 ]
 const letter = number => number > 26 ? `A${String.fromCharCode(64 + number - 26)}` : String.fromCharCode(64 + number)
 export const PIPELINE_COLUMNS = columns.map(([key, label, w], index) => ({
   key, label, w, letter: letter(index + 3),
-  ...(['valueK', 'cogsK', 'gmK', 'gmPct'].includes(key) ? { num: true } : {}),
+  ...(['valueK', 'cogsK', 'gmK', 'gmPct', 'probabilityPct'].includes(key) ? { num: true } : {}),
   ...(['createDate', 'proposalDate', 'orderDate', 'invoiceDate', 'lastUpdated'].includes(key) ? { wAll: 7 } : {}),
 }))
 

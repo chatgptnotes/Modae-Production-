@@ -151,7 +151,7 @@ export function leadRegistrationContext(lead = {}) {
   return {
     sourceLeadId: lead.id,
     sourceLeadSnapshot: { ...lead },
-    source: lead.source || '', originator: lead.originator || null,
+    source: lead.source || '', contactEmail: lead.contactEmail ?? lead.from ?? '', originator: lead.originator || null,
     sourceSubject: lead.subject || '', sourceBody: lead.body || '',
     attachments: lead.attachments || [], notes: lead.notes || '',
     legacyCustomerClass: lead.legacyCustomerClass,

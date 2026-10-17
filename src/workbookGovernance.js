@@ -26,7 +26,12 @@ export function fieldValues(config, key, current = []) {
 }
 export const fieldLabel = (config, key, value) => fieldRows(config, key).find(row => row.value === value)?.label || value
 export const fieldBase = (config, key, value) => fieldRows(config, key).find(row => row.value === value)?.base || value
-export const probabilityWeight = (config, value) => Number(config?.probabilityWeights?.[value] ?? ({ Low: 25, Medium: 50, High: 75 }[value] ?? 25)) / 100
+export const probabilityWeight = (config, value) => {
+  const fallback = { Low: 25, Medium: 50, High: 75 }[value] ?? 25
+  const configured = config?.probabilityWeights?.[value]
+  const weight = configured == null || String(configured).trim() === '' ? fallback : Number(configured)
+  return (Number.isFinite(weight) && weight >= 0 && weight <= 100 ? weight : fallback) / 100
+}
 
 // Transcribed from Customers B4:F24. Approximate / malformed thresholds remain
 // review items, rather than inventing a numerical interpretation.

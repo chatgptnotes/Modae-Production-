@@ -1,3 +1,4 @@
+import { parseProbabilityPct } from './opportunityProbability.js'
 import { canAccessPage, canPerform, effectiveAccess, isNonSalesUser } from './accessPolicy.js'
 import { classRule, DEFAULT_CUSTOMER_CLASSES, noExceptionKeys } from './customerClasses.js'
 import { canOverrideCustomerKyc } from './kycPolicy.js'
@@ -10,7 +11,7 @@ import { proposalApprovalSnapshot } from './approvalMemory.js'
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 const denied = message => { throw Object.assign(new Error(message || 'Your role does not have permission for this action.'), { status: 403 }) }
 const pick = (value, keys) => Object.fromEntries(keys.filter(key => key in (value || {})).map(key => [key, value[key]]))
-const PUBLIC_OPPORTUNITY = ['id', 'oppName', 'owner', 'sellTo', 'euc', 'eucName', 'customerStatus', 'legacyCustomerClass', 'customerClassificationVersion', 'oppType', 'route', 'context', 'stage', 'status', 'prob', 'expectedOrderDate', 'expectedDate', 'enquiryDate', 'created', 'lastUpdated', 'milestone', 'sourceLeadId', 'region', 'location', 'product', 'solution', 'closeReason', 'closeReasonNote', 'closedDate', 'leadVerification', 'valueK', 'orderDate', 'invoiceDate', 'offerDate', 'wonDate', 'proposalDate', 'createDate', 'closedReason', 'closedReasonNote']
+const PUBLIC_OPPORTUNITY = ['id', 'oppName', 'owner', 'sellTo', 'euc', 'eucName', 'customerStatus', 'legacyCustomerClass', 'customerClassificationVersion', 'oppType', 'route', 'context', 'stage', 'status', 'prob', 'probabilityPct', 'expectedOrderDate', 'expectedDate', 'enquiryDate', 'created', 'lastUpdated', 'milestone', 'sourceLeadId', 'region', 'location', 'product', 'solution', 'closeReason', 'closeReasonNote', 'closedDate', 'leadVerification', 'valueK', 'orderDate', 'invoiceDate', 'offerDate', 'wonDate', 'proposalDate', 'createDate', 'closedReason', 'closedReasonNote']
 const PUBLIC_LEAD = ['id', 'subject', 'from', 'sender', 'company', 'customer', 'status', 'assignedOwner', 'suggestedOwner', 'oppId', 'ts', 'source', 'receivedAt', 'customerStatus', 'legacyCustomerClass', 'customerClassificationVersion']
 const PUBLIC_BOOKING = ['id','oppId','owner','customer','title','po','booked','valueK','status','confirmedAt','confirmedBy','source']
 export const projectBooking = booking => booking ? pick(booking,PUBLIC_BOOKING) : booking
@@ -167,6 +168,12 @@ export function assertWorkspaceRowWrite(user, entity, previous, next, config, st
   if (deleted) requireAction('records.delete')
   if (entity === 'opportunities') {
     requireAction(previous ? 'opportunities.edit' : 'opportunities.create')
+    if (!deleted && !same(previous?.probabilityPct, next?.probabilityPct)) {
+      try {
+        const parsed = parseProbabilityPct(next?.probabilityPct)
+        if (next?.probabilityPct != null && parsed !== next.probabilityPct) throw new Error('Probability must be a number between 0 and 100, or blank.')
+      } catch (error) { throw Object.assign(new Error(error.message), { status: 400 }) }
+    }
     if (deleted && previous?.booking && !(state.sales?.orders || []).some(row => same(row,previous.booking))) denied('Preserve the confirmed booking in the order register before deleting this opportunity.')
     if (previous && !canReadPricing(user, previous, config, state)) {
       for (const key of changedKeys(previous, next)) if (!PUBLIC_OPPORTUNITY.includes(key)) denied('You do not have permission to edit protected opportunity data.')

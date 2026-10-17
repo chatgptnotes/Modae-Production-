@@ -1,10 +1,11 @@
+import { opportunityProbabilityWeight } from '../opportunityProbability.js'
 import { useFieldLists } from '../useFieldLists.js'
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 
 import { fmtRupeesFromK as fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, isSalesOwner, sameCustomer, productList, displayRoleLabel, displayRole } from '../utils.js'
-import { PROB_WEIGHT, winLossAnalysis, FUNNEL_STAGES } from '../kpi.js'
+import { winLossAnalysis, FUNNEL_STAGES } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import { Funnel } from './myDashboard/WorkspaceDashboard.jsx'
 import { segmentedFunnel } from './myDashboard/model.js'
@@ -148,7 +149,7 @@ export default function Analytics({ embedded = false }) {
     ? setF(p => ({ ...p, range: 'all', from: '', to: '' }))
     : set(k, 'All'))
 
-  const weightedK = open.reduce((s, o) => s + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0)
+  const weightedK = open.reduce((s, o) => s + (+o.valueK || 0) * opportunityProbabilityWeight(store.config, o), 0)
 
   const ageing = open
     .map(o => ({ ...o, age: ageDays(o.createDate) }))
@@ -284,7 +285,7 @@ export default function Analytics({ embedded = false }) {
             <thead><tr><th>Opportunity</th><th>Customer</th><th>Stage</th><th>Owner</th><th>Probability</th>{comm && <><th className="num">Value</th><th className="num">Weighted</th></>}<th>Age</th></tr></thead>
             <tbody>
               {ageing.map(row => <tr key={row.id} className={row.age > 30 ? 'stale' : ''}>
-                <td><Link className="oppid-link" to={`/proposal/${row.id}`}>{row.id}</Link><small>{row.oppName || '—'}</small></td><td>{row.sellTo || '—'}</td><td>{row.stage || '—'}</td><td>{displayRole(row.owner) || '—'}</td><td>{row.prob || 'Low'}</td>{comm && <><td className="num">{fmtLakh(row.valueK)}</td><td className="num">{fmtLakh((Number(row.valueK) || 0) * (PROB_WEIGHT[row.prob] ?? PROB_WEIGHT.Low))}</td></>}<td>{row.age} d</td>
+                <td><Link className="oppid-link" to={`/proposal/${row.id}`}>{row.id}</Link><small>{row.oppName || '—'}</small></td><td>{row.sellTo || '—'}</td><td>{row.stage || '—'}</td><td>{displayRole(row.owner) || '—'}</td><td>{row.prob || 'Low'}</td>{comm && <><td className="num">{fmtLakh(row.valueK)}</td><td className="num">{fmtLakh((Number(row.valueK) || 0) * opportunityProbabilityWeight(store.config, row))}</td></>}<td>{row.age} d</td>
               </tr>)}
               {!ageing.length && <tr><td colSpan={comm ? 8 : 6} className="empty">No open opportunities match the current filters.</td></tr>}
             </tbody>

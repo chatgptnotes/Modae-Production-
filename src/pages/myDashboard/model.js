@@ -1,4 +1,5 @@
-import { funnelRows, PROB_WEIGHT, salesPerformance, winLossAnalysis } from '../../kpi.js'
+import { opportunityProbabilityWeight } from '../../opportunityProbability.js'
+import { funnelRows, salesPerformance, winLossAnalysis } from '../../kpi.js'
 import { readiness, isBlocked, nextActionWith, actionableClarifications, isClarificationResolved, isClarificationCoveredByAnswer } from '../../gates.js'
 import { ageDays, ddMMyyyy, isTodayIST, isHiddenDashboardOpportunity, canPriceProposal } from '../../utils.js'
 import { fieldBase } from '../../workbookGovernance.js'
@@ -211,7 +212,7 @@ export function dashboardModel(store, { scope = 'global', owner = 'all', period 
     opportunityCounts, opportunitySummary, headlineOpenCount, headlinePipelineK, perf, wonPerformance, team,
     workbookOnly: String(store.importedWorkbook || '').startsWith('betser-sales-pipeline-usage-'),
     pipelineK: open.reduce((sum, o) => sum + (+o.valueK || 0), 0),
-    weightedK: open.reduce((sum, o) => sum + (+o.valueK || 0) * (PROB_WEIGHT[o.prob] ?? PROB_WEIGHT.Low), 0),
+    weightedK: open.reduce((sum, o) => sum + (+o.valueK || 0) * opportunityProbabilityWeight(store.config, o), 0),
     outcomes,
     otherClosedRows: pipeline.filter(o => o.status === 'Closed')
       .map(o => ({ ...o, stage: fieldBase(store.config, 'stage', o.stage) }))

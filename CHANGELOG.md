@@ -1,3 +1,14 @@
+## 2026-10-17 — Editable lead and opportunity forecast details
+
+- Add editable lead source, contact email and remarks, carrying saved decisions
+  into registration while retaining the original enquiry.
+- Add optional win probability (0–100%, including decimals) and expected order
+  date to opportunity creation and editing. Retain High/Medium/Low independently;
+  exact percentages drive weighted forecasts when supplied, with band fallback.
+- Preserve percentages through shared state, Tracker and workbook import/export.
+  Expected dates derive fiscal quarters without creating confirmed bookings.
+- Let converted lead details and original emails scroll fully on desktop and phone.
+
 ## 2026-10-17 — Focused two-card lead review
 
 - Remove the workflow progress strip and repeated RFQ heading from active lead

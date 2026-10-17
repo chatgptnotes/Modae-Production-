@@ -512,6 +512,17 @@ Our Ref 2511096RS) are retained with the local reference documents.
 
 ## Stage 1 lead intake and registration
 
+- On desktop and phone, edit lead source, contact email and remarks; save and
+  reload, then confirm registration carries the saved values while Original email
+  retains its sender and body.
+- In both creation forms and opportunity details, set High/Medium/Low separately
+  from 0%, 62.5% and blank percentage; save/reload and verify weighted forecasts
+  prefer the percentage and fall back to band weights only when blank. Reject
+  values outside 0–100. Check expected order date updates fiscal quarter without
+  creating a booking. Unrelated edits must preserve invalid historical percentages.
+- Open a converted lead with long details and original email. Scroll to the last
+  detail, last email line and attachments at desktop and phone widths.
+
 - At desktop and phone widths, open New Lead: two contact columns on desktop,
   one on phone, message/files span the form, actions remain reachable.
 - Submit a partial lead with a message only. Choose an owner explicitly, then

@@ -1,3 +1,5 @@
+import { parseProbabilityPct } from '../opportunityProbability.js'
+import { fiscalQuarter } from '../excelLogic.js'
 import { registrationFields } from '../businessRules.js'
 import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
@@ -73,7 +75,11 @@ export default function Register() {
   const [product, setProduct] = useState(leadFieldValue(fields, 'product') || guessFromList(allText, PRODUCTS) || '')
   const identitySeed = leadIdentity(lead, fields)
   const [identityDraft, setIdentityDraft] = useState(identitySeed)
-  const [details, setDetails] = useState({source:lead?.source || '', oppName:lead?.subject || '', contactEmail:lead?.contactEmail || lead?.from || '', notes:lead?.notes || '', opportunityScope:lead?.opportunityScope || lead?.body || ''})
+  const [details, setDetails] = useState({source:lead?.source || '', oppName:lead?.subject || '', contactEmail:lead?.contactEmail ?? lead?.from ?? '', notes:lead?.notes || '', opportunityScope:lead?.opportunityScope || lead?.body || ''})
+  const [prob, setProb] = useState(lead?.prob || 'Low')
+  const [probabilityPct, setProbabilityPct] = useState(lead?.probabilityPct == null ? '' : String(lead.probabilityPct))
+  const [orderDate, setOrderDate] = useState(lead?.orderDate || '')
+  const [forecastError, setForecastError] = useState('')
   const [identitySaved, setIdentitySaved] = useState(false)
   const [creating, setCreating] = useState(false)
   const submitLock = useRef(false)
@@ -179,6 +185,12 @@ export default function Register() {
 
   const create = async () => {
     if (blocked || missingIdentity.length || creating || store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false) return
+    let parsedProbability
+    try {
+      parsedProbability = parseProbabilityPct(probabilityPct)
+      if (orderDate && !fiscalQuarter(orderDate)) throw new Error('Enter a valid expected order date.')
+      setForecastError('')
+    } catch (error) { setForecastError(error.message); return }
     const existing = existingLeadOpportunity(store.opportunities, lead)
     if (existing) { nav('/opp/' + existing.id); return }
     const isOverride = creationOverride
@@ -219,11 +231,11 @@ export default function Register() {
       oppName: details.oppName, opportunityScope: details.opportunityScope, owner: finalOwner, oppType, bu, segment, product,
       suggestedOwner: creationRegionalOwner || finalOwner,
       ownerOverrideReason: isOverride ? ownerOverrideReason.trim() : '',
-      prob: 'Low', valueK: 0, cogsK: 0,
+      prob, probabilityPct: parsedProbability, valueK: 0, cogsK: 0,
       rfqNumber, rfqDate,
       extractedFields: acceptedLeadFields(fields),
       requestedItems: extracted,
-      createDate: today, proposalDate: '', orderDate: '', invoiceDate: '',
+      createDate: today, proposalDate: '', orderDate, invoiceDate: '',
       status: 'Open', stage: 'Lead', milestone: 'Screening', closedReason: '',
       contactPerson, contactPhone,
       // Commercial/customer master details may be completed after registration
@@ -238,7 +250,7 @@ export default function Register() {
       // ModAE senders are filtered before it reaches the opportunity.
       contactEmail: details.contactEmail,
       lastUpdated: today, forecast: false,
-      remarks: lead.notes || '',
+      remarks: details.notes,
       route: routeForType(oppType, store.config),
     }
     let conversion
@@ -402,6 +414,22 @@ export default function Register() {
               </select>
             </label>
           </div>
+          <div className="section-title" style={{ marginTop: 12 }}>Forecast details (optional)</div>
+          <div className="registration-fields" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
+            <label className="afield">Probability band
+              <select value={prob} onChange={e => setProb(e.target.value)} name="register-prob"><option value="">Unspecified</option>{['High', 'Medium', 'Low'].map(band => <option key={band} value={band}>{band}</option>)}</select>
+            </label>
+            <label className="afield">Win probability (%)
+              <input type="number" min="0" max="100" step="any" value={probabilityPct} onChange={e => { setProbabilityPct(e.target.value); setForecastError('') }} placeholder="Optional" name="register-probability-pct" />
+            </label>
+            <label className="afield">Expected order date
+              <input type="date" value={orderDate} onChange={e => { setOrderDate(e.target.value); setForecastError('') }} name="register-order-date" />
+            </label>
+            <label className="afield">Fiscal quarter / year
+              <input readOnly value={fiscalQuarter(orderDate)} placeholder="—" name="register-fiscal-quarter" />
+            </label>
+          </div>
+          {forecastError && <p className="warnbox" role="alert">{forecastError}</p>}
           <p className="hint" style={{ marginTop: 6 }}>
             Proposal route: <b>{routeForType(oppType, store.config)}</b> — set from the opportunity type.
           </p>

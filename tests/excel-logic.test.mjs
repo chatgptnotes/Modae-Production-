@@ -86,7 +86,7 @@ test('recovery preserves edits, existing customer colours, other slices and dele
   assert.deepEqual(again.opportunities, merged.opportunities)
 })
 test('Excel column order is complete and excludes Next Action', () => {
-  assert.equal(PIPELINE_COLUMNS.length, 31)
+  assert.equal(PIPELINE_COLUMNS.length, 32)
   assert.equal(PIPELINE_COLUMNS[20].key, 'orderDate')
   assert.equal(PIPELINE_COLUMNS[21].key, 'fqFy')
   assert.equal(PIPELINE_COLUMNS[22].key, 'invoiceDate')

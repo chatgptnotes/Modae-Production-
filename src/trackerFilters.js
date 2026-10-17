@@ -30,6 +30,7 @@ export const COL_TYPES = {
   segment: 'enum',
   product: 'multi-enum',
   prob: 'enum',
+  probabilityPct: 'number',
   valueK: 'currency',
   cogsK: 'currency',
   gmK: 'currency',

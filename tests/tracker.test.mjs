@@ -187,7 +187,7 @@ test('tracker has no trailing proposal action column', () => {
   assert.doesNotMatch(tracker, /Open ▸/)
   assert.doesNotMatch(tracker, /Revision opened from Opportunities list/)
   assert.doesNotMatch(tracker, /PROPOSAL_PCT|PROPOSAL_PX/)
-  assert.match(tracker, /<td colSpan=\{13\}><\/td>/)
+  assert.match(tracker, /<td colSpan=\{14\}><\/td>/)
 })
 
 test('closing from the Status column requires outcome then reason', () => {

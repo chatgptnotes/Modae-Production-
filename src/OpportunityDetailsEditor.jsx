@@ -1,7 +1,7 @@
 import { normalizeCustomerClass } from './customerClasses.js'
 import { releaseWorkspaceElementInputs } from './workspaceInputOwnership.js'
 import { workspaceSyncState } from './workspaceSyncState.js'
-import { changedOpportunityFields, validateOpportunityEdit } from './opportunityEdits.js'
+import { changedOpportunityFields, validateOpportunityEdit, shouldValidateOpportunityInput } from './opportunityEdits.js'
 import { useFieldLists } from './useFieldLists.js'
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { displayOpportunityId } from './seed.js'
@@ -16,7 +16,7 @@ const Field = ({ label, children }) => (
 
 const ReadOnlyField = ({ label, value, wide = false }) => (
   <Field label={label}>
-    <div className={`read-only-field ${wide ? 'read-only-field-wide' : ''}`}>{value || '—'}</div>
+    <div className={`read-only-field ${wide ? 'read-only-field-wide' : ''}`}>{value == null || value === '' ? '—' : value}</div>
   </Field>
 )
 
@@ -30,22 +30,22 @@ const displayOpportunityScope = value => String(value || '')
   .trim()
 
 const fields = [
-  'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'sellTo', 'customerStatus', 'category', 'location', 'cogsK', 'forecast', 'remarks',
-  'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product', 'prob',
+  'owner', 'source', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'sellTo', 'customerStatus', 'category', 'location', 'cogsK', 'forecast', 'remarks',
+  'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product', 'prob', 'probabilityPct',
   'contactPerson', 'contactPhone', 'contactEmail', 'sellToCustomerLocation',
   'orderDate', 'invoiceDate', 'deliveryDate', 'offerDate',
   'additionalCustomerInformation', 'commercialNotes', 'paymentTerms', 'deliveryTerms', 'incoterms',
 ]
 
 const makeDraft = opp => ({
-  owner: opp.owner || '', oppName: opp.oppName || '', opportunityScope: opp.opportunityScope || '', sellTo: opp.sellTo || '',
+  owner: opp.owner || '', source: opp.source || '', oppName: opp.oppName || '', opportunityScope: opp.opportunityScope || '', sellTo: opp.sellTo || '',
   rfqNumber: opp.rfqNumber || '', rfqDate: opp.rfqDate || '', valueK: opp.valueK == null ? '' : opp.valueK * 1000,
   cogsK: opp.cogsK == null ? '' : opp.cogsK * 1000, forecast: !!opp.forecast, remarks: opp.remarks || '',
   category: opp.category || '', location: opp.location || '',
   customerStatus: normalizeCustomerClass(opp.customerStatus), eucName: opp.eucName || '',
   eucLocation: opp.eucLocation || '', oppType: opp.oppType || '',
   bu: opp.bu || '', segment: opp.segment || '', solution: solutionList(opp.solution),
-  product: productList(opp.product), prob: opp.prob || '',
+  product: productList(opp.product), prob: opp.prob || '', probabilityPct: opp.probabilityPct == null ? '' : String(opp.probabilityPct),
   contactPerson: opp.contactPerson || '', contactPhone: opp.contactPhone || '',
   contactEmail: opp.contactEmail || '', sellToCustomerLocation: opp.sellToCustomerLocation || opp.location || '',
   additionalCustomerInformation: opp.additionalCustomerInformation || '',
@@ -66,6 +66,7 @@ export function OpportunityDetailsView({ opp, className = '', showValue = true }
       <div className="dgrid2 opportunity-details-grid">
         <ReadOnlyField label="Opp ID" value={`${displayOpportunityId(opp.id)} (Sl ${opp.sl})`} />
         <ReadOnlyField label="Owner" value={displayRole(opp.owner)} />
+        <ReadOnlyField label="Source" value={opp.source} />
         <ReadOnlyField label="RFQ Number" value={opp.rfqNumber} />
         <ReadOnlyField label="RFQ Date" value={opp.rfqDate} />
         <div className="opportunity-details-wide">
@@ -99,7 +100,8 @@ export function OpportunityDetailsView({ opp, className = '', showValue = true }
         <ReadOnlyField label="Segment" value={opp.segment} />
         {showValue && <ReadOnlyField label="Estimated Value (₹)" value={opp.valueK == null ? '—' : `₹ ${Number(opp.valueK * 1000).toLocaleString('en-IN')}`} />}
         <ReadOnlyField label="Solution" value={solutionLabel(opp.solution)} />
-        <ReadOnlyField label="Probability" value={opp.prob} />
+        <ReadOnlyField label="Probability band" value={opp.prob} />
+        <ReadOnlyField label="Win probability (%)" value={opp.probabilityPct == null ? '—' : `${opp.probabilityPct}%`} />
         <ReadOnlyField label="Product" value={product.length ? product.join(', ') : 'No products selected'} />
       </div>
 
@@ -210,8 +212,6 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
 
   const save = async () => {
     if (!canEdit) return
-    const invalid = formRef.current?.querySelector(':invalid')
-    if (invalid) { invalid.reportValidity(); return }
     try {
       const latest = store.opportunities?.find(row => row.id === opp.id) || opp
       const normalizedDraft = { ...draft }
@@ -220,13 +220,22 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
         if (normalizedDraft[key] !== '') normalizedDraft[key] = Number(normalizedDraft[key])
       }
       const changed = changedOpportunityFields(baseline.current, normalizedDraft, makeDraft(latest))
+      if (Object.hasOwn(changed, 'probabilityPct')) validateOpportunityEdit('probabilityPct', changed.probabilityPct)
+      const invalid = [...(formRef.current?.querySelectorAll(':invalid') || [])].find(input =>
+        shouldValidateOpportunityInput(input.name === 'opportunity-details-editor-probability-pct' ? 'probabilityPct' : input.name,
+          baseline.current, normalizedDraft, input.validity))
+      if (invalid) {
+        if (invalid.name === 'opportunity-details-editor-probability-pct') setError('Enter a probability between 0 and 100, or leave it blank.')
+        invalid.reportValidity()
+        return
+      }
       const patch = {}
       for (const key of fields) {
         if (!(key in changed)) continue
         if (key === 'owner' && !canTransfer) continue
         if (key === 'valueK' && !showValue || key === 'cogsK' && !showCost) continue
         validateOpportunityEdit(key, changed[key])
-        patch[key] = ['valueK', 'cogsK'].includes(key) ? (changed[key] === '' ? null : rupeesToK(changed[key])) : changed[key]
+        patch[key] = key === 'probabilityPct' ? validateOpportunityEdit(key, changed[key]) : ['valueK', 'cogsK'].includes(key) ? (changed[key] === '' ? null : rupeesToK(changed[key])) : changed[key]
       }
       if (Object.hasOwn(patch, 'customerStatus')) { patch.legacyCustomerClass = null; patch.customerClassificationVersion = 2 }
       if (Object.keys(patch).length) store.updateOpportunity(opp.id, patch)
@@ -286,6 +295,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
       <div className="dgrid2 opportunity-details-grid">
         <Field label="Opp ID"><div className="ro read-only-field">{displayOpportunityId(opp.id)} <span>(Sl {opp.sl})</span></div></Field>
         <Field label="Owner"><select disabled={!canTransfer} title={!canTransfer ? "Ownership transfers require management permission" : undefined} value={draft.owner} onChange={e => set('owner', e.target.value)} name="opportunity-details-editor-owner">{OWNERS.map(x => <option key={x} value={x}>{labelFor('owner', x)}</option>)}</select></Field>
+        <Field label="Source"><input type="text" value={draft.source} onChange={e => set('source', e.target.value)} name="opportunity-details-editor-source" /></Field>
         <Field label="RFQ Number"><input type="text" value={draft.rfqNumber} onChange={e => set('rfqNumber', e.target.value)} name="opportunity-details-editor-rfq-number" /></Field>
         <Field label="RFQ Date"><input type="date" value={draft.rfqDate} onChange={e => set('rfqDate', e.target.value)} name="opportunity-details-editor-rfq-date" /></Field>
         <div style={{ gridColumn: '1 / -1' }}>
@@ -360,7 +370,8 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
             )}
           </div>
         </Field>
-        <Field label="Probability"><select value={draft.prob} onChange={e => set('prob', e.target.value)} name="opportunity-details-editor-prob"><option value="">—</option>{PROB_LEVELS.map(x => <option key={x} value={x}>{labelFor('prob', x)}</option>)}</select></Field>
+        <Field label="Probability band"><select value={draft.prob} onChange={e => set('prob', e.target.value)} name="opportunity-details-editor-prob"><option value="">—</option>{PROB_LEVELS.map(x => <option key={x} value={x}>{labelFor('prob', x)}</option>)}</select></Field>
+        <Field label="Win probability (%)"><input type="number" min="0" max="100" step="any" value={draft.probabilityPct} onChange={e => set('probabilityPct', e.target.value)} placeholder="Optional" name="opportunity-details-editor-probability-pct" /></Field>
         <Field label="Product">
           <div className="compact-product-picker">
             <button

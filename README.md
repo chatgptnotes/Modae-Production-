@@ -238,6 +238,13 @@ submission, and follow-up.
 - EUC suggestions prioritize explicit end-user details over site and general
   address fields. A buyer alone does not establish the EUC; missing end-user
   names stay blank for review. AI suggestions remain pending human acceptance.
+- Lead decisions include editable source, contact email and remarks; saved values
+  carry into registration without changing the original enquiry.
+- Opportunity creation and editing support an optional win probability percentage
+  (0–100, decimals allowed) and expected order date with a derived fiscal quarter.
+  High/Medium/Low remains independently editable. Weighted forecasts use the exact
+  percentage when supplied, otherwise the configured band weight. Expected dates
+  do not create confirmed bookings. Workbook imports/exports preserve percentages.
 - Registers qualified leads as opportunities. Opportunity ID labels omit legacy
   owner suffixes; ownership remains available in separate Owner fields.
 - Opportunities search offers **Search with AI** beneath typed text. Natural-language

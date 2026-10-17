@@ -20,6 +20,16 @@ test('repeat conversion finds the original opportunity even if lead link is stal
   assert.equal(existingLeadOpportunity([opportunity],{id:'other',oppId:'OP-1'}), opportunity)
   assert.equal(existingLeadOpportunity([opportunity],{id:'other'}),null)
 })
+test('edited lead source, email and notes carry forward without replacing the original message', () => {
+  const lead = { id: 'LD-edited', source: 'WhatsApp / Phone Call', from: 'original@example.com', contactEmail: 'corrected@example.com', notes: 'Call before quoting', body: 'Original customer enquiry', attachments: [{ name: 'rfq.pdf' }] }
+  const context = leadRegistrationContext(lead)
+  assert.equal(context.source, lead.source)
+  assert.equal(context.contactEmail, 'corrected@example.com')
+  assert.equal(context.notes, 'Call before quoting')
+  assert.equal(context.sourceBody, 'Original customer enquiry')
+  assert.equal(context.sourceLeadSnapshot.from, 'original@example.com')
+  assert.deepEqual(context.attachments, lead.attachments)
+})
 test('blank enquiry identity remains blank and company alone is sufficient', () => {
   const identity = leadIdentity({}, [])
   assert.equal(identity.sellTo,'')

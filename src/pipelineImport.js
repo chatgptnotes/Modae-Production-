@@ -1,3 +1,4 @@
+import { parseProbabilityPct } from './opportunityProbability.js'
 import XLSX from 'xlsx-js-style'
 import { fiscalQuarter, financials, customersFromOpportunities, classificationGuidance } from './excelLogic.js'
 
@@ -95,6 +96,7 @@ function currentOpportunity(row) {
     segment: textOf(rowValue(row, 'Segment')),
     product: textOf(rowValue(row, 'Product*', 'Product')),
     prob: textOf(rowValue(row, 'Prob (%)*', 'Prob (%)')),
+    probabilityPct: parseProbabilityPct(valueOf(rowValue(row, 'Probability (%)', 'Probability percentage'))),
     valueK, cogsK, ...financials({ valueK, cogsK }),
     createDate: textOf(rowValue(row, 'Create Date*', 'Offer Date')),
     proposalDate: textOf(rowValue(row, 'Proposal Date')),
@@ -129,7 +131,7 @@ function oldOpportunity(row) {
     sellTo, category: textOf(rowValue(row, 'Category')), location: textOf(rowValue(row, 'Location')),
     customerStatus: null, eucName: textOf(rowValue(row, 'End User Customer')), eucLocation: textOf(rowValue(row, 'EU Location')),
     owner: textOf(rowValue(row, 'Owner')), oppType, bu: null, segment: null, product: textOf(rowValue(row, 'Product')),
-    prob: textOf(rowValue(row, 'Prob (%)')), valueK, cogsK, ...financials({ valueK, cogsK }),
+    prob: textOf(rowValue(row, 'Prob (%)')), probabilityPct: parseProbabilityPct(valueOf(rowValue(row, 'Probability (%)', 'Probability percentage'))), valueK, cogsK, ...financials({ valueK, cogsK }),
     createDate: null, offerDate: textOf(rowValue(row, 'Offer Date')), proposalDate: null,
     orderDate: textOf(rowValue(row, 'EOD')), expectedOrderDate: textOf(rowValue(row, 'EOD')), deliveryDate: textOf(rowValue(row, 'EDD/ADD')),
     fqFy: fiscalQuarter(textOf(rowValue(row, 'EOD'))), invoiceDate: null, status, stage, closedReason: textOf(rowValue(row, 'Closed Reason')),

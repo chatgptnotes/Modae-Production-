@@ -832,7 +832,7 @@ test('the pipeline snapshot is bars plus a stat list, not a table', () => {
   const css = read('src/styles.css')
   for (const cls of ['snap-open', 'snap-weighted', 'snap-booked']) assert.match(css, new RegExp(`\.mb-fill\.${cls}`))
   // Weighted consumers use the configured shared probability helper.
-  assert.match(source, /probabilityWeight\(store\.config, o\.prob\)/)
+  assert.match(source, /opportunityProbabilityWeight\(store\.config, o\)/)
   assert.doesNotMatch(source, /\{ Low: \.25, Medium: \.5, High: \.75 \}/)
 })
 

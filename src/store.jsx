@@ -1,3 +1,4 @@
+import { parseProbabilityPct } from './opportunityProbability.js'
 import { mergeWorkspaceView, workspaceViewForPath } from './workspaceViews.js'
 import { activeWorkspaceInput, appliedWorkspaceInput } from './workspaceInputOwnership.js'
 import { WorkspaceSyncRuntime } from './ui/WorkspaceSync.jsx'
@@ -1042,6 +1043,7 @@ export function StoreProvider({ children }) {
     },
 
     updateOpportunity(id, patch) {
+      if ('probabilityPct' in patch) patch = { ...patch, probabilityPct: parseProbabilityPct(patch.probabilityPct) }
       const today = nowIST().slice(0, 10)
       // Status-folder diff BEFORE the patch lands — a stage change (Won/Lost/
       // reopen) moves the SharePoint folder between the four status folders.
@@ -1061,7 +1063,7 @@ export function StoreProvider({ children }) {
         'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'cogsK', 'gmK', 'gmPct', 'fqFy',
         'sellTo', 'category', 'location', 'customerStatus', 'eucName',
         'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product',
-        'prob', 'contactPerson', 'contactPhone', 'contactEmail',
+        'prob', 'probabilityPct', 'contactPerson', 'contactPhone', 'contactEmail',
         'additionalCustomerInformation', 'sellToCustomerLocation',
         'commercialNotes', 'paymentTerms', 'deliveryTerms', 'incoterms',
         'orderDate', 'invoiceDate', 'deliveryDate', 'offerDate',

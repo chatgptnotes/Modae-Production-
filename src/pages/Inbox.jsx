@@ -1249,6 +1249,9 @@ function ReadOnlyDecisionForm({ lead, items = [] }) {
         <Field label="EUC location" fieldKey="eucLocation">{eucLocation}</Field>
         <Field label="Contact person" fieldKey="contactPerson">{contact}</Field>
         <Field label="Contact phone" fieldKey="contactPhone">{phone}</Field>
+        <Field label="Contact email" fieldKey="contactEmail">{lead.contactEmail ?? lead.from}</Field>
+        <Field label="Lead source" fieldKey="source">{lead.source}</Field>
+        <Field label="Remarks / notes" fieldKey="notes" multiline>{lead.notes}</Field>
         <div className="lead-decision-subsection">Routing and ownership</div>
         <Field label="Assigned owner" fieldKey="owner">{owner}</Field>
         <Field label="Opportunity type" fieldKey="oppType">{oppType}</Field>
@@ -1435,6 +1438,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     const buSegment = splitBuSegment(ai.fields)
     const sourcePhone = customerPhoneFromText(`${lead.subject || ''}\n${lead.body || ''}`)
     return ({
+    source: lead.source || '',
+    contactEmail: lead.contactEmail ?? (internalSender ? '' : lead.from || ''),
+    notes: lead.notes ?? lead.remarks ?? '',
     sellTo: identity.sellTo || sourceValue('Sell-to customer'),
     sellToCustomerLocation: lead.sellToCustomerLocation || customer?.location || sourceValue('Sell-to customer location') || '',
     scope: scopeForReview(lead, mappedLeadFieldValue(ai.fields, 'scope') || sourceValue('Opportunity scope')),
@@ -1915,6 +1921,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     const overrideReason = isOverride ? (lead.ownerOverrideReason || '').trim() : ''
     const effectiveOwner = isOverride && !overrideReason ? routedOwner : draft.owner
     return {
+      source: String(draft.source || '').trim(),
+      contactEmail: String(draft.contactEmail || '').trim(),
+      notes: String(draft.notes || '').trim(),
       sellTo: String(draft.sellTo || '').trim(),
       sellToCustomerLocation: String(draft.sellToCustomerLocation || '').trim(),
       opportunityScope: String(draft.scope || '').trim(),
@@ -2390,6 +2399,16 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
         </div>
         <div className="lead-decision-grid">
           <div className="lead-decision-subsection">Customer and contact</div>
+          <label><span className="decision-field-heading">Lead source</span>
+            <select value={decisionDraft.source} disabled={lead.status === 'Dropped'} onChange={e => updateDecisionField('source', e.target.value)} name="lead-decision-source">
+              <option value="">Select source</option>
+              {decisionDraft.source && !LEAD_SOURCES.includes(decisionDraft.source) && <option value={decisionDraft.source}>{decisionDraft.source}</option>}
+              {LEAD_SOURCES.map(source => <option key={source} value={source}>{source}</option>)}
+            </select>
+          </label>
+          <label><span className="decision-field-heading">Contact email</span>
+            <input type="email" value={decisionDraft.contactEmail} disabled={lead.status === 'Dropped'} onChange={e => updateDecisionField('contactEmail', e.target.value)} placeholder="name@customer.com" name="lead-decision-contact-email" />
+          </label>
             <div data-phone-field="Sell-to customer">
               <span className="decision-field-heading">Sell To Customer {registrationRequired.has('sellTo') && <span className="required-mark">*</span>} {decisionAiMeta('sellTo', false)}</span>
               <CustomerPicker
@@ -2436,6 +2455,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           <label><span className="decision-field-heading">Contact Phone {registrationRequired.has('contactPhone') && <span className="required-mark">*</span>} {decisionAiMeta('contactPhone', false)}</span>
             <div className="decision-value-row"><input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" name="inbox-contact-phone" />{decisionAiStatus('contactPhone')}</div>
+          </label>
+          <label className="lead-decision-full"><span className="decision-field-heading">Remarks / notes</span>
+            <textarea rows={3} value={decisionDraft.notes} disabled={lead.status === 'Dropped'} onChange={e => updateDecisionField('notes', e.target.value)} placeholder="Additional lead information" name="lead-decision-notes" />
           </label>
           <div className="lead-decision-subsection">Routing and ownership</div>
           <label><span className="decision-field-heading">Assigned owner</span>
@@ -3472,7 +3494,7 @@ export default function Inbox() {
     if (phone) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><LegacyLeadDetail key={sel.id} lead={sel} phoneLayout /></WorkspaceRecordBoundary>
     const age = ageDays(sel.ts)
     return (
-    <div className="lead-workspace">
+    <div className={`lead-workspace${sel.status === 'Converted' ? ' lead-workspace--converted' : ''}`}>
         <div className="ws-topbar">
           <button className="ws-back" onClick={() => nav('/inbox')}>
             <Icon name="inbox" size={13} /> Back to inbox

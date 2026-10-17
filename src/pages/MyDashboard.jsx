@@ -1,5 +1,6 @@
+import { opportunityProbabilityWeight } from '../opportunityProbability.js'
 import { allocateTarget, targetRupees } from './myDashboard/targetAllocation.js'
-import { probabilityWeight, fieldBase } from '../workbookGovernance.js'
+import { fieldBase } from '../workbookGovernance.js'
 import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
@@ -8,7 +9,7 @@ import { ROLES, displayOpportunityId } from '../seed.js'
 
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
 import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtRupeesFromK as fmtLakh, ddMmmYY, ddMMyyyy, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
-import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT, funnelRows } from '../kpi.js'
+import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, funnelRows } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
 import WorkspaceDashboard from './myDashboard/WorkspaceDashboard.jsx'
@@ -670,7 +671,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head,
   const visibleBlocked = blocked.filter(({ opp }) => !isHiddenDashboardOpportunity(opp))
   const visibleNextActions = nextActions.filter(({ opp }) => !isHiddenDashboardOpportunity(opp))
   const openValue = visibleOpen.reduce((s, o) => s + (+o.valueK || 0), 0)
-  const weightedValue = visibleOpen.reduce((s, o) => s + (+o.valueK || 0) * probabilityWeight(store.config, o.prob), 0)
+  const weightedValue = visibleOpen.reduce((s, o) => s + (+o.valueK || 0) * opportunityProbabilityWeight(store.config, o), 0)
   const myLeads = store.leads.filter(l => scope === 'global' || (l.assignedOwner || l.suggestedOwner) === role)
   const leads = myLeads.filter(l => l.status === 'New')
   const unproposed = visibleOpen.filter(o => !o.proposalDate)

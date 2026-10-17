@@ -441,7 +441,10 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
     let value = e.target.type === 'checkbox' ? e.target.checked : e.target.value
     const current = store.opportunities.find(o => o.id === id)
     if (!canEditRow(current) || field === 'owner' && !canTransfer) return
-    try { validateOpportunityEdit(field, value) } catch (error) { window.alert(error.message); return }
+    try {
+      const validated = validateOpportunityEdit(field, value)
+      if (field === 'probabilityPct') value = validated
+    } catch (error) { window.alert(error.message); return }
     // Numeric columns must store numbers so margin calculations and proposal
     // write-back comparisons remain stable.
     if (field === 'valueK' || field === 'cogsK') value = e.target.value === '' ? null : rupeesToK(e.target.value)
@@ -873,7 +876,11 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
                 <td onClick={selectCell(o, COLS[29])} className={isSel(o, COLS[29]) ? 'cell-sel' : ''} style={{ textAlign: 'center' }}>
                   <EditableOpportunityCell type="checkbox" label="Forecast" checked={!!o.forecast} onChange={upd(o.id, 'forecast')} disabled={!canEditRow(o)} title="Include for roll-up" />
                 </td>
-                <td onClick={selectCell(o, COLS[30])} className={isSel(o, COLS[30]) ? 'cell-sel' : ''} title={o.remarks}><EditableOpportunityCell type="text" value={o.remarks} label={COLS.find(c => c.key === 'remarks')?.label} onChange={upd(o.id, 'remarks')} disabled={!canEditRow(o)} /></td>
+                <td onClick={selectCell(o, COLS[30])} className={`num ${isSel(o, COLS[30]) ? 'cell-sel' : ''}`}>
+                  <span className="tracker-cell-label">{COLS[30].label}</span>
+                  <EditableOpportunityCell type="number" min="0" max="100" step="any" value={o.probabilityPct ?? ''} label={COLS[30].label} onChange={upd(o.id, 'probabilityPct')} disabled={!canEditRow(o)} placeholder="Optional" />
+                </td>
+                <td onClick={selectCell(o, COLS[31])} className={isSel(o, COLS[31]) ? 'cell-sel' : ''} title={o.remarks}><EditableOpportunityCell type="text" value={o.remarks} label={COLS.find(c => c.key === 'remarks')?.label} onChange={upd(o.id, 'remarks')} disabled={!canEditRow(o)} /></td>
 
               </EditableOpportunityRow>
             ))}
@@ -903,7 +910,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
               <td className="num">{fmtRupeesFromK(totals.c)}</td>
               <td className="num">{fmtRupeesFromK(totals.v - totals.c)}</td>
               <td className="num" style={{ color: 'var(--amber-text)' }}>{totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : ''}</td>
-              <td colSpan={13}></td>
+              <td colSpan={14}></td>
             </tr>
           </tfoot>
         </table>
