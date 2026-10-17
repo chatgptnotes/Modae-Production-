@@ -4,6 +4,34 @@
 Start each scenario from a clean **Reset all demo data** (Demo Launcher or Admin).
 Record browser, viewport, role, result and console errors.
 
+## Account name propagation
+
+- Sign in as the dedicated local Admin and preview an active Sales or Non-sales
+  account. After switching, verify the target's permissions and that Preview as
+  user is absent. Check LJ, Ashwath and Lokesh cannot see or invoke preview despite
+  their admin permissions. A connected session must never expose preview.
+- Rename the dedicated Admin and change its password, then refresh and sign in
+  again: its preview access must follow the account ID. Suspending, demoting or
+  deleting that account must disable preview without restoring it after refresh.
+- In Personal settings on desktop and phone, change the signed-in password as a
+  Non-sales user and a Sales/Management user. Check incorrect current password,
+  mismatched confirmation, visibility controls and success field clearing. Sign
+  out and confirm only the new password works. Another account must be unaffected.
+  In connected mode check provider errors and that workspace drafts survive;
+  passwords must never appear in audit or shared workspace requests.
+- Open account Actions at desktop and phone widths, including the bottom row.
+  The dropdown must stay visible without changing row height or pagination.
+  Check arrows, Home/End, Escape, Tab, outside dismissal, disabled actions and
+  Edit/Reset password/Delete; only one menu should remain open at a time.
+- Edit a linked sales account name in Users and roles → Accounts. Confirm the
+  new name in New Lead, owner filters, opportunity rows, dashboard drilldowns,
+  approvals, folders and a new pipeline export, including phone/tablet views.
+  The Owner names tab must be absent. Restore the account name
+  after checking; ownership IDs and permissions must remain unchanged.
+- Rename the signed-in account and confirm the sidebar updates. Reload, sign in
+  again and refresh a second session; the saved name must remain consistent.
+  Previously sent messages and stored document snapshots must keep their content.
+
 ## Confirmed bookings and performance
 
 - At desktop and phone widths, verify imported Won opportunities show booking
@@ -481,3 +509,43 @@ Our Ref 2511096RS) are retained with the local reference documents.
 - Switch accounts during a save/read: old results do not enter the new workspace.
 - Deploy while the app stays focused: an old-deployment mutation is rejected.
 - Disable BroadcastChannel: no fallback polling; activation still revalidates.
+
+## Stage 1 lead intake and registration
+
+- At desktop and phone widths, open New Lead: two contact columns on desktop,
+  one on phone, message/files span the form, actions remain reachable.
+- Submit a partial lead with a message only. Choose an owner explicitly, then
+  repeat without an owner and verify routing rules/LJS fallback.
+- Sign in as Non-sales: only New Lead and personal settings are available;
+  direct links to dashboard/inbox/opportunities must not disclose records.
+- Review a lead as sales: edit details, manually choose Red/Yellow/Green, reassign,
+  drop/reopen, then qualify. Registration must carry its data and attachments;
+  no opportunity is created before explicit submission.
+- Submit registration, reload, then revisit the same lead: one opportunity only.
+  Repeat from two devices in staging after applying the conversion migration.
+- Leave KYC incomplete and confirm registration/proposal/Won do not gain a KYC
+  blocker; unverified records must still not claim Verified.
+- Enter ₹500 as a target and split quarters: each shows ₹125. Confirm INR values
+  in dashboard, register editing and export while historical totals stay equal.
+
+## Admin permissions, integrations and full backup
+
+- Open Accounts → Permissions for a Sales account. Deny one page/action, save
+  with a reason, refresh as that account and check both navigation and API denial.
+  Restore Inherit. Confirm Admin/Management and Non-sales boundaries remain intact.
+- In a connected staging workspace, add an AI provider key; load its models,
+  select text/document defaults and test an actual extraction. Check invalid keys,
+  model failures and disabling a selected provider produce actionable errors.
+  Confirm browser responses and logs contain no stored keys.
+- Export records with lead attachments, converted-lead opportunity documents and
+  local uploads. Inspect readable Excel and original bytes inside the ZIP. Confirm
+  passwords, API keys and session tokens are absent. Missing original files must
+  block full export.
+- Review a backup against an empty disposable workspace. Change a setting after
+  review and verify restore refuses the stale review. Restore after another review;
+  verify booking/approval evidence, file bytes, audit and numbering reservations.
+- Confirm local archives cannot restore connected workspaces, signatures reject
+  modified shared archives, and shared backups from another workspace are rejected.
+- Interrupt a local restore, reload and verify recovery restores a consistent
+  records/files set. Open a second tab during restore to check serialized recovery.
+  Test on phone and desktop. Do not use production for restore smoke checks.

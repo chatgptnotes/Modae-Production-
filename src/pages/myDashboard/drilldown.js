@@ -1,7 +1,8 @@
+import { fmtRupeesFromK } from '../../utils.js'
 import { probabilityKey } from './model.js'
 import { ddMMyyyy } from '../../utils.js'
 
-export const drilldownMoney = value => `₹${((Number(value) || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`
+export const drilldownMoney = value => fmtRupeesFromK(Number(value) || 0)
 
 // Selections describe a live view, never a snapshot of IDs captured on click.
 export function dashboardDrilldown(model, selection, { showMoney = false, period = 'fy' } = {}) {

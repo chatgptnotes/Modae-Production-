@@ -98,7 +98,7 @@ export default function Login() {
           <form onSubmit={submitSignIn}>
             <label htmlFor="lg-email">Work email</label>
             <input id="lg-email" type="email" autoComplete="username" autoFocus disabled={signingIn}
-              value={email} onChange={e => setEmail(e.target.value)} placeholder="you@modae.demo" />
+              value={email} onChange={e => setEmail(e.target.value)} placeholder="you@mod-ae.com" />
             <label htmlFor="lg-pw">Password</label>
             <div className="password-field">
               <input id="lg-pw" type={showPassword ? 'text' : 'password'} autoComplete="current-password" disabled={signingIn}

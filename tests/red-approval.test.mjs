@@ -34,10 +34,10 @@ const clearance = (patch = {}) => ({
   ts: '2026-08-11T05:35:00Z', decisionTs: '', ...patch,
 })
 
-test('a Red lead is blocked until the joint clearance is granted', () => {
-  assert.deepEqual(leadVerificationBlockers(lead, 'Red'), [RED_BLOCKER])
-  assert.equal(leadVerificationComplete(lead, 'Red'), false)
-  assert.deepEqual(leadVerificationBlockers(lead, 'Red', { redCleared: false }), [RED_BLOCKER])
+test('a Red lead registers without joint clearance; later controls remain separate', () => {
+  assert.deepEqual(leadVerificationBlockers(lead, 'Red'), [])
+  assert.equal(leadVerificationComplete(lead, 'Red'), true)
+  assert.deepEqual(leadVerificationBlockers(lead, 'Red', { redCleared: false }), [])
 
   // The whole point of the fix: granted means cleared.
   assert.deepEqual(leadVerificationBlockers(lead, 'Red', { redCleared: true }), [])
@@ -59,7 +59,7 @@ test('one of the two approvers is not enough', () => {
   // is that a half-decided gate is still Pending, and Pending does not clear.
   const half = clearance({ decisions: { LJS: { d: 'Approved', when: 'x' } }, status: 'Pending' })
   assert.equal(isRedCleared(half), false)
-  assert.deepEqual(leadVerificationBlockers(lead, 'Red', { redCleared: isRedCleared(half) }), [RED_BLOCKER])
+  assert.deepEqual(leadVerificationBlockers(lead, 'Red', { redCleared: isRedCleared(half) }), [])
 
   const both = clearance({
     decisions: { LJS: { d: 'Approved', when: 'x' }, AH: { d: 'Approved', when: 'y' } },
@@ -131,7 +131,7 @@ test('the seeded demo path is the one the client reproduced', () => {
   assert.ok(seedCustomers.some(c => c.status === 'Red'))
 })
 
-test('an exact Customer Master match overrides a stale inferred Blue lead class', () => {
+test('legacy lead classification normalizes without master inference', () => {
   const customers = [{ name: 'Vedanta (Lanjigarh)', status: 'Red' }]
   const lead = {
     sellTo: 'Vedanta (Lanjigarh)',

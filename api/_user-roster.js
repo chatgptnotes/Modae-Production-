@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { isActiveUser, isAccountAdmin, matchesAccount } from '../src/userManagement.js'
+import { isActiveUser, isAccountAdmin, accountProfileFor } from '../src/userManagement.js'
 
 export async function readRoster(client) {
   const { data, error } = await client.from('records').select('data,rev').eq('entity', 'state').eq('id', 'users').is('deleted_at', null).maybeSingle()
@@ -8,7 +8,8 @@ export async function readRoster(client) {
 }
 export async function activeProfile(client, auth) {
   const { users } = await readRoster(client)
-  return users.find(user => matchesAccount(user, auth) && isActiveUser(user)) || null
+  const profile = accountProfileFor(users, auth)
+  return isActiveUser(profile) ? profile : null
 }
 export async function saveRoster(client, roster, users, actor, action, targetId) {
   const now = new Date().toISOString()

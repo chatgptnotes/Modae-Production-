@@ -145,3 +145,20 @@ export const leadIdentity = (lead, fields = []) => {
     contactPhone: String(lead?.contactPhone || leadFieldValue(fields, 'contactPhone') || lead?.parse?.contactPhone || '').trim(),
   }
 }
+
+// Keep the complete originating enquiry available after registration.
+export function leadRegistrationContext(lead = {}) {
+  return {
+    sourceLeadId: lead.id,
+    sourceLeadSnapshot: { ...lead },
+    source: lead.source || '', originator: lead.originator || null,
+    sourceSubject: lead.subject || '', sourceBody: lead.body || '',
+    attachments: lead.attachments || [], notes: lead.notes || '',
+    legacyCustomerClass: lead.legacyCustomerClass,
+    customerClassificationVersion: 2,
+  }
+}
+
+export function existingLeadOpportunity(opportunities = [], lead = {}) {
+  return opportunities.find(opp => opp.id === lead.oppId || (lead.id && opp.sourceLeadId === lead.id)) || null
+}

@@ -330,7 +330,7 @@ test('lead extraction is carried into the opportunity record and details view', 
   const details = fs.readFileSync(new URL('../src/OpportunityDetailsEditor.jsx', import.meta.url), 'utf8')
   assert.match(register, /const rfqNumber = String\(/)
   assert.match(register, /const rfqDate = String\(/)
-  assert.match(register, /opportunityScope: scope/)
+  assert.match(register, /opportunityScope: details\.opportunityScope/)
   assert.match(register, /extractedFields: acceptedLeadFields\(fields\)/)
   assert.match(register, /requestedItems: extracted/)
   assert.match(register, /rfqNumber,/)

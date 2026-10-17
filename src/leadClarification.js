@@ -118,7 +118,7 @@ export function clarificationSender(lead, users = [], config = {}) {
 }
 
 // Role names are configurable and are now set to the people's own names, so
-// displayRole('RS') returns "R. Sundaram" — the same string as sender.name. The
+// displayRole('RS') returns "Ruthvik Satish" — the same string as sender.name. The
 // parenthetical is only worth showing when it actually adds something.
 export const senderLabel = sender => {
   if (sender.rule !== 'assigned-owner') return 'Common mailbox — lead is not assigned yet'

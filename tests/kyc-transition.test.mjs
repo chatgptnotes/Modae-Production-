@@ -25,10 +25,10 @@ test('Blue KYC transition blocker opens the KYC tab instead of milestone excepti
   assert.doesNotMatch(workbenchSource, /\['kyc', 'amber-fee', 'red-clearance'\]\.includes\(blocker\.key\)/)
 })
 
-test('Blue KYC blocks Proposal until every KYC item is verified', () => {
+test('optional KYC never blocks Proposal', () => {
   const state = { approvals: [], kyc: {}, clarifications: [] }
   const blocked = transitionBlockers(baseOpp, 'Proposal', proposal, state)
-  assert.ok(blocked.some(b => b.key === 'kyc'), 'missing KYC should block moving to Proposal')
+  assert.equal(blocked.some(b => b.key === 'kyc'), false)
 
   const verified = transitionBlockers(baseOpp, 'Proposal', proposal, {
     ...state,
@@ -55,14 +55,14 @@ test('Blue lead-stage KYC verification clears the opportunity KYC gate', () => {
     'lead-stage verified KYC should not assign the next action to AH')
 })
 
-test('unverified lead-stage KYC snapshot does not clear the opportunity gate', () => {
+test('unverified lead-stage KYC remains optional', () => {
   const state = { approvals: [], kyc: {}, clarifications: [] }
   const blockers = transitionBlockers({
     ...baseOpp,
     milestone: 'Customer/KYC',
     leadVerification: { type: 'KYC', status: 'Pending' },
   }, 'Registration', proposal, state)
-  assert.ok(blockers.some(b => b.key === 'kyc'), 'only a verified lead-stage snapshot should clear KYC')
+  assert.equal(blockers.some(b => b.key === 'kyc'), false)
 })
 
 test('commercial deviation still uses AH approval', () => {

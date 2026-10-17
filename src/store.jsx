@@ -1,3 +1,4 @@
+import { mergeWorkspaceView, workspaceViewForPath } from './workspaceViews.js'
 import { activeWorkspaceInput, appliedWorkspaceInput } from './workspaceInputOwnership.js'
 import { WorkspaceSyncRuntime } from './ui/WorkspaceSync.jsx'
 import { workspaceDrafts, SYNC_ENTITIES } from './workspaceDrafts.js'
@@ -5,11 +6,11 @@ import { workspaceSyncState, committedWorkspace, resolvedWorkspaceRecord } from 
 import { recordFrom, replaceRecord } from './workspaceReconcile.js'
 import { applyApprovalEffects } from './approvalEffects.js'
 import { createApprovalCommands } from './approvalCommands.js'
-import { getWorkspaceGeneration, fetchWorkspace } from './workspaceApi.js'
+import { getWorkspaceGeneration, fetchWorkspace, convertLeadOnServer } from './workspaceApi.js'
 import { previewOpportunityNumber, validateOpportunityNumbering } from './opportunityNumbering.js'
 import { canPerform as policyCanPerform, effectiveAccess, validateAccessPolicy } from './accessPolicy.js'
 import { readAdminPolicy, saveAdminPolicy } from './adminPolicyApi.js'
-import { accountChangeError, deletedProfile, isActiveUser, isDeletedUser, matchesAccount } from './userManagement.js'
+import { accountChangeError, deletedProfile, isActiveUser, isDeletedUser, accountProfileFor } from './userManagement.js'
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import * as filestore from './filestore.js'
 import * as datastore from './datastore.js'
@@ -44,8 +45,11 @@ import {
 } from './proposal/sparesBoq.js'
 import { createKycOverride } from './kycPolicy.js'
 import { releaseState, transitionBlockers } from './gates.js'
-import { clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
+import { changeSupabasePassword, clearSupabaseSession, isSupabaseAuthError, supabase, supabaseConfigError } from './supabase.js'
+import { changeLocalPassword, validatePasswordChange } from './passwordChange.js'
+import { canPreviewAsUser } from './localPreviewAdmin.js'
 import { isLocalDemoSession } from './authMode.js'
+import { mergeLocalBackupState } from './localBackupState.js'
 import { workspaceSyncStatus } from './syncStatus.js'
 import { readLiveData } from './liveSync.js'
 import { purgeWorkspace } from './workspacePurge.js'
@@ -58,11 +62,11 @@ import { approvePurchaseOrder, recordBooking, confirmSalesTarget, stagePODetails
 const StoreCtx = createContext(null)
 function applyAuthoritativeProfile(state, users) {
   if (!Array.isArray(users) || !state.auth?.user) return state
-  const profile = users.find(user => matchesAccount(user, state.auth.user))
+  const profile = accountProfileFor(users, state.auth.user)
   const roles = isActiveUser(profile) ? userRoles(profile) : []
   if (!isActiveUser(profile) || !ROLES[profile.role]) return { ...state, role: null, roles: [], auth: { ...state.auth, user: null } }
   return { ...state, role: profile.role, roles, auth: { ...state.auth, user: {
-    ...state.auth.user, name: profile.name || state.auth.user.email, role: profile.role, roles,
+    ...state.auth.user, name: profile.name || state.auth.user.email, email: profile.email || state.auth.user.email, role: profile.role, roles,
   } } }
 }
 const workflowTransition = (from, to, reason = '', id = null) => ({
@@ -177,6 +181,14 @@ const localSnapshot = state => ({
   viewModePinnedAt: state.viewModePinnedAt,
   viewModePreferenceRev: state.viewModePreferenceRev,
   inboxShowAll: state.inboxShowAll,
+  oneTimeCleanups: state.oneTimeCleanups,
+  ...(!datastore.dbEnabled() ? {
+    audit: state.audit, files: state.files, communications: state.communications,
+    clarifications: state.clarifications, svcEstimates: state.svcEstimates,
+    vendorQuotes: state.vendorQuotes, surveys: state.surveys, competitors: state.competitors,
+    sparesAlternatives: state.sparesAlternatives, kyc: state.kyc,
+    bSteps: state.bSteps, bStepOwners: state.bStepOwners,
+  } : {}),
 })
 
 let localCacheWarningShown = false
@@ -301,6 +313,10 @@ export function StoreProvider({ children }) {
   datastore.setLocalDemoMode(isLocalDemoSession(state))
   const [authReady, setAuthReady] = useState(() => !supabase || isLocalDemoSession(state))
   const [authProfileError, setAuthProfileError] = useState('')
+  const [overview, setOverview] = useState(null)
+  const [activeDataView, setActiveDataView] = useState(null)
+  const viewRequestsRef = useRef(new Map())
+  const requestedViewRef = useRef(null)
   const authEpochRef = useRef(0)
   const externalLoginRef = useRef(null)
   const pendingAuthUserRef = useRef(null)
@@ -310,8 +326,9 @@ export function StoreProvider({ children }) {
   const [sourcingDataStatus, setSourcingDataStatus] = useState(() => datastore.dbEnabled() ? 'loading' : 'ready')
   const [sourcingDataError, setSourcingDataError] = useState('')
   const [syncDiagnostics, setSyncDiagnostics] = useState({ normalizedOpportunityCount: null })
-  setRoleNameConfig(state.config)
-  setPermissionContext({ ...state.auth?.user, role: state.role, roles: state.roles }, state.config)
+  setRoleNameConfig(state.config, state.users)
+  const permissionProfile = accountProfileFor(state.users, state.auth?.user) || state.auth?.user
+  setPermissionContext(permissionProfile ? { ...permissionProfile, role: state.role, roles: state.roles } : null, state.config)
   // Ref mirror so read APIs (getProposal) see same-tick mutations, not the render closure.
   const stateRef = useRef(state)
   stateRef.current = state
@@ -523,80 +540,54 @@ export function StoreProvider({ children }) {
   // record the user just made and watched appear (simulate a lead, reload
   // straight away, and it is gone). Same rule as applyServer, measured against
   // bootRef instead of lastSavedRef because we have not saved anything yet.
-  const hydrate = async () => {
+  const ensureWorkspaceView = (view, { force = false, activate = true } = {}) => {
+    if (!datastore.dbEnabled()) return Promise.resolve(true)
     const epoch = authEpochRef.current
-    const res = await datastore.loadCore()
-    if (epoch !== authEpochRef.current || authInvalidRef.current) return
-    if (!res) {
-      setSourcingDataStatus('error')
-      if (!supabaseConfigError) setLiveSyncStatus('error')
-      return
-    }
-    if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-    const sourcingError = res.error || null
-    const coreError = res.coreError || null
-    if (sourcingError) {
-      setSourcingDataStatus('error')
-      setSourcingDataError(sourcingError.message || 'Sourcing data could not be loaded')
-      invalidateSupabaseAuth(sourcingError)
-    } else {
-      setSourcingDataStatus('ready')
-      setSourcingDataError('')
-    }
-    if (coreError) {
-      if (!isSupabaseAuthError(coreError)) setLiveSyncStatus('error')
-      invalidateSupabaseAuth(coreError)
-    } else if (!sourcingError || !isSupabaseAuthError(sourcingError)) {
-      setLiveSyncStatus('live')
-    }
-    if (hydratedRef.current) return
-    const s = stateRef.current
-    if (res.empty) {
-      const clean = migrate({
-        ...emptyState(s),
-        demoData: false,
-        priceLists: {},
-        adhocParts: [],
-        rateSheets: {},
-        users: [],
-        audit: [],
-      })
-      lastSavedRef.current = syncedOf(clean)
-      hydratedRef.current = true
-      setLiveSyncStatus('live')
-      setSyncDiagnostics(diagnostics => ({ ...diagnostics, emptyWorkspaceAt: new Date().toISOString() }))
-      setState(clean)
-      setSourcingDataStatus(sourcingError ? 'error' : 'ready')
-    } else {
-      const serverSlices = syncedOf(res.slices)
-      const accepted = {}
-      for (const [key, value] of Object.entries(serverSlices)) {
-        // Preserve only a real edit made while the request was in flight. A
-        // browser snapshot that merely existed before boot is not an edit.
-        if (key in s && JSON.stringify(s[key]) !== JSON.stringify(bootRef.current[key])) continue
-        accepted[key] = value
+    const key = JSON.stringify([epoch, view, activate])
+    if (activate) requestedViewRef.current = key
+    if (viewRequestsRef.current.has(key)) return viewRequestsRef.current.get(key)
+    const current = () => epoch === authEpochRef.current && !authInvalidRef.current
+    const request = (async () => {
+      try {
+        const result = await datastore.loadWorkspaceView(view, { force, isCurrent: current })
+        if (!current() || !result || activate && requestedViewRef.current !== key) return false
+        registerDirtyRecords()
+        datastore.installWorkspaceViewRevisions(result, (entity, id) => hydratedRef.current && JSON.stringify(recordFrom(stateRef.current, entity, id)) !== JSON.stringify(recordFrom(lastSavedRef.current, entity, id)))
+        const slices = mergeWorkspaceView(lastSavedRef.current, result)
+        if (!hydratedRef.current) {
+          // No business editor mounts before this first authoritative response.
+          // Summary opportunities stay out of canonical state and save baselines.
+          const next = applyAuthoritativeProfile(migrate({ ...emptyState(stateRef.current),
+            audit: [], ...slices, demoData: false, priceLists: {},
+            auth: stateRef.current.auth, role: stateRef.current.role, roles: stateRef.current.roles,
+          }), slices.users)
+          approvalViewRevisionsRef.current = result.slices._approvalRevisions || {}
+          stateRef.current = next
+          lastSavedRef.current = syncedOf(next)
+          bootRef.current = syncedOf(next)
+          hydratedRef.current = true
+          setState(next)
+        } else applyServer(slices)
+        if (activate && requestedViewRef.current === key) {
+          setOverview(result.summary)
+          setActiveDataView(view)
+        }
+        setLiveSyncStatus('live')
+        setSourcingDataStatus(view.kind === 'detail' || view.kind === 'full' ? 'ready' : 'loading')
+        setSourcingDataError('')
+        return true
+      } catch (error) {
+        if (!current()) return false
+        if (error.code === 'WORKSPACE_PURGED') workspaceSyncState.suspended = true
+        if (!invalidateSupabaseAuth(error)) setLiveSyncStatus('error')
+        setSyncDiagnostics(d => ({ ...d, lastLoadError: { message: error.message } }))
+        return false
       }
-      const merged = reconcileApprovedSubmissions(migrate({
-        ...s,
-        ...accepted,
-        deletedLeadIds: [],
-        deletedOpportunityIds: [],
-        pendingOpportunitySyncIds: [],
-        leadSyncBaseline: accepted.leads || [],
-        clarificationSyncBaseline: accepted.clarifications || [],
-        opportunitySyncBaseline: accepted.opportunities || [],
-        sparesLinesSyncBaseline: accepted.sparesLines || [],
-      }))
-      // Every server slice is the baseline, including an explicitly empty
-      // slice. This prevents stale local values from becoming dirty and being
-      // written back on the next debounce or pagehide.
-      lastSavedRef.current = { ...syncedOf(merged), ...serverSlices }
-      hydratedRef.current = true
-      setState(applyAuthoritativeProfile(merged, accepted.users))
-      setSourcingDataStatus(sourcingError ? 'error' : 'ready')
-      setTimeout(flushSaves, 0)
-    }
+    })()
+    viewRequestsRef.current.set(key, request)
+    return request.finally(() => { if (viewRequestsRef.current.get(key) === request) viewRequestsRef.current.delete(key) })
   }
+  const hydrate = () => ensureWorkspaceView(workspaceViewForPath(window.location.pathname))
 
   // A server slice replaces only a clean local slice. This protects edits that
   // are still being saved while accepting a live update from another browser.
@@ -722,26 +713,8 @@ export function StoreProvider({ children }) {
     if (!force && sharedPullInFlightRef.current) return sharedPullInFlightRef.current
     const epoch = authEpochRef.current
     if (authInvalidRef.current) return false
-    const pull = (async () => {
-      if (!workspaceSyncState.enabled) await flushSaves()
-      registerDirtyRecords()
-      const res = await datastore.loadAll({ force: true })
-      if (epoch !== authEpochRef.current || authInvalidRef.current) return false
-      if (!res) { setLiveSyncStatus('error'); return false }
-      if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-      if (res.error) {
-        const authError = invalidateSupabaseAuth(res.error)
-        if (!authError) setLiveSyncStatus('error')
-        return false
-      }
-      if (res.empty) {
-        setLiveSyncStatus('degraded')
-        return true
-      }
-      setLiveSyncStatus('live')
-      applyServer(res.slices, res.diagnostics)
-      return true
-    })()
+    const pull = ensureWorkspaceView(workspaceViewForPath(window.location.pathname), { force })
+
     sharedPullInFlightRef.current = pull
     return pull.finally(() => {
       if (sharedPullInFlightRef.current === pull) sharedPullInFlightRef.current = null
@@ -754,7 +727,6 @@ export function StoreProvider({ children }) {
     if (initialHydrationRef.current === userId) return
     initialHydrationRef.current = userId
     hydrate()
-    loadApprovedPriceLists()
     const onFocus = () => {
       if (!hydratedRef.current) return
       if (!workspaceSyncState.enabled) void pullSharedData()
@@ -813,6 +785,12 @@ export function StoreProvider({ children }) {
 
   const api = {
     ...state,
+    opportunities: activeDataView?.kind === 'overview' && overview ? overview.opportunities : state.opportunities,
+    overviewSignals: ['overview', 'list'].includes(activeDataView?.kind) ? overview?.signals || {} : {},
+    ensureWorkspaceView,
+    loadOpportunityDetails: id => ensureWorkspaceView({ kind: 'detail', id }, { activate: false }),
+    loadedOpportunity: id => stateRef.current.opportunities.find(row => row.id === id),
+    ensurePriceLists: () => loadApprovedPriceLists(),
     flushPersistence,
     async saveSelectedRecords(records) {
       if (!workspaceSyncState.enabled || workspaceSyncState.suspended) return false
@@ -910,7 +888,8 @@ export function StoreProvider({ children }) {
     },
     canPerform(action) {
       const current = stateRef.current
-      return policyCanPerform(current.roles || current.role, action, current.config)
+      const profile = accountProfileFor(current.users, current.auth?.user)
+      return policyCanPerform(profile || current.roles || current.role, action, current.config)
     },
     async getAccessRules() {
       const current = stateRef.current
@@ -924,7 +903,7 @@ export function StoreProvider({ children }) {
       const current = stateRef.current
       if (!effectiveAccess(current.roles || current.role, current.config).isAdmin) throw new Error('Only administrators can manage access rules.')
       if (!reason?.trim()) throw new Error('A reason is required.')
-      const checked = validateAccessPolicy(patch.accessPolicy)
+      const checked = validateAccessPolicy(patch.accessPolicy, current.users)
       if (!checked.valid) throw new Error(checked.errors.join('; '))
       const changes = { accessPolicy: checked.policy, opportunityNumbering: validateOpportunityNumbering(patch.opportunityNumbering) }
       if (!datastore.dbEnabled()) {
@@ -969,7 +948,35 @@ export function StoreProvider({ children }) {
       })
     },
 
+    async convertLead(leadId, opportunity) {
+      if (!datastore.dbEnabled()) {
+        const existing = stateRef.current.opportunities.find(row => row.sourceLeadId === leadId)
+        if (existing) return {opportunity:existing,existing:true}
+        api.addOpportunity(opportunity)
+        api.updateLead(leadId,{status:'Converted',oppId:opportunity.id})
+        return {opportunity,existing:false}
+      }
+      const base = datastore.workspaceRecord('leads',leadId)
+      if (!base?.rev) throw new Error('Save and refresh the lead before conversion.')
+      const actor = stateRef.current.auth?.user?.id, generation = getWorkspaceGeneration()
+      const result = await convertLeadOnServer(leadId,base.rev,opportunity)
+      if (stateRef.current.auth?.user?.id !== actor || getWorkspaceGeneration() !== generation || workspaceSyncState.suspended) throw new Error('Workspace session changed. Reload to see the converted opportunity.')
+      const committed = [{...result.lead,entity:'leads',available:true},{...result.opportunity,entity:'opportunities',available:true}]
+      let next = stateRef.current
+      for (const row of committed) {
+        datastore.acceptWorkspaceRecord(row)
+        next = replaceRecord(next,row)
+        lastSavedRef.current = replaceRecord(lastSavedRef.current,row)
+        workspaceDrafts.clear(row.entity,row.id)
+      }
+      if (!next.files?.[result.opportunity.id]) next = {...next,files:{...next.files,[result.opportunity.id]:Object.fromEntries(SUBFOLDERS.map(folder=>[folder,[]]))}}
+      stateRef.current=next; setState(next); committedWorkspace(committed); persistLocalSnapshot(next)
+      return {opportunity:result.opportunity.data,existing:result.existing}
+    },
+
     addOpportunity(opp) {
+      const existing = stateRef.current.opportunities.find(row => row.id === opp.id || (opp.sourceLeadId && row.sourceLeadId === opp.sourceLeadId))
+      if (existing) return existing.id
       // Normalize here so every creator (IntakeForm, TenderIntake, Register)
       // yields workbench-ready rows — migrate() only backfills on reload.
       const normalized = {
@@ -983,7 +990,7 @@ export function StoreProvider({ children }) {
       // Resolve ownership after spreading the caller payload so a blank
       // caller value cannot overwrite the fallback routing decision.
       opp = { ...normalized, owner }
-      setState(s => withAudit({
+      setState(s => s.opportunities.some(row => row.id === opp.id || (opp.sourceLeadId && row.sourceLeadId === opp.sourceLeadId)) ? s : withAudit({
         ...s,
         opportunities: [...s.opportunities, opp],
         deletedOpportunityIds: (s.deletedOpportunityIds || []).filter(id => id !== opp.id),
@@ -1049,7 +1056,7 @@ export function StoreProvider({ children }) {
       // those changes; every change remains audited and approval snapshots
       // are refreshed by the existing proposal sync path.
       const role = stateRef.current.role
-      const canEdit = before && (before.owner === role || ROLES[role]?.admin)
+      const canEdit = before && (before.owner === role || effectiveAccess(stateRef.current.roles || role, stateRef.current.config).isAdmin)
       const detailFields = new Set([
         'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'cogsK', 'gmK', 'gmPct', 'fqFy',
         'sellTo', 'category', 'location', 'customerStatus', 'eucName',
@@ -1449,7 +1456,7 @@ export function StoreProvider({ children }) {
     // ---- Lead inbox -------------------------------------------------------
     addLead(lead) {
       setState(s => withAudit(
-        { ...s, leads: [{ ...lead, ts: toISTISOString(lead.ts || new Date()) }, ...s.leads] },
+        { ...s, leads: [{ ...lead, originator: lead.originator || { id: s.auth?.user?.id || '', name: s.auth?.user?.name || '', email: s.auth?.user?.email || '' }, ts: toISTISOString(lead.ts || new Date()) }, ...s.leads] },
         'Lead received', lead.id, lead.subject))
       // A new enquiry is immediately followed by navigation. Publish it after
       // React commits the state update so a quick refresh cannot lose the row
@@ -1769,7 +1776,7 @@ export function StoreProvider({ children }) {
     updateUser(id, patch) {
       const current = stateRef.current
       if (datastore.dbEnabled()) throw new Error('Use server account management for shared accounts.')
-      const problem = accountChangeError(current.users, current.users.find(u => matchesAccount(u, current.auth?.user)), current.users.find(u => u.id === id), patch)
+      const problem = accountChangeError(current.users, accountProfileFor(current.users, current.auth?.user), current.users.find(u => u.id === id), patch)
       if (problem) throw new Error(problem)
       setState(s => {
         if (!isAdminRole(s.roles || s.role)) return s
@@ -1802,7 +1809,7 @@ export function StoreProvider({ children }) {
     removeUserAccount(id) {
       const s = stateRef.current
       if (datastore.dbEnabled()) throw new Error('Use server account management for shared accounts.')
-      const actor = s.users.find(u => matchesAccount(u, s.auth?.user))
+      const actor = accountProfileFor(s.users, s.auth?.user)
       const target = s.users.find(u => u.id === id)
       const problem = accountChangeError(s.users, actor, target, {}, true)
       if (problem) throw new Error(problem)
@@ -2664,19 +2671,6 @@ export function StoreProvider({ children }) {
       if (!id || !ROLES[stateRef.current.role]?.admin) return
       setState(s => withAudit({ ...s, config: { ...s.config, clauses: (s.config.clauses || []).filter(c => c.id !== id) } }, 'T&C clause removed', id, ''))
     },
-    updateRoleNames(roleNames) {
-      setState(s => {
-        if (!ROLES[s.role]?.admin) return s
-        const defaults = Object.fromEntries(Object.entries(ROLES).map(([id, role]) => [id, role.name]))
-        const nextNames = { ...defaults, ...(roleNames || {}) }
-        const changed = Object.keys(defaults).filter(id => nextNames[id] !== (s.config?.roleNames?.[id] || defaults[id]))
-        if (!changed.length) return s
-        const detail = JSON.stringify({ changed: Object.fromEntries(changed.map(id => [id, {
-          from: s.config?.roleNames?.[id] || defaults[id], to: nextNames[id],
-        }])) })
-        return withAudit({ ...s, config: { ...s.config, roleNames: nextNames } }, 'Role names changed', 'roleNames', detail)
-      })
-    },
     saveAiModel(aiModel) {
       setState(s => withAudit({
         ...s,
@@ -2824,24 +2818,7 @@ export function StoreProvider({ children }) {
     },
 
     async refreshSharedData() {
-      const epoch = authEpochRef.current
-      if (!datastore.dbEnabled() || authInvalidRef.current) return false
-      const res = await datastore.loadAll({ force: true })
-      if (epoch !== authEpochRef.current || authInvalidRef.current) return false
-    if (!res) { setLiveSyncStatus('error'); return false }
-      if (res.diagnostics) setSyncDiagnostics(res.diagnostics)
-      if (res.error) {
-      if (!invalidateSupabaseAuth(res.error)) setLiveSyncStatus('error')
-      return false
-    }
-    if (Array.isArray(res.slices?.sparesLines)) {
-      setSourcingDataStatus('ready')
-      setSourcingDataError('')
-    }
-    if (res.empty) { setLiveSyncStatus('degraded'); return false }
-      setLiveSyncStatus('live')
-      applyServer(res.slices, res.diagnostics)
-      return true
+      return ensureWorkspaceView(workspaceViewForPath(window.location.pathname), { force: true })
     },
 
     // Sourcing has its own fast-load contract. Retrying it should not make
@@ -2913,6 +2890,26 @@ export function StoreProvider({ children }) {
       }
     },
 
+    async changeOwnPassword(currentPassword, password, confirmation) {
+      validatePasswordChange(currentPassword, password, confirmation)
+      const starting = stateRef.current
+      const account = accountProfileFor(starting.users, starting.auth?.user)
+      if (!isActiveUser(account)) throw new Error('Sign in with an active account to change your password.')
+      const epoch = authEpochRef.current
+      const isCurrent = () => epoch === authEpochRef.current && stateRef.current.auth?.user?.id === starting.auth?.user?.id
+      if (supabase && !isLocalDemoSession(starting)) {
+        await changeSupabasePassword(starting.auth.user.id, currentPassword, password, confirmation, isCurrent)
+        if (!isCurrent()) throw new Error('Your session changed. Sign in again.')
+        return
+      }
+      // Self-service does not call the administrator-only updateUser action.
+      changeLocalPassword(starting, currentPassword, password, confirmation)
+      setState(s => {
+        if (s.auth?.user?.id !== starting.auth?.user?.id || s.auth?.source !== starting.auth?.source) return s
+        return withAudit(changeLocalPassword(s, currentPassword, password, confirmation), 'Password changed', account.id, 'Self-service password change')
+      })
+    },
+
     // ---- Auth (demo login — plaintext by design, disclaimed on screen) ----
     login(email, pw, source = 'local') {
       const s = stateRef.current
@@ -2961,14 +2958,14 @@ export function StoreProvider({ children }) {
               if (result.error) throw result.error
               const verifiedSession = result.data?.session
               if (!verifiedSession?.access_token || verifiedSession.user?.id !== user.id) throw new Error('Your session changed. Sign in again.')
-              const workspace = await fetchWorkspace(verifiedSession.access_token, undefined, { isCurrent: current })
+              const workspace = await fetchWorkspace(verifiedSession.access_token, undefined, { isCurrent: current, identityOnly: true })
               await datastore.settleWorkspaceReads()
               return workspace
             })(),
             new Promise((_, reject) => { timeout = setTimeout(() => reject(new Error('Account verification timed out. Retry.')), 15000) }),
           ])
           if (!current()) return { ok: false, err: 'Session changed.' }
-          const profile = workspace.users?.find(row => matchesAccount(row, user))
+          const profile = accountProfileFor(workspace.users, user)
           if (!isActiveUser(profile) || !ROLES[profile.role]) throw new Error('An active workspace profile is required. Contact your administrator or retry.')
           const previous = stateRef.current
           const switching = previous.auth?.user?.id !== user.id
@@ -2977,9 +2974,11 @@ export function StoreProvider({ children }) {
             config: switching ? workspace.config || {} : { ...base.config, accessPolicy: workspace.config?.accessPolicy },
             auth: { source: 'supabase', user: { id: user.id, email: user.email } },
           }, workspace.users)
-          if (switching) workspaceDrafts.reset()
+          if (switching) { workspaceDrafts.reset(); datastore.resetWorkspaceViewRecords() }
           datastore.setLocalDemoMode(false)
           datastore.invalidateLoadCache()
+          setOverview(null)
+          setActiveDataView(null)
           // Hydration may have been started by an earlier session. Start a new
           // read; preserve same-account draft baselines on ordinary revalidation.
           if (switching || !hydratedRef.current) {
@@ -3050,17 +3049,57 @@ export function StoreProvider({ children }) {
       return { ok: true }
     },
     signInAs(userId) {
-      if (datastore.dbEnabled() || !isAdminRole(stateRef.current.roles || stateRef.current.role)) return
+      if (!canPreviewAsUser(stateRef.current, datastore.dbEnabled())) throw new Error('Only the dedicated Admin account can preview another user in a local workspace.')
+      if (!isActiveUser(stateRef.current.users.find(user => user.id === userId))) throw new Error('Choose an active account to preview.')
+      authEpochRef.current++
       setState(st => {
+        if (!canPreviewAsUser(st, datastore.dbEnabled())) return st
         const u = st.users.find(x => x.id === userId)
-        if (!u || u.status !== 'Active') return st
+        if (!isActiveUser(u)) return st
         return {
-          ...withAudit(st, 'Signed in as', u.email, `by ${st.role}`),
+          ...withAudit(st, 'Signed in as', u.email, `by account ${st.auth.user.id}`),
           auth: { source: st.auth?.source, user: { id: u.id, name: u.name, email: u.email, role: u.role, roles: userRoles(u) } },
           roles: userRoles(u),
           role: ROLES[u.role] ? u.role : st.role,
         }
       })
+      return true
+    },
+
+    getLocalBackupState() {
+      return localSnapshot(stateRef.current)
+    },
+    async restoreLocalBackup(imported) {
+      const { isEmptyBackupWorkspace, localBackupState } = await import('./workspaceBackup.js')
+      const current = stateRef.current
+      const actor = accountProfileFor(current.users, current.auth?.user)
+      if (datastore.dbEnabled() || (supabase && !isLocalDemoSession(current))) throw new Error('Use the server to restore a connected workspace.')
+      if (!isActiveUser(actor) || !effectiveAccess(actor, current.config).isAdmin) throw new Error('Only an active administrator can restore a backup.')
+      if (!isEmptyBackupWorkspace(current)) throw new Error('Restore requires an empty business workspace.')
+      const beforeSaved = localStorage.getItem(KEY)
+      const next = withAudit(migrate(mergeLocalBackupState(current, localBackupState(imported))), 'Full backup restored', 'workspace', 'Business records and original files restored; current accounts retained')
+      // Quota errors must abort so the journal can roll back file bytes too.
+      localStorage.setItem(KEY, JSON.stringify(localSnapshot(next)))
+      clearTimeout(saveTimerRef.current)
+      clearTimeout(localCacheTimerRef.current)
+      workspaceDrafts.reset()
+      approvalCommandsRef.current.clear()
+      datastore.resetWorkspaceViewRecords()
+      datastore.invalidateLoadCache()
+      viewRequestsRef.current.clear()
+      setOverview(null)
+      setActiveDataView(null)
+      lastSavedRef.current = syncedOf(next)
+      stateRef.current = next
+      setState(next)
+      return () => {
+        clearTimeout(localCacheTimerRef.current)
+        if (beforeSaved === null) localStorage.removeItem(KEY)
+        else localStorage.setItem(KEY, beforeSaved)
+        lastSavedRef.current = syncedOf(current)
+        stateRef.current = current
+        setState(current)
+      }
     },
 
     // Drop the saved state entirely — initialState() then rebuilds from
@@ -3133,7 +3172,7 @@ export function StoreProvider({ children }) {
   // Enforce configurable action grants at the mutation boundary as well as in
   // navigation. Existing ownership, approval and transition checks still run.
   const guardedActions = {
-    'opportunities.create': ['addOpportunity'],
+    'opportunities.create': ['convertLead', 'addOpportunity'],
     'opportunities.edit': ['updateOpportunity', 'closeLost', 'markWon', 'setMilestone', 'assignBStep', 'signBStep', 'unsignBStep', 'requestSurvey', 'updateSurvey', 'addCompetitor', 'removeCompetitor', 'updateServiceFlow', 'receivePO', 'resolvePoLine', 'setPOBookingDetails', 'hoToggleItem'],
     'leads.create': ['addLead'],
     'leads.edit': ['updateLead', 'updateLeadDraft', 'updateLeads', 'revertLead', 'cancelLeadKyc', 'reopenLeadKyc', 'skipLeadKyc', 'clearLeadKycItem', 'reviewLeadKycItem'],

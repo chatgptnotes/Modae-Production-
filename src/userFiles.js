@@ -1,4 +1,7 @@
 import { describeSupabaseError, supabase } from './supabase.js'
+import { listRestoredFiles, getRestoredFile, retireRestoredFiles } from './restoredFiles.js'
+const restoredScope = scope => ['opportunity','attachment','admin-template'].includes(scope.recordType) && Boolean(scope.recordId)
+const restoreRequest = scope => ({ recordType: scope.recordType, recordId: scope.recordId, folder: scope.folder, ...(scope.fileName ? { name: scope.fileName } : {}) })
 
 export const MAX_FILE_BYTES = 10 * 1024 * 1024
 const APP_STATE_KEY = 'wintrack-modae-v5'
@@ -100,7 +103,9 @@ export async function replaceUserFile(scope) {
     .eq('folder', String(scope.folder || ''))
     .eq('file_name', String(scope.file?.name || ''))
   if (deleteError) throw fileError('replace-delete', deleteError)
-  return insertUserFile(scope)
+  const inserted = await insertUserFile(scope)
+  if (restoredScope(scope)) await retireRestoredFiles({ ...restoreRequest(scope), name: scope.file.name || inserted.name })
+  return inserted
 }
 
 export async function listUserFiles({ recordType, recordId, folder = '' }) {
@@ -113,7 +118,9 @@ export async function listUserFiles({ recordType, recordId, folder = '' }) {
   if (folder !== null) query = query.eq('folder', String(folder || ''))
   const { data, error } = await query.order('created_at', { ascending: true })
   if (error) throw fileError('list', error)
-  return (data || []).map(meta)
+  const own = (data || []).map(meta)
+  const restored = restoredScope({ recordType, recordId }) ? await listRestoredFiles({ recordType, recordId, folder }) : []
+  return [...new Map([...own, ...restored].map(row => [row.id,row])).values()]
 }
 
 export async function getUserFile({ recordType, recordId, folder = '', fileName }) {
@@ -127,7 +134,7 @@ export async function getUserFile({ recordType, recordId, folder = '', fileName 
   if (!isDemoMode()) query = query.eq('is_demo', false)
   const { data, error } = await query.maybeSingle()
   if (error) throw fileError('get', error)
-  if (!data) return null
+  if (!data) return restoredScope({ recordType, recordId }) ? getRestoredFile({ recordType, recordId, folder, name: fileName }) : null
   const bytes = fromBytea(data.file_data)
   const blob = new Blob([bytes], { type: data.file_type || 'application/octet-stream' })
   return { ...meta(data), blob }
@@ -143,6 +150,7 @@ export async function deleteUserFile({ recordType, recordId, folder = '', fileNa
     .eq('folder', String(folder || ''))
     .eq('file_name', String(fileName || ''))
   if (error) throw fileError('delete', error)
+  if (fileName && restoredScope({ recordType, recordId })) await retireRestoredFiles({ recordType, recordId, folder, name: fileName })
 }
 
 export async function deleteUserFiles({ recordType, recordId, folder = null } = {}) {
@@ -154,6 +162,7 @@ export async function deleteUserFiles({ recordType, recordId, folder = null } = 
   if (folder !== null) query = query.eq('folder', String(folder || ''))
   const { error } = await query
   if (error) throw fileError('delete-scope', error)
+  if (restoredScope({ recordType, recordId })) await retireRestoredFiles({ recordType, recordId, folder })
 }
 
 export async function deleteDemoUserFiles() {

@@ -17,7 +17,7 @@ export function customerHealth(customer, opportunities = [], config = null) {
   if (!customer) return null
   const reasons = []
   const rules = healthScoreRules(config)
-  let score = rules.classBase[customer.status] ?? 50
+  let score = (customer.legacyCustomerClass || customer.status) === 'Blue' ? (config?.healthScore?.classBase?.Blue ?? 60) : (rules.classBase[customer.status] ?? 50)
   reasons.push({ delta: 0, why: `${customer.status} account` })
 
   const kyc = String(customer.kyc || '')
@@ -121,7 +121,7 @@ export function suggestProbability(opp, proposal, config = null) {
 
   // Each class may nudge the probability: a bias that lowers it wins outright,
   // one that raises it only rescues a Low on a still-live opportunity.
-  const bias = classRule(config, opp.customerStatus)?.probabilityBias
+  const bias = classRule(config, opp.customerStatus, opp)?.probabilityBias
   if (bias === 'Low') { level = 'Low'; why.push(`${opp.customerStatus} account`) }
   else if (bias && bias !== 'Low' && level === 'Low' && opp.stage !== 'Lost') {
     level = bias

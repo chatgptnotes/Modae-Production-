@@ -1,26 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { fieldLabel, fieldValues } from '../../workbookGovernance.js'
+import { fieldValues } from '../../workbookGovernance.js'
 import { displayRole } from '../../utils.js'
 import { targetPlan } from '../../orderBookings.js'
 
-const toLakhs = value => (Number(value) || 0) / 100
-const toK = value => Math.round((parseFloat(value) || 0) * 100)
-const emptyTarget = { annual: 0, q: [0, 0, 0, 0] }
+import { targetRupees as toRupees, targetThousands as toK, targetTotal, targetAmountsEqual, allocateTarget as allocate } from './targetAllocation.js'
 
-function allocate(total, weights, count) {
-  if (!count) return []
-  const amounts = weights.map(value => Math.max(0, Math.round(Number(value) || 0)))
-  const weightTotal = amounts.reduce((sum, value) => sum + value, 0)
-  const shares = weightTotal
-    ? amounts.map(value => total * value / weightTotal)
-    : amounts.map(() => total / count)
-  const result = shares.map(Math.floor)
-  let remainder = total - result.reduce((sum, value) => sum + value, 0)
-  const order = shares.map((share, index) => ({ index, fraction: share - result[index] }))
-    .sort((a, b) => b.fraction - a.fraction || a.index - b.index)
-  for (let i = 0; i < remainder; i += 1) result[order[i % order.length].index] += 1
-  return result
-}
+const emptyTarget = { annual: 0, q: [0, 0, 0, 0] }
 
 function TargetManagerDialog({ store, onClose }) {
   const targets = store.sales?.targets || {}
@@ -29,16 +14,16 @@ function TargetManagerDialog({ store, onClose }) {
   ]), [store.config, store.opportunities, targets])
   const [drafts, setDrafts] = useState(() => Object.fromEntries(owners.map(owner => {
     const target = targets[owner] || emptyTarget
-    return [owner, { annual: String(toLakhs(target.annual)), q: (target.q || emptyTarget.q).map(value => String(toLakhs(value))) }]
+    return [owner, { annual: String(toRupees(target.annual)), q: (target.q || emptyTarget.q).map(value => String(toRupees(value))) }]
   })))
-  const [companyTargetDraft, setCompanyTargetDraft] = useState(() => String(toLakhs(
-    owners.reduce((sum, owner) => sum + toK(drafts[owner]?.annual), 0),
+  const [companyTargetDraft, setCompanyTargetDraft] = useState(() => String(toRupees(
+    targetTotal(owners.map(owner => toK(drafts[owner]?.annual))),
   )))
   const [errors, setErrors] = useState({})
   const [saved, setSaved] = useState({})
   const [globalError, setGlobalError] = useState('')
   const confirmedPlan = targetPlan(store)
-  const draftAnnual = owners.reduce((sum, owner) => sum + toK(drafts[owner]?.annual), 0)
+  const draftAnnual = targetTotal(owners.map(owner => toK(drafts[owner]?.annual)))
   const confirmedOwners = confirmedPlan.configuredCount
 
   useEffect(() => {
@@ -54,7 +39,7 @@ function TargetManagerDialog({ store, onClose }) {
     }
     const nextDrafts = { ...drafts, [owner]: nextOwner }
     setDrafts(nextDrafts)
-    setCompanyTargetDraft(String(toLakhs(owners.reduce((sum, key) => sum + toK(nextDrafts[key]?.annual), 0))))
+    setCompanyTargetDraft(String(toRupees(targetTotal(owners.map(key => toK(nextDrafts[key]?.annual))))))
     setErrors(current => ({ ...current, [owner]: '' }))
     setSaved(current => ({ ...current, [owner]: false }))
   }
@@ -65,10 +50,10 @@ function TargetManagerDialog({ store, onClose }) {
     const nextDrafts = Object.fromEntries(owners.map((owner, index) => {
       const draft = drafts[owner] || { annual: '0', q: ['0', '0', '0', '0'] }
       const quarters = allocate(annuals[index], draft.q.map(toK), 4)
-      return [owner, { annual: String(toLakhs(annuals[index])), q: quarters.map(value => String(toLakhs(value))) }]
+      return [owner, { annual: String(toRupees(annuals[index])), q: quarters.map(value => String(toRupees(value))) }]
     }))
     setDrafts(nextDrafts)
-    setCompanyTargetDraft(String(toLakhs(companyK)))
+    setCompanyTargetDraft(String(toRupees(companyK)))
     setErrors({})
     setSaved({})
     setGlobalError('')
@@ -76,15 +61,14 @@ function TargetManagerDialog({ store, onClose }) {
 
   const split = owner => setDrafts(current => {
     const total = toK(current[owner].annual)
-    const each = Math.floor(total / 4)
-    return { ...current, [owner]: { ...current[owner], q: [each, each, each, total - each * 3].map(value => String(toLakhs(value))) } }
+    return { ...current, [owner]: { ...current[owner], q: allocate(total, [1, 1, 1, 1]).map(value => String(toRupees(value))) } }
   })
 
   const save = owner => {
     const draft = drafts[owner]
     const annual = toK(draft.annual)
     const q = draft.q.map(toK)
-    if (q.reduce((sum, value) => sum + value, 0) !== annual) {
+    if (!targetAmountsEqual(targetTotal(q), annual)) {
       setErrors(current => ({ ...current, [owner]: 'Quarterly targets must add up to the annual target.' }))
       return
     }
@@ -98,7 +82,7 @@ function TargetManagerDialog({ store, onClose }) {
   }
 
   const saveAll = () => {
-    if (toK(companyTargetDraft) !== draftAnnual) {
+    if (!targetAmountsEqual(toK(companyTargetDraft), draftAnnual)) {
       setGlobalError('Apply the company target first so it matches the owner total.')
       return
     }
@@ -106,7 +90,7 @@ function TargetManagerDialog({ store, onClose }) {
     for (const owner of owners) {
       const draft = drafts[owner] || { annual: '0', q: ['0', '0', '0', '0'] }
       const annual = toK(draft.annual)
-      if (draft.q.map(toK).reduce((sum, value) => sum + value, 0) !== annual) {
+      if (!targetAmountsEqual(targetTotal(draft.q.map(toK)), annual)) {
         nextErrors[owner] = 'Quarterly targets must add up to the annual target.'
       }
     }
@@ -131,13 +115,13 @@ function TargetManagerDialog({ store, onClose }) {
   return <div className="target-manager-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
     <section className="target-manager-dialog" role="dialog" aria-modal="true" aria-labelledby="target-manager-title">
       <header className="target-manager-header">
-        <div><h2 id="target-manager-title">Manage sales targets</h2><p>Set annual and quarterly targets for each owner · ₹ lakh · {store.sales?.fy || 'Current FY'}</p></div>
+        <div><h2 id="target-manager-title">Manage sales targets</h2><p>Set annual and quarterly targets for each owner · INR · {store.sales?.fy || 'Current FY'}</p></div>
         <button type="button" aria-label="Close target editor" onClick={onClose}>×</button>
       </header>
       <div className="target-manager-summary" aria-live="polite">
-        <div className="target-manager-company-edit"><label htmlFor="company-target-draft">Company target · ₹ lakh</label><div><input id="company-target-draft" type="number" min="0" step="0.1" value={companyTargetDraft} onChange={event => { setCompanyTargetDraft(event.target.value); setGlobalError('') }} /><button type="button" onClick={applyCompanyTarget} disabled={!owners.length}>Apply</button></div></div>
-        <div><span>Confirmed company target</span><strong>₹{toLakhs(confirmedPlan.annual).toLocaleString('en-IN', { maximumFractionDigits: 1 })} L</strong></div>
-        <div><span>Draft total</span><strong>₹{toLakhs(draftAnnual).toLocaleString('en-IN', { maximumFractionDigits: 1 })} L</strong></div>
+        <div className="target-manager-company-edit"><label htmlFor="company-target-draft">Company target · INR</label><div><input id="company-target-draft" type="number" min="0" step="0.01" value={companyTargetDraft} onChange={event => { setCompanyTargetDraft(event.target.value); setGlobalError('') }} /><button type="button" onClick={applyCompanyTarget} disabled={!owners.length}>Apply</button></div></div>
+        <div><span>Confirmed company target</span><strong>₹{toRupees(confirmedPlan.annual).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></div>
+        <div><span>Draft total</span><strong>₹{toRupees(draftAnnual).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></div>
         <div><span>Targets confirmed</span><strong>{confirmedOwners} of {owners.length} owners</strong></div>
       </div>
       {globalError && <p className="target-manager-global-message" role="status">{globalError}</p>}
@@ -146,20 +130,18 @@ function TargetManagerDialog({ store, onClose }) {
           <thead><tr><th>Owner</th><th>Annual</th><th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th /></tr></thead>
           <tbody>{owners.map(owner => {
             const draft = drafts[owner] || { annual: '0', q: ['0', '0', '0', '0'] }
-            const label = fieldLabel(store.config, 'owner', owner)
+            const label = displayRole(owner, store.config)
             const ownerPlan = targetPlan(store, owner)
             const stored = targets[owner]
-            const matchesStored = stored && toK(draft.annual) === Number(stored.annual)
-              && draft.q.every((value, index) => toK(value) === Number(stored.q?.[index]))
+            const matchesStored = stored && targetAmountsEqual(toK(draft.annual), stored.annual)
+              && draft.q.every((value, index) => targetAmountsEqual(toK(value), stored.q?.[index]))
             const confirmed = saved[owner] || (ownerPlan.configuredCount > 0 && matchesStored)
-            const annual = Number(draft.annual) || 0
-            const quarterTotal = draft.q.reduce((sum, value) => sum + (Number(value) || 0), 0)
-            const mismatch = Math.abs(quarterTotal - annual) > 0.0001
+            const mismatch = !targetAmountsEqual(targetTotal(draft.q.map(toK)), toK(draft.annual))
             return <React.Fragment key={owner}>
               <tr>
-                <th scope="row">{label === owner ? displayRole(owner, store.config) : label}</th>
-                <td><input type="number" min="0" step="0.1" aria-label={`${owner} annual target (₹ lakh)`} value={draft.annual} onChange={event => update(owner, 'annual', event.target.value)} name={`target-${owner}-annual`} /></td>
-                {draft.q.map((value, index) => <td key={index}><input type="number" min="0" step="0.1" aria-label={`${owner} Q${index + 1} target (₹ lakh)`} value={value} onChange={event => update(owner, 'q', event.target.value, index)} name={`target-${owner}-q${index + 1}`} /></td>)}
+                <th scope="row">{label}</th>
+                <td><input type="number" min="0" step="0.01" aria-label={`${owner} annual target (INR)`} value={draft.annual} onChange={event => update(owner, 'annual', event.target.value)} name={`target-${owner}-annual`} /></td>
+                {draft.q.map((value, index) => <td key={index}><input type="number" min="0" step="0.01" aria-label={`${owner} Q${index + 1} target (INR)`} value={value} onChange={event => update(owner, 'q', event.target.value, index)} name={`target-${owner}-q${index + 1}`} /></td>)}
                 <td className="target-manager-actions"><button type="button" onClick={() => split(owner)}>Split evenly</button><button type="button" onClick={() => save(owner)} disabled={mismatch}>Confirm target</button>{confirmed ? <span role="status">Confirmed</span> : ownerPlan.pendingCount > 0 ? <span role="status">Needs confirmation</span> : null}</td>
               </tr>
               {errors[owner] && <tr className="target-manager-error"><td colSpan="7" role="alert">{errors[owner]}</td></tr>}

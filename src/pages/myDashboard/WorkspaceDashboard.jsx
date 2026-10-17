@@ -1,6 +1,7 @@
+import { fmtRupeesFromK, displayRole } from '../../utils.js'
 import NormalFunnel, { FunnelViewSwitch, useFunnelView } from './FunnelView.jsx'
 import QuarterPeriodControl from './QuarterPeriodControl.jsx'
-import React, { useMemo, useState } from 'react'
+ import React, { useMemo, useState } from 'react'
 import { Icon } from '../../icons.jsx'
 import { displayOpportunityId } from '../../seed.js'
 import { FY_QUARTERS } from '../../kpi.js'
@@ -23,7 +24,7 @@ import { DashboardDrilldownProvider, PipelineCounts } from './DashboardDrilldown
 import { drillClick, useDashboardDrilldown } from './drillInteraction.js'
 export { TargetManagerDialog }
 
-const money = value => `₹${((Number(value) || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`
+const money = value => fmtRupeesFromK(Number(value) || 0)
 const scopeLabel = scope => scope === 'my' ? 'My' : 'Global'
 
 function Card({ label, value, hint, icon, tone, explanation, selection }) {
@@ -71,7 +72,7 @@ export function Performance({ model, showMoney, scope, nav, period, setPeriod, s
       data-explain={kind === 'actual'
         ? 'Won value uses the confirmed PO amount where available and the opportunity estimate otherwise.'
         : 'Target is the configured sales goal for the selected period.'}>
-      <span>{label}</span><i>{value !== null && <b className={kind} style={{ width: `${Number(value) / maximum * 100}%` }} />}</i><strong>{unavailable || (showMoney ? money(value) : value)}</strong></div>)}<small>Value ({showMoney ? '₹ L' : 'opportunities'})</small></div>
+      <span>{label}</span><i>{value !== null && <b className={kind} style={{ width: `${Number(value) / maximum * 100}%` }} />}</i><strong>{unavailable || (showMoney ? money(value) : value)}</strong></div>)}<small>Value ({showMoney ? 'INR' : 'opportunities'})</small></div>
     {hasTarget && perf.targetNeedsConfirmation && <p className="reference-target-note">Confirmed company target includes {perf.targetOwnerCount - perf.targetPendingCount} of {perf.targetOwnerCount} owner targets. {perf.targetPendingCount} still need confirmation.</p>}
     {comparison && <aside className={`reference-gap ${gap > 0 ? 'is-below-target' : 'is-on-target'}`} {...drillClick(open && (() => open({ kind: 'gap' })), 'View remaining-to-target calculation')} data-explain-title="Remaining to full-period target"
       data-explain="Gap is target minus actual, with a minimum of zero.">
@@ -109,7 +110,7 @@ function ActionQueue({ model, nav, scope }) {
     {tasks.map(task => <tr key={task.id} {...drillClick(() => nav(task.path), `Open ${task.text}`, { row: true })}
       data-explain-title={task.text}
       data-explain={priorityReason(task)}>
-      <td><strong>{task.opp ? displayOpportunityId(task.opp.id) : 'Approval'}</strong> <span>· {task.opp?.sellTo || task.opp?.oppName || 'Workspace approval'}</span></td><td>{task.text}</td><td>{task.owner || 'Unassigned'}</td><td><span className="reference-blocked" data-tone={task.rank === 2 ? 'danger' : task.rank <= 4 ? 'warning' : 'neutral'}><i />{task.timing || 'Blocked'}</span></td><td><button data-explain-title="Open action" data-explain="Open this action." onClick={() => nav(task.path)}>Open</button></td></tr>)}
+      <td><strong>{task.opp ? displayOpportunityId(task.opp.id) : 'Approval'}</strong> <span>· {task.opp?.sellTo || task.opp?.oppName || 'Workspace approval'}</span></td><td>{task.text}</td><td>{task.owner ? task.owner.split(',').map(owner => displayRole(owner.trim())).join(', ') : 'Unassigned'}</td><td><span className="reference-blocked" data-tone={task.rank === 2 ? 'danger' : task.rank <= 4 ? 'warning' : 'neutral'}><i />{task.timing || 'Blocked'}</span></td><td><button data-explain-title="Open action" data-explain="Open this action." onClick={() => nav(task.path)}>Open</button></td></tr>)}
     {!tasks.length && <tr><td colSpan="5">Nothing requires action right now.</td></tr>}
   </tbody></table></div></Section>
 }
@@ -119,7 +120,7 @@ export function Funnel({ model, showMoney, scope, title, onStageClick }) {
   const [view, setView] = useFunnelView()
   return <Section title={title || `${scopeLabel(scope)} Sales Pipeline Funnel`} accent="blue" className="reference-funnel"
     explanation={view === 'normal' ? 'Each opportunity appears at its current saved stage. Funnel widths represent stage order, not counts. Probability splits and totals reflect saved opportunities.' : "Each opportunity appears at its current saved stage. Curved stage widths vary with opportunity count within a 30%–80% display range for readability; they are not directly proportional to counts. Probability splits and totals reflect the current saved opportunities. Empty stages show zero counts and values."}
-    action={<><FunnelViewSwitch view={view} onChange={setView} /><span className="reference-funnel-metric">Opportunities{showMoney ? ' (and Value ₹ L)' : ''}</span><span className="reference-legend"><b className="high" />High <b className="medium" />Medium <b className="low" />Low</span></>}><p className="reference-analysis-subtitle">{view === 'normal' ? 'Current stage · Widths show stage order, not counts · Splits show probability · Grey = empty' : 'Current stage · Widths adjusted for readability · Splits show probability · Grey = empty'}</p><NormalFunnel view={view} rows={model.funnel} animate showMoney={showMoney} formatMoney={money} onStageClick={onStageClick || (open && (row => open({ kind: 'funnel', stageKey: row.key })))} onSegmentClick={open && ((row, probability) => open({ kind: 'funnel', stageKey: row.key, probability }))} /></Section>
+    action={<><FunnelViewSwitch view={view} onChange={setView} /><span className="reference-funnel-metric">Opportunities{showMoney ? ' (and Value INR)' : ''}</span><span className="reference-legend"><b className="high" />High <b className="medium" />Medium <b className="low" />Low</span></>}><p className="reference-analysis-subtitle">{view === 'normal' ? 'Current stage · Widths show stage order, not counts · Splits show probability · Grey = empty' : 'Current stage · Widths adjusted for readability · Splits show probability · Grey = empty'}</p><NormalFunnel view={view} rows={model.funnel} animate showMoney={showMoney} formatMoney={money} onStageClick={onStageClick || (open && (row => open({ kind: 'funnel', stageKey: row.key })))} onSegmentClick={open && ((row, probability) => open({ kind: 'funnel', stageKey: row.key, probability }))} /></Section>
 }
 
 function WinLoss({ model, scope, nav, showMoney }) {

@@ -40,6 +40,6 @@ export function PhoneInboxToolbar({ store, query, onQuery, view, onView, archive
       </div></details></div>
     {!archive && <div className="phone-inbox-views" role="group" aria-label="Inbox views">{INBOX_VIEWS.map(item => <button type="button" key={item.key} aria-label={item.label} aria-pressed={view === item.key} onClick={() => onView(item.key)}>{item.key === 'starred' ? <Icon name="star" size={19} /> : item.label}</button>)}</div>}
     <div className="phone-inbox-list-label"><span>{archive ? 'Archived leads' : INBOX_VIEWS.find(item => item.key === view)?.label}</span><span>Newest first</span></div>
-    {!archive && <button type="button" className="phone-inbox-new" disabled={store.canPerform?.('leads.create') === false} onClick={onNew}><Icon name="edit" size={19} />New enquiry</button>}
+    {!archive && <button type="button" className="phone-inbox-new" disabled={store.canPerform?.('leads.create') === false} onClick={onNew}><Icon name="edit" size={19} />New Lead</button>}
   </>
 }

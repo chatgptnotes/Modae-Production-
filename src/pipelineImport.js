@@ -7,7 +7,7 @@ const HEADER_ALIASES = {
   id: ['opp id', 'opportunity id', 'id'],
   sellTo: ['sell to customer', 'customer', 'customer name'],
   oppName: ['opportunity name description', 'oppurtunity name description', 'opportunity name', 'description'],
-  owner: ['owner', 'sales owner', 'ljs'],
+  owner: ['owner', 'sales owner', 'opportunity owner', 'ljs'],
   stage: ['stage', 'funnel stage'],
   valueK: ['value', 'value inr', 'value rs', 'value k', 'opportunity value'],
   orderDate: ['order date', 'expected order date', 'expected close date', 'close date'],
@@ -64,6 +64,12 @@ const workbookRows = (worksheet, date1904 = false) => {
 }
 
 const rowValue = (row, ...names) => valueFor(row, names)
+// Historical workbook amounts are K₹. New exports name INR explicitly.
+const amountInK = (row, label) => {
+  const inrKey = Object.keys(row).find(key => [canon(`${label} (INR)`), canon(`${label} (₹)`)].includes(canon(key)))
+  if (inrKey) { const amount = numberOf(row[inrKey]); return amount == null ? null : amount / 1000 }
+  return numberOf(rowValue(row, `${label} (K₹)*`, `${label} (K₹)`))
+}
 
 function currentOpportunity(row) {
   const id = textOf(rowValue(row, 'Opp ID'))
@@ -71,8 +77,8 @@ function currentOpportunity(row) {
   if (!id) return null
   const oppType = textOf(rowValue(row, 'Opp Type*', 'Opp Type')) || 'Project'
   const stage = textOf(rowValue(row, 'Stage*', 'Stage')) || 'Lead'
-  const valueK = numberOf(rowValue(row, 'Value (K₹)*', 'Value (K₹)'))
-  const cogsK = numberOf(rowValue(row, 'COGS (K₹)*', 'COGS (K₹)'))
+  const valueK = amountInK(row, 'Value')
+  const cogsK = amountInK(row, 'COGS')
   const remarks = textOf(rowValue(row, 'Update/Remarks', 'Remarks'))
   return {
     id, sl: numberOf(rowValue(row, 'Sl.')),
@@ -83,7 +89,7 @@ function currentOpportunity(row) {
     customerStatus: textOf(rowValue(row, 'Customer Status')),
     eucName: textOf(rowValue(row, 'EUC Name*', 'End User Customer')),
     eucLocation: textOf(rowValue(row, 'EUC Location', 'EU Location')),
-    owner: textOf(rowValue(row, 'LJS', 'Owner')),
+    owner: textOf(rowValue(row, 'LJS', 'Owner', 'Opportunity Owner')),
     oppType,
     bu: textOf(rowValue(row, 'BU*', 'BU')),
     segment: textOf(rowValue(row, 'Segment')),
@@ -113,8 +119,8 @@ function oldOpportunity(row) {
   const oppType = textOf(rowValue(row, 'Opp Type')) || 'Project'
   const status = 'Closed'
   const stage = textOf(rowValue(row, 'Stage')) || 'Lost'
-  const valueK = numberOf(rowValue(row, 'Value (K₹)'))
-  const cogsK = numberOf(rowValue(row, 'COGS (K₹)'))
+  const valueK = amountInK(row, 'Value')
+  const cogsK = amountInK(row, 'COGS')
   const sellTo = textOf(rowValue(row, 'Sell To Customer'))
   const remarks = textOf(rowValue(row, 'Update/Remarks'))
   return {

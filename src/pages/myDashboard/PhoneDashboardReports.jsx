@@ -1,3 +1,4 @@
+import { fmtRupeesFromK } from '../../utils.js'
 import NormalFunnel, { FunnelViewSwitch, useFunnelView } from './FunnelView.jsx'
 import QuarterPeriodControl from './QuarterPeriodControl.jsx'
 import React from 'react'
@@ -6,7 +7,7 @@ import WinLossReport from './WinLossReport.jsx'
 import { drillClick, useDashboardDrilldown } from './drillInteraction.js'
 import { WonValueNotice } from '../../BookingReview.jsx'
 
-export const phoneMoney = value => `₹${((Number(value) || 0) / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`
+export const phoneMoney = value => fmtRupeesFromK(Number(value) || 0)
 
 // Native disclosures provide keyboard toggling and announce expansion state.
 // React only supplies the initial open value; user toggles survive rerenders.

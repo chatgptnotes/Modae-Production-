@@ -1,3 +1,4 @@
+import { fmtRupeesFromK } from '../../utils.js'
 import React, { useState } from 'react'
 import { drillClick, useDashboardDrilldown } from './drillInteraction.js'
 import WinLossDonut from './WinLossDonut.jsx'
@@ -61,7 +62,7 @@ export default function WinLossReport({ outcomes, showMoney = false, animateDonu
         </div>
         <dl className="winloss-summary-totals">
           <div {...drillClick(open && (() => open({ kind: 'outcomes' })), 'View Won/Lost opportunities')}><dt>Won/Lost Closed</dt><dd>{summary.total}</dd></div>
-          {showMoney && totalValue != null && <div {...drillClick(open && (() => open({ kind: 'outcomes' })), 'View Won/Lost value contributors')}><dt>Total Opportunity Value</dt><dd>₹{(totalValue / 100).toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L</dd></div>}
+          {showMoney && totalValue != null && <div {...drillClick(open && (() => open({ kind: 'outcomes' })), 'View Won/Lost value contributors')}><dt>Total Opportunity Value</dt><dd>{fmtRupeesFromK(totalValue)}</dd></div>}
         </dl>
         <p className="winloss-calculation">{closed} closed {closed === 1 ? 'opportunity' : 'opportunities'} · {explanation}</p>
         {closedOther.count > 0 && <p className="winloss-exclusion">{closedOther.count} other closed {closedOther.count === 1 ? 'outcome is' : 'outcomes are'} excluded from win rate.</p>}

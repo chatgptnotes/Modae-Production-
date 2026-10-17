@@ -159,7 +159,7 @@ test('default mail authorization rejects missing bearer before SMTP', withMailEn
 }))
 
 test('authoritative permissions, roster status, readiness and release gate all block SMTP', withMailEnv(async()=>{
- for(const [options,code] of [[{status:'Suspended'},403],[{denyAction:true},403],[{denyPage:true},403],[{opportunity:{customerStatus:'Blue'}},409],[{config:{requireFinalQuoteApproval:true}},409]]) {
+ for(const [options,code] of [[{status:'Suspended'},403],[{denyAction:true},403],[{denyPage:true},403],[{opportunity:{customerStatus:'Red',legacyCustomerClass:'Red'}},409],[{config:{requireFinalQuoteApproval:true}},409]]) {
   let sent=0
   const protectedHandler=createSendProposalEmailHandler({authorize:(req,input)=>authorizeProposalSend(req,input,authorizationDeps(options)),transportFactory:()=>({sendMail:async()=>{sent++}})})
   const res=response();await protectedHandler({method:'POST',headers:{authorization:'Bearer token'},body:{...validMail,approvals:[{status:'Approved'}],ready:true}},res)
@@ -174,4 +174,12 @@ test('authorized ready saved proposal sends once; missing opportunity ID cannot 
   const res=response();await protectedHandler({method:'POST',headers:{authorization:'Bearer token'},body},res);assert.equal(res.out.status,code,JSON.stringify(res.out.body))
  }
  assert.equal(sent,1)
+}))
+
+// Optional KYC must also hold at the server SMTP boundary.
+test('missing KYC on a former Blue customer does not block authoritative proposal dispatch', withMailEnv(async()=>{
+ let sent=0
+ const handler=createSendProposalEmailHandler({authorize:(req,input)=>authorizeProposalSend(req,input,authorizationDeps({opportunity:{customerStatus:'Red',legacyCustomerClass:'Blue',customerClassificationVersion:2}})),transportFactory:()=>({sendMail:async()=>{sent++;return {messageId:'optional-kyc'}}})})
+ const res=response();await handler({method:'POST',headers:{authorization:'Bearer token'},body:validMail},res)
+ assert.equal(res.out.status,200,JSON.stringify(res.out.body));assert.equal(sent,1)
 }))

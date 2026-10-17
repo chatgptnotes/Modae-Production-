@@ -50,19 +50,19 @@ test('status filter is removed from the Opportunities toolbar and More menu', ()
   assert.doesNotMatch(tracker, /statusFilter/)
 })
 
-test('Excel export uses workbook columns and K₹ for every role', () => {
-  assert.match(tracker, /const exportCols = PIPELINE_COLUMNS/)
+test('Excel export uses workbook columns and actual INR for every role', () => {
+  assert.match(tracker, /const exportCols = COLS/)
   assert.match(tracker, /\['Sl\.', \.\.\.exportCols\.map\(col => col\.label\)\]/)
-  assert.match(tracker, /case 'valueK': return o\.valueK \?\? ''/)
-  assert.match(tracker, /case 'gmK': return gmK\(o\)/)
+  assert.match(tracker, /case 'valueK': return o\.valueK == null \? '' : o\.valueK \* 1000/)
+  assert.match(tracker, /case 'gmK': return gmK\(o\) \* 1000/)
   assert.match(tracker, /case 'fqFy': return fiscalQuarter\(o\.orderDate\)/)
   assert.ok(!PIPELINE_COLUMNS.some(c => c.key === 'nextActionOwner'))
 })
 
-test('Value and COGS use stored K₹ directly while GM stays derived', () => {
-  assert.match(tracker, /value=\{o\.valueK \?\? ''\}.*?onChange=\{upd\(o\.id, 'valueK'\)\}/)
-  assert.match(tracker, /value=\{o\.cogsK \?\? ''\}.*?onChange=\{upd\(o\.id, 'cogsK'\)\}/)
-  assert.match(tracker, /\{fmt\(gmK\(o\), 3\)\}/)
+test('Value and COGS display actual INR while GM stays derived', () => {
+  assert.match(tracker, /value=\{o\.valueK == null \? '' : o\.valueK \* 1000\}.*?onChange=\{upd\(o\.id, 'valueK'\)\}/)
+  assert.match(tracker, /value=\{o\.cogsK == null \? '' : o\.cogsK \* 1000\}.*?onChange=\{upd\(o\.id, 'cogsK'\)\}/)
+  assert.match(tracker, /\{fmt\(gmK\(o\) \* 1000, 2\)\}/)
   assert.deepEqual(financials({ valueK: 100, cogsK: 25 }), { gmK: 75, gmPct: 0.75 })
 })
 
@@ -445,11 +445,11 @@ test('an unscoped service opportunity names its own salesperson', () => {
   assert.equal(na.derived, true)
 })
 
-test('a KYC block sits with the commercial approver', () => {
+test('optional KYC does not assign a blocking next action to the commercial approver', () => {
   const blue = { id: 'X-2', status: 'Open', owner: 'RS', route: 'Service', oppType: 'Service', customerStatus: 'Blue', sellTo: 'Unknown Ltd' }
   const na = nextActionWith(blue, { bom: [], terms: [] }, { approvals: [], kyc: {}, sparesLines: [], svcEstimates: [] })
-  assert.equal(na.owner, 'AH')
-  assert.match(na.text, /KYC/)
+  assert.equal(na.owner, 'RS')
+  assert.doesNotMatch(na.text, /KYC/)
 })
 
 test('Next Action remains in the list and drawer after removal from the Excel sheet', () => {

@@ -1,4 +1,4 @@
-import { isActiveUser, isAccountAdmin } from '../src/userManagement.js'
+import { isActiveUser, isAccountAdmin, accountProfileFor } from '../src/userManagement.js'
 import { createHash } from 'node:crypto'
 import { getAdminSupabaseClient } from './_supabase-client.js'
 import { upgradeCustomerRules } from '../src/customerClasses.js'
@@ -35,7 +35,7 @@ export function createWorkbookImportHandler(getClient = getAdminSupabaseClient) 
       const opportunities = read(opportunityResult)
       const settings = read(settingsResult)
       const stateRecord = id => records.find(row => row.entity === 'state' && row.id === id && !row.deleted_at)
-      const profile = (stateRecord('users')?.data || []).find(user => String(user.email || '').toLowerCase() === auth.data.user.email.toLowerCase())
+      const profile = accountProfileFor(stateRecord('users')?.data || [], auth.data.user)
       if (!isActiveUser(profile) || !isAccountAdmin(profile)) {
         return res.status(403).json({ ok: false, error: 'Only an active administrator can import a workbook.' })
       }

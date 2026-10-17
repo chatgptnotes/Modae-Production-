@@ -13,14 +13,14 @@ async function responseError(response, fallback) {
   const body = await response.json().catch(() => ({}))
   const error = new Error(body?.error || `${fallback} (${response.status})`)
   error.status = response.status
-  error.code = body?.errorCode || ''
+  error.code = body?.errorCode || body?.code || ''
   error.details = body?.details || ''
   error.hint = body?.hint || ''
   return error
 }
 
-export async function fetchWorkspace(token, fetcher = fetch, { isCurrent = () => true } = {}) {
-  const response = await fetcher('/api/workspace/bootstrap', {
+export async function fetchWorkspace(token, fetcher = fetch, { isCurrent = () => true, identityOnly = false } = {}) {
+  const response = await fetcher(`/api/workspace/bootstrap${identityOnly ? '?scope=identity' : ''}`, {
     headers: { ...workspaceDeploymentHeaders(), Authorization: `Bearer ${token}` },
   })
   if (!response.ok) throw await responseError(response, 'Workspace bootstrap failed')
@@ -70,4 +70,31 @@ export async function importWorkspaceWorkbook(importData, { action = 'preview', 
   })
   if (!response.ok) throw await responseError(response, 'Workbook import failed')
   return response.json()
+}
+
+export async function convertLeadOnServer(leadId, leadRev, opportunity, fetcher = fetch) {
+  const { data } = await supabaseAuth?.getSession?.() || {}
+  const token = data?.session?.access_token
+  if (!token) throw new Error('Sign in before converting a lead.')
+  const response = await fetcher('/api/workspace/data', {
+    method:'POST', headers:{...workspaceDeploymentHeaders(),Authorization:`Bearer ${token}`,'Content-Type':'application/json','x-workspace-generation':getWorkspaceGeneration()},
+    body:JSON.stringify({operation:'lead_conversion',leadId,leadRev,opportunity}),
+  })
+  if (!response.ok) throw await responseError(response,'Lead conversion failed')
+  return (await response.json()).data
+}
+
+export async function fetchWorkspaceView(view, { isCurrent = () => true } = {}, fetcher = fetch) {
+  const { data } = await supabaseAuth?.getSession?.() || {}
+  const token = data?.session?.access_token
+  if (!token) throw new Error('Sign in before loading workspace data.')
+  const response = await fetcher('/api/workspace/data', {
+    method: 'POST', headers: { ...workspaceDeploymentHeaders(), Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ operation: 'view', view }),
+  })
+  if (!response.ok) throw await responseError(response, 'Workspace view failed')
+  const result = await response.json()
+  if (!isCurrent()) throw new Error('Session changed.')
+  if (workspaceGeneration && result.generation !== workspaceGeneration) throw Object.assign(new Error('The workspace changed. Reload before continuing.'), { code: 'WORKSPACE_PURGED', status: 409 })
+  return result
 }

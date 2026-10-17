@@ -1,6 +1,10 @@
+import { createLeadIntakeHandler } from '../../api/lead-intake.js'
 import { projectWorkspace } from '../workspaceAccess.js'
 import { createWorkspaceDataHandler } from '../../api/workspace-data.js'
 import adminPolicyHandler from '../../api/admin-policy.js'
+import adminIntegrationsHandler from '../../api/admin-integrations.js'
+import adminBackupsHandler from '../../api/admin-backups.js'
+import restoredFilesHandler from '../../api/restored-files.js'
 import userPreferencesHandler from '../../api/user-preferences.js'
 import opportunityNumberHandler from '../../api/opportunity-number.js'
 import { controller } from './controllers/legacy.js'
@@ -63,6 +67,9 @@ export function createApp({
   app.disable('x-powered-by')
   app.set('trust proxy', 1)
   app.use(cors(corsOptions))
+  app.use('/api/admin-integrations', express.json({ limit: '32kb' }))
+  app.use('/api/admin-backups', express.json({ limit: '150mb' }))
+  app.use('/api/lead-intake', express.json({ limit: '9mb' }))
   app.use('/api/workspace/data', express.json({ limit: '32mb' }))
   app.use('/api/send-proposal-email', express.json({ limit: '32mb' }))
   app.use(express.json({ limit: '2mb' }))
@@ -82,7 +89,7 @@ export function createApp({
       if (!user?.profile) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
       const workspace = projectWorkspace({ ...await workspaceCache.bootstrap(), config: user.config || {} }, user.profile)
       res.setHeader('x-workspace-generation', workspaceCache.generationHeader())
-      return res.status(200).json({ ok: true, data: workspace })
+      return res.status(200).json({ ok: true, data: req.query.scope === 'identity' ? { users: workspace.users, config: workspace.config } : workspace })
     } catch (error) { return next(error) }
   })
   app.post('/api/workspace/save', async (req, res, next) => {
@@ -115,7 +122,18 @@ export function createApp({
     } catch (error) { next(error) }
   })
   app.post('/api/workspace/data', controller(createWorkspaceDataHandler({ invalidate: () => workspaceCache.invalidate() })))
+  const leadIntake = controller(createLeadIntakeHandler({ invalidate: () => workspaceCache.invalidate() }))
+  app.get('/api/lead-intake', leadIntake)
+  app.post('/api/lead-intake', leadIntake)
   app.get('/api/admin-policy', controller(adminPolicyHandler))
+  app.post('/api/restored-files', controller(restoredFilesHandler))
+  app.get('/api/admin-integrations', controller(adminIntegrationsHandler))
+  app.post('/api/admin-integrations', controller(adminIntegrationsHandler))
+  app.post('/api/admin-backups', async (req, res, next) => {
+    try { await adminBackupsHandler(req, res) } catch (error) { next(error) } finally {
+      if (req.body?.operation === 'restore') workspaceCache.invalidate()
+    }
+  })
   app.get('/api/user-preferences', controller(userPreferencesHandler))
   app.put('/api/user-preferences', controller(userPreferencesHandler))
   app.post('/api/admin-policy', async (req, res, next) => {

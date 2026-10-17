@@ -3,7 +3,7 @@ import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable, displayOpportunityId } from '../seed.js'
+import { OWNERS, STAGES, PROB_LEVELS, SEGMENTS, PRODUCTS, BUS, SUBFOLDERS, MILESTONES, REVISION_TYPES, DEFAULT_WORKFLOW, isWorkflowAvailable, displayOpportunityId } from '../seed.js'
 
 import { canPriceProposal, isAdminRole, fmt, fmtRupeesFromK, ageDays, ddMmmYY, ddMMyyyy, gmailComposeHref, displayRole, displayRoles, displayRoleLabel, formatISTDateTime, productDisplayLabel } from '../utils.js'
 import { EMAIL_RE, recipientsValid, splitRecipients } from '../emailValidation.js'
@@ -312,23 +312,6 @@ function WorkbenchRecord() {
   const [recovery, setRecovery] = useState('idle')
   const [sharedRefreshError, setSharedRefreshError] = useState('')
 
-  useEffect(() => {
-    if (!store.authReady || !['live', 'degraded'].includes(store.liveSyncStatus)) return undefined
-    let active = true
-    const refreshSharedData = () => {
-      if (document.visibilityState === 'hidden') return
-      void store.refreshSharedData().then(ok => {
-        if (!active) return
-        setSharedRefreshError(ok ? '' : 'Shared workspace data could not be refreshed.')
-      }).catch(() => {
-        if (active) setSharedRefreshError('Shared workspace data could not be refreshed.')
-      })
-    }
-    refreshSharedData()
-    return () => {
-      active = false
-    }
-  }, [oppId, store.authReady, store.liveSyncStatus])
 
   const retrySharedRefresh = () => {
     setSharedRefreshError('')
@@ -714,8 +697,8 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
   const blockerExplanation = blocker => {
     if (blocker.key === 'clarifications') return 'Customer answers are still missing. The proposal must not be built on unconfirmed technical, delivery, or site assumptions.'
     if (blocker.key === 'dev') return 'This proposal differs from the customer’s requested commercial terms. AH approval is required before submission.'
-    if (blocker.key === 'amber-fee') return 'This Amber customer requires the pre-quote processing fee to be received before the opportunity can progress.'
-    if (blocker.key === 'kyc') return 'This Blue customer is new or unverified. AH must complete the required KYC review before registration or quoting.'
+    if (blocker.key === 'amber-fee') return 'This Yellow customer requires the pre-quote processing fee to be received before the opportunity can progress.'
+    if (blocker.key === 'kyc') return 'KYC is optional; missing documents do not block progression.'
     if (blocker.key === 'red-clearance') return 'This Red customer requires joint commercial clearance because of the risk or payment history.'
     // Diagram 02 §5 — the layered approval before the first quote dispatch and
     // before every revision. All three must clear; there is no exception route.
@@ -1423,21 +1406,14 @@ function CustomerKycTab({ opp }) {
             {!isAdminRole(store.role) && <p className="hint">Opportunity values save immediately. Updating the shared customer master requires AH approval.</p>}
           </>
         ) : (
-          <p className="hint">{opp.sellTo} is not in the customer master yet — treated as a new (Blue) customer.</p>
+          <p className="hint">{opp.sellTo} is not in the customer master yet — classification is recorded manually. KYC is optional.</p>
         )}
-        {opp.customerStatus === 'Blue' && (
-          opp.leadVerification?.status === 'Verified'
-            ? null
-            : <WarnBox>Blue class: AH clearance required before proposal release.</WarnBox>
-        )}
-        {opp.customerStatus === 'Red' && (
-          <WarnBox>Red class: KYC not required — continuation gated by joint LJS+AH (AP-1).</WarnBox>
-        )}
-        {opp.customerStatus === 'Amber' && (
+        <p className="hint">KYC is optional and does not block proposals, Won or PO validation.</p>
+        {['Yellow', 'Amber'].includes(opp.customerStatus) && (
           opp.leadVerification?.status === 'Confirmed'
-            ? <div className="okbox"><b>Amber processing fee:</b> confirmed at Lead stage — no second confirmation is required in the Opportunity.</div>
+            ? <div className="okbox"><b>Yellow processing fee:</b> confirmed at Lead stage — no second confirmation is required in the Opportunity.</div>
             : <div className={opp.amberFeePaid ? 'okbox' : 'warnbox'}>
-              <b>Amber pre-quote fee:</b> ₹ {fmt(fee.amount)} — {opp.amberFeePaid ? 'received' : `pending (${fee.days}-day window)`}
+              <b>Yellow pre-quote fee:</b> ₹ {fmt(fee.amount)} — {opp.amberFeePaid ? 'received' : `pending (${fee.days}-day window)`}
               {!opp.amberFeePaid && (
                 <div style={{ marginTop: 6 }}>
                 </div>
@@ -1452,7 +1428,7 @@ function CustomerKycTab({ opp }) {
         )}
       </div>
       <div className="ana-card c-6">
-        <div className="ana-title">{opp.leadVerification ? 'Lead-stage verification' : 'KYC checklist'}</div>
+        <div className="ana-title">{opp.leadVerification ? 'Lead-stage verification' : 'KYC checklist (optional)'}</div>
         {opp.leadVerification ? (
           <>
             <div className="okbox">
@@ -2799,7 +2775,7 @@ function communicationRecipient(entry, opp, customer, vendorQuotes, mailbox) {
 function communicationSender(entry, opp, lead) {
   const raw = cleanAddress(entry.from)
   if (entry.dir === 'In') return { name: entry.fromName || lead?.sender || raw || 'Customer', email: raw && raw !== (entry.fromName || lead?.sender) ? raw : '' }
-  return { name: entry.fromName || ROLES[opp.owner]?.name || displayRole(opp.owner) || 'ModAE Sales Desk', email: raw }
+  return { name: entry.fromName || displayRole(opp.owner) || 'ModAE Sales Desk', email: raw }
 }
 
 const formatKind = kind => ({

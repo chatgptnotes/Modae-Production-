@@ -1,0 +1,17 @@
+.non-sales-workspace { max-width: 1000px; margin: auto; padding: 20px; }
+.non-sales-workspace header, .non-sales-workspace nav { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; }
+.non-sales-workspace header { justify-content: space-between; padding-bottom: 24px; }
+.non-sales-intake fieldset { border: 0; padding: 0; min-width: 0; }
+.non-sales-intake label { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+.non-sales-intake input, .non-sales-intake select, .non-sales-intake textarea { width: 100%; min-width: 0; padding: 12px; font: inherit; }
+.non-sales-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 0 24px; }
+.non-sales-intake [role="alert"] { color: var(--danger, #b42318); }
+@media (max-width: 600px) { .non-sales-fields { grid-template-columns: 1fr; } .non-sales-workspace { padding: 16px; } }
+.non-sales-intake input, .non-sales-intake select, .non-sales-intake textarea {
+  box-sizing: border-box;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--surface-default, #fff);
+  color: var(--text-primary, inherit);
+  min-height: 44px;
+}

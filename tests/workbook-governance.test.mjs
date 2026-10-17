@@ -21,7 +21,7 @@ test('classification requires known facts and a unique match, never a silent col
   const customer = { status: 'Blue', classificationCriteria: { orders: 'Yes' } }
   assert.equal(governance.suggestCustomerClass(customer, config).suggestedClass, 'Green')
   assert.equal(customer.status, 'Blue')
-  config.classificationCriteria[0].conditions.Amber = { op: 'eq', value: 'Yes' }
+  config.classificationCriteria[0].conditions.Yellow = { op: 'eq', value: 'Yes' }
   assert.equal(governance.suggestCustomerClass(customer, config).status, 'Needs review')
 })
 
@@ -31,10 +31,10 @@ test('unclear workbook criteria are excluded and negative numeric facts are reje
   assert.ok(governance.validateWorkbookConfig({ ...governance.workbookDefaults(), amberFee: { amount: -1 } }).length)
 })
 
-test('Red defaults to No Bid and only joint clearance permits continuation', () => {
+test('legacy Red continuation controls remain after registration', () => {
   const config = governance.workbookDefaults()
   const lead = { customerStatus: 'Red', existingCustomerKyc: true }
-  assert.equal(leadVerificationComplete(lead, 'Red', { config, redCleared: false }), false)
+  assert.equal(leadVerificationComplete(lead, 'Red', { config, redCleared: false }), true)
   assert.equal(leadVerificationComplete(lead, 'Red', { config, redCleared: true }), true)
   assert.deepEqual(leadVerificationBlockers(lead, 'Red', { config, redCleared: true }), [])
   const opp = { id: 'R', status: 'Open', customerStatus: 'Red', milestone: 'Proposal' }
@@ -45,9 +45,9 @@ test('Red defaults to No Bid and only joint clearance permits continuation', () 
   assert.equal(releaseState({}, state.approvals, 'R', opp, { ...config, requireFinalQuoteApproval: false }).required, false)
 })
 
-test('Amber fee evidence remains required when KYC was already verified', () => {
+test('Yellow registration permits later fee collection independently of KYC', () => {
   const config = governance.workbookDefaults()
-  assert.equal(leadVerificationComplete({ existingCustomerKyc: true }, 'Amber', { config }), false)
+  assert.equal(leadVerificationComplete({ existingCustomerKyc: true }, 'Amber', { config }), true)
   assert.equal(leadVerificationComplete({ existingCustomerKyc: true, verification: { payment: { state: 'Confirmed' } } }, 'Amber', { config }), true)
 })
 
@@ -55,8 +55,8 @@ test('Admin can replace No Bid with approval clearance and disable class verific
   const config = governance.workbookDefaults()
   config.customerClasses.Red = governance.ruleForAction(config.customerClasses.Red, 'Approval required')
   assert.equal(leadVerificationComplete({}, 'Red', { config, redCleared: true }), true)
-  config.customerClasses.Amber.verification.required = false
-  config.customerClasses.Amber.gate = null
+  config.customerClasses.Yellow.verification.required = false
+  config.customerClasses.Yellow.gate = null
   assert.equal(leadVerificationComplete({}, 'Amber', { config }), true)
 })
 
@@ -64,7 +64,7 @@ test('workbook comparison identifies a changed fee, terms and field choices', ()
   const config = governance.workbookDefaults()
   assert.equal(governance.workbookComparison(config).filter(r => r.status === 'Different').length, 0)
   config.amberFee.amount = 0
-  config.customerClasses.Amber.paymentTerms = 'Advance'
+  config.customerClasses.Yellow.paymentTerms = 'Advance'
   config.fieldLists.category = config.fieldLists.category.filter(x => x.value !== 'EPC')
   assert.ok(governance.workbookComparison(config).filter(r => r.status === 'Different').length >= 3)
 })
@@ -72,7 +72,7 @@ test('workbook comparison identifies a changed fee, terms and field choices', ()
 test('an existing workbook policy is upgraded once and later Admin edits survive', () => {
   const config = governance.upgradeWorkbookConfig({ amberFee: { amount: 0 }, customerClasses: {} })
   assert.equal(config.amberFee.amount, 0)
-  assert.equal(config.customerClasses.Red.defaultAction, 'No Bid')
+  assert.equal(config.customerClasses.Red.defaultAction, 'Pending validation')
   config.amberFee.amount = 5000
   assert.equal(governance.upgradeWorkbookConfig(config).amberFee.amount, 5000)
 })
@@ -105,4 +105,11 @@ test('a custom opportunity type retains its mapped workflow and proposal after r
   assert.equal(restored.route, 'Service')
   assert.equal(restored.context, 'Service')
   assert.equal(newProposal(restored.id, restored).proposalType, 'Services')
+})
+
+test('Fx placeholders cannot be offered from defaults, configuration or the current record', () => {
+  const config = { fieldLists: { product: [{ value: 'Fx-1', label: 'Old placeholder' }, { value: 'Real product', label: 'Real product' }] } }
+  assert.deepEqual(governance.fieldValues(config, 'product', ['Fx 2', 'Historical product']), ['Real product', 'Historical product'])
+  assert.equal(config.fieldLists.product[0].value, 'Fx-1', 'historical data is not mutated')
+  for (const key of ['segment', 'solution', 'product', 'category']) assert.ok(governance.fieldValues({}, key).every(value => !/^fx[ -]?\d+$/i.test(value)))
 })

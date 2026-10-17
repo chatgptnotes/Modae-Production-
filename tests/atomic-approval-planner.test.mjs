@@ -42,15 +42,19 @@ test('a superseded request cannot receive another signature', () => {
   assert.throws(() => planApprovalDecision(context({ ...request, supersededBy: 'NEW' }), { id: 'u' }, command), e => e.status === 409)
 })
 
-test('customer approval updates the master and its related business rows together', () => {
-  const snapshot = context({ ...request, type: 'Customer master change', customerName: 'Acme', patch: { status: 'Blue' }, anyOf: true })
+test('customer approval updates the master without overwriting linked manual classes or KYC evidence', () => {
+  const snapshot = context({ ...request, type: 'Customer master change', customerName: 'Acme', patch: { status: 'Yellow' }, anyOf: true })
   snapshot.rows.push({ entity: 'state', id: 'customers', rev: 2, data: [{ name: 'Acme', status: 'Red' }] },
-    { entity: 'opportunities', id: 'O', rev: 4, data: { id: 'O', sellTo: 'ACME', customerStatus: 'Red' } })
+    { entity: 'opportunities', id: 'O', rev: 4, data: { id: 'O', sellTo: 'ACME', customerStatus: 'Red', legacyCustomerClass: 'Blue', customerClassificationVersion: 2, leadVerification: { type: 'KYC', status: 'Verified', verifiedAt: '2026-10-01' } } })
   snapshot.rows.find(r => r.entity === 'leads').data.sellTo = 'Acme'
   const plan = planApprovalDecision(snapshot, { id: 'u' }, command)
-  assert.deepEqual(plan.writes.map(r => r.entity).sort(), ['leads', 'opportunities', 'state'])
-  assert.equal(plan.writes.find(r => r.entity === 'state').data[0].status, 'Blue')
-  assert.equal(plan.writes.find(r => r.entity === 'opportunities').data.customerStatus, 'Blue')
+  assert.deepEqual(plan.writes.map(r => r.entity).sort(), ['state'])
+  assert.equal(plan.writes.find(r => r.entity === 'state').data[0].status, 'Yellow')
+  const linked = snapshot.rows.find(r => r.entity === 'opportunities').data
+  assert.equal(linked.customerStatus, 'Red')
+  assert.equal(linked.legacyCustomerClass, 'Blue')
+  assert.equal(linked.leadVerification.status, 'Verified')
+  assert.equal(linked.leadVerification.verifiedAt, '2026-10-01')
 })
 
 test('final quote approval releases the proposal and appends one pricing receipt', () => {

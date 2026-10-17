@@ -409,6 +409,45 @@ export async function deleteItem(itemId) {
   await graphFetch('/drives/' + await resolveDrive() + '/items/' + itemId, { method: 'DELETE' })
 }
 
+// Uses only the existing authenticated Graph connection. Backup callers never
+// receive or persist Microsoft tokens or temporary download URLs.
+export async function downloadBackupFile(itemId) {
+  requireConfigured()
+  const response = await graphFetch('/drives/' + await resolveDrive() + '/items/' + encodeURIComponent(itemId) + '/content')
+  if (!response || typeof response.arrayBuffer !== 'function') throw new Error('SharePoint did not return document bytes.')
+  return new Uint8Array(await response.arrayBuffer())
+}
+
+export async function listBackupFiles(opp) {
+  requireConfigured()
+  const found = await findOppFolder(opp.id)
+  if (!found) return []
+  const drive = await resolveDrive(), files = [], pending = [{ id: found.itemId, path: '', depth: 0 }]
+  let visited = 0
+  while (pending.length) {
+    const folder = pending.shift()
+    if (++visited > 10000 || folder.depth > 32) throw new Error('SharePoint backup folder limits exceeded.')
+    let path = `/drives/${drive}/items/${encodeURIComponent(folder.id)}/children?$select=id,name,size,file,folder&$top=200`
+    while (path) {
+      const page = await graphFetch(path)
+      for (const item of page.value || []) {
+        if (item.folder) pending.push({ id: item.id, path: folder.path ? `${folder.path}/${item.name}` : item.name, depth: folder.depth + 1 })
+        else if (item.file) {
+          files.push({ name: item.name, size: item.size, itemId: item.id, folder: folder.path || 'Root documents', type: item.file.mimeType || 'application/octet-stream' })
+          if (files.length > 9997) throw new Error('SharePoint backup file limit exceeded.')
+        }
+      }
+      const next = page['@odata.nextLink']
+      if (next) {
+        const url = new URL(next)
+        if (url.origin !== 'https://graph.microsoft.com' || !url.pathname.startsWith('/v1.0/')) throw new Error('SharePoint returned an unexpected paging endpoint.')
+        path = url.pathname.slice('/v1.0'.length) + url.search
+      } else path = ''
+    }
+  }
+  return files
+}
+
 // ---------- diagnostics ----------
 
 export async function testConnection() {

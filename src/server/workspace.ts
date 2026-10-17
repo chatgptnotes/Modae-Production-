@@ -93,7 +93,7 @@ const rows = (result: { data: Array<{ id: string, data: unknown }> | null, error
   return result.data || []
 }
 
-export function createWorkspaceReader(): WorkspaceReader | null {
+export function createWorkspaceReader({ includeRevisions = false } = {}): WorkspaceReader | null {
   const url = configuredValue('SUPABASE_URL', 'VITE_SUPABASE_URL')
   const serviceRoleKey = configuredValue('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !serviceRoleKey) return null
@@ -102,15 +102,15 @@ export function createWorkspaceReader(): WorkspaceReader | null {
     // The server makes this one database read and reuses it for every
     // browser until a successful write invalidates the cache.
     const [leads, opportunities, approvals, records, proposals, sparesLines, clarifications, audit, settings] = await Promise.all([
-      service.from('leads').select('id, data').is('deleted_at', null),
-      service.from('opportunities').select('id, data').is('deleted_at', null),
-      service.from('approvals').select('id, data').is('deleted_at', null),
-      service.from('records').select('entity, id, data').is('deleted_at', null),
-      service.from('proposals').select('id, data').is('deleted_at', null),
-      service.from('spares_lines').select('id, data').is('deleted_at', null),
-      service.from('clarifications').select('id, data').is('deleted_at', null),
-      service.from('audit').select('id, data').is('deleted_at', null),
-      service.from('settings').select('id, data').eq('id', 'config').is('deleted_at', null),
+      service.from('leads').select('id, data, rev').is('deleted_at', null),
+      service.from('opportunities').select('id, data, rev').is('deleted_at', null),
+      service.from('approvals').select('id, data, rev').is('deleted_at', null),
+      service.from('records').select('entity, id, data, rev').is('deleted_at', null),
+      service.from('proposals').select('id, data, rev').is('deleted_at', null),
+      service.from('spares_lines').select('id, data, rev').is('deleted_at', null),
+      service.from('clarifications').select('id, data, rev').is('deleted_at', null),
+      service.from('audit').select('id, data, rev').is('deleted_at', null),
+      service.from('settings').select('id, data, rev').eq('id', 'config').is('deleted_at', null),
     ])
     const recordRows = rows(records) as Array<{ entity: string, id: string, data: unknown }>
     const state = Object.fromEntries(recordRows.filter(row => row.entity === 'state').map(row => [row.id, row.data]))
@@ -119,6 +119,7 @@ export function createWorkspaceReader(): WorkspaceReader | null {
     const config = (rows(settings).find(row => row.id === 'config')?.data || {})
     return {
       ...state,
+      ...(includeRevisions ? { _revisions: Object.fromEntries(Object.entries({ leads, opportunities, approvals, records, proposals, spares_lines: sparesLines, clarifications, audit, settings }).map(([entity, result]) => [entity, rows(result)])) } : {}),
       workspaceGeneration,
       config,
       leads: rows(leads).map(row => row.data),

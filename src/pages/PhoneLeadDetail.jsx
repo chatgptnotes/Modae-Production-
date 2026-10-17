@@ -2,7 +2,7 @@ import { displayOpportunityId } from '../seed.js'
 import React, { useEffect, useId, useRef, useState } from 'react'
 import { Icon } from '../icons.jsx'
 import { Modal } from '../ui.jsx'
-import { ageDays, ddMmmYY } from '../utils.js'
+import { ageDays, ddMmmYY, displayRole } from '../utils.js'
 import './phoneLeadDetail.css'
 
 const tabs = [['overview', 'Overview'], ['details', 'Details'], ['email', 'Email']]
@@ -47,7 +47,7 @@ export default function PhoneLeadDetail({ lead, summary = {}, issues = [], items
       <h1>{lead.subject || 'Untitled enquiry'}</h1>
       <p>{lead.sender || lead.from || 'Sender unavailable'}</p>
       <p>{lead.ts ? ddMmmYY(String(lead.ts).slice(0,10)) : 'Date unavailable'}{age != null && ` · ${age} day${age === 1 ? '' : 's'} old`}</p>
-      <div className="phone-lead-meta"><span data-status={lead.status}>{lead.status || 'New'}</span>{summary.owner && <span>Assigned to {summary.owner}</span>}</div>
+      <div className="phone-lead-meta"><span data-status={lead.status}>{lead.status || 'New'}</span>{summary.owner && <span>Assigned to {displayRole(summary.owner)}</span>}</div>
     </header>
     <div className="phone-lead-tabs" role="tablist" aria-label="Lead sections" ref={tabRef} onKeyDown={navigateTabs}>
       {tabs.map(([key, label]) => <button type="button" role="tab" key={key} id={`${id}-${key}-tab`} aria-controls={`${id}-${key}`} aria-selected={tab === key} tabIndex={tab === key ? 0 : -1} onClick={() => switchTab(key)}>{label}</button>)}

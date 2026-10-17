@@ -181,12 +181,11 @@ test('a draft is never a sent mail', () => {
   assert.equal(sent.clarification.to, drafted.clarification.to)
 })
 
-test('an answered clarification stops the auto-drop timer', () => {
+test('optional clarification records answers without an auto-drop timer', () => {
   // processLeadDeadlines drops a lead whose clarification deadline expires, so
   // the answer has to close the deadline as well as the record.
   const open = { ...lead, ts: '2026-08-01T00:00:00Z' }
-  assert.ok(deadlineForLead(open, seedConfig, new Date('2026-08-20T00:00:00Z'))
-    .some(r => r.type === 'clarification'))
+  assert.deepEqual(deadlineForLead(open, seedConfig, new Date('2026-08-20T00:00:00Z')), [])
 
   const answered = { ...open, ...answeredPatch({ status: 'Sent' }, { now: new Date('2026-08-20T00:00:00Z') }) }
   assert.equal(answered.clarification.status, 'Answered')

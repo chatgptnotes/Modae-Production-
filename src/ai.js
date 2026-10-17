@@ -21,6 +21,7 @@ export const aiEnabled = () => !!AI_URL
 
 const DEFAULT_TIMEOUT = 45000
 const inflight = new Map()
+export const useLocalAiFallback = (fallback, accessToken) => Boolean(fallback && !accessToken)
 const requestKey = (task, payload, model) => {
   try { return `${task}:${model || ''}:${JSON.stringify(payload)}` }
   catch { return `${task}:${model || ''}:${String(payload)}` }
@@ -28,8 +29,7 @@ const requestKey = (task, payload, model) => {
 
 // → { data } | { text } from the function, or null. Never throws.
 export async function runTaskResult(task, payload = {}, { timeoutMs = DEFAULT_TIMEOUT, model, fallback = false } = {}) {
-  if (fallback) return { data: null, errorCode: 'AI_FALLBACK_ENABLED', error: 'Built-in fallback is selected' }
-  const key = requestKey(task, payload, model)
+  const key = `${requestKey(task, payload, model)}:${fallback ? 'local-fallback-preference' : 'server-ai'}`
   if (inflight.has(key)) return inflight.get(key)
   const request = (async () => {
   const ctl = new AbortController()
@@ -38,6 +38,9 @@ export async function runTaskResult(task, payload = {}, { timeoutMs = DEFAULT_TI
     const body = { task, payload, model }
     const { data: session } = await supabaseAuth?.getSession?.() || { data: null }
     const accessToken = session?.session?.access_token
+    // A legacy browser fallback choice cannot override the Admin's server-owned
+    // active integration. Only disconnected demo sessions decide locally.
+    if (useLocalAiFallback(fallback, accessToken)) return { data: null, errorCode: 'AI_FALLBACK_ENABLED', error: 'Built-in fallback is selected' }
     const { data, error, errorCode, status } = await fetch(AI_URL, {
       method: 'POST',
       headers: {
@@ -104,5 +107,5 @@ export async function testConnection(model) {
 // Sends a new provider credential only to the server-side setup function. It
 // is deliberately not persisted in app state or localStorage.
 export async function saveAiKey(apiKey, role = '') {
-  throw new Error('AI credentials are managed in the Railway environment')
+  throw new Error('Manage provider credentials in Admin → Integrations.')
 }

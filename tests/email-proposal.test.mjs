@@ -116,7 +116,7 @@ test('communications combines the inbound enquiry with all logged messages', () 
   assert.match(workbench, /id: `lead-\$\{lead\.id\}`.*kind: 'enquiry'/s)
   assert.match(workbench, /\.sort\(\(a, b\) => new Date\(b\.ts \|\| 0\) - new Date\(a\.ts \|\| 0\)\)/)
   assert.match(workbench, /ModAE Sales Desk/)
-  assert.match(workbench, /ROLES\[opp\.owner\]\?\.name/)
+  assert.match(workbench, /entry\.fromName \|\| displayRole\(opp\.owner\)/)
   assert.match(workbench, /formatKind = kind =>/)
 })
 

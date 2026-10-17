@@ -432,14 +432,15 @@ test('My Dashboard is reachable on phone and tablet', () => {
   }
 })
 
-test('every internal role can still open My Dashboard', () => {
-  for (const role of Object.keys(ROLES).filter(r => r !== 'CUST')) {
+test('sales workspace roles can open My Dashboard; non-sales accounts cannot', () => {
+  for (const role of Object.keys(ROLES).filter(r => !['CUST','NON_SALES'].includes(r))) {
     assert.ok(PERMS[role]?.includes('mydashboard'), `${role} must reach My Dashboard`)
   }
   assert.ok(!PERMS.CUST.includes('mydashboard'))
+  assert.ok(!PERMS.NON_SALES.includes('mydashboard'))
 })
 
-test('every internal role can open detailed reporting from their reporting action', () => {
+test('sales workspace roles can open detailed reporting; non-sales accounts cannot', () => {
   const source = read('src/pages/MyDashboard.jsx')
   const app = read('src/App.jsx')
   const tabletApp = read('src/tablet/TabletApp.jsx')
@@ -458,10 +459,11 @@ test('every internal role can open detailed reporting from their reporting actio
   assert.match(app, /<Route path="\/order" element=\{<PageGate page="po"><PurchaseOrders \/><\/PageGate>\} \/>/)
   assert.match(app, /<Route path="\/analytics" element=\{<PageGate page="analytics"><Analytics \/><\/PageGate>\}/)
   assert.match(tabletApp, /<Route path="\/analytics" element=\{<TabletGate page="analytics"><Analytics \/><\/TabletGate>\}/)
-  for (const role of Object.keys(ROLES).filter(r => r !== 'CUST')) {
+  for (const role of Object.keys(ROLES).filter(r => !['CUST','NON_SALES'].includes(r))) {
     assert.ok(PERMS[role]?.includes('analytics'), `${role} must reach detailed reporting`)
   }
   assert.ok(!PERMS.CUST.includes('analytics'))
+  assert.ok(!PERMS.NON_SALES.includes('analytics'))
 })
 
 test('annual attainment scorecard leads with progress above the figures', () => {
@@ -484,7 +486,7 @@ test('ADMIN and LJS are co-equal application authorities', () => {
 })
 
 test('forecast reporting is available internally with sales-owner scoping', () => {
-  for (const role of Object.keys(ROLES).filter(r => r !== 'CUST')) {
+  for (const role of Object.keys(ROLES).filter(r => !['CUST','NON_SALES'].includes(r))) {
     assert.equal(canViewForecast(role), true, `${role} should see forecast reporting`)
   }
   assert.equal(canViewForecast('CUST'), false)
@@ -851,8 +853,8 @@ test('LJS and AH can set targets for the owners, and it is audited', () => {
   assert.match(approver, /<TeamTargetsCard store=\{store\} \/>/)
   assert.match(admin, /<TeamTargetsCard store=\{store\} \/>/)
   assert.doesNotMatch(sales, /TeamTargetsCard/)
-  // The editor speaks lakhs while the store keeps K₹.
-  assert.match(source, /const toK = l => Math\.round\(\(parseFloat\(l\) \|\| 0\) \* 100\)/)
+  // The editor accepts actual INR while the store keeps thousands of rupees.
+  assert.match(source, /const toK = l => \(parseFloat\(l\) \|\| 0\) \/ 1000/)
   assert.match(source, /store\.setSalesTarget\(editing, \{ annual: toK\(draft\.annual\), q: draft\.q\.map\(toK\) \}\)/)
   // Every owner gets a row, including ones not yet in the seed targets.
   assert.match(source, /\[\.\.\.new Set\(\[\.\.\.OWNERS, \.\.\.Object\.keys\(targets\)\]\)\]/)

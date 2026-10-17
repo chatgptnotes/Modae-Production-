@@ -57,7 +57,7 @@ export default function NormalFunnel({ rows, showMoney, formatMoney, onStageClic
   const dynamic = view === 'dynamic'
   const geometry = dynamic ? dynamicFunnelGeometry(rows) : []
   return <div className={`normal-funnel${showMoney ? ' has-values' : ''}`} data-funnel-view={view} data-animated={animate ? "" : undefined}>
-    <div className="normal-funnel-head"><span /><span>Stage</span><span>Count</span>{showMoney && <span>Value (₹ L)</span>}</div>
+    <div className="normal-funnel-head"><span /><span>Stage</span><span>Count</span>{showMoney && <span>Value (INR)</span>}</div>
     {rows.map((row, index) => {
       const top = 880 - index * 110
       const bottom = top - 110

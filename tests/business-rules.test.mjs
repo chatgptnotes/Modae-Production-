@@ -3,9 +3,9 @@ import assert from 'node:assert/strict'
 import { registrationFields, validateBusinessRules } from '../src/businessRules.js'
 import { customerHealth, suggestProbability } from '../src/insights.js'
 
-test('registration requirements default to existing fields and preserve customer identity', () => {
-  assert.equal(registrationFields({}).length, 6)
-  assert.deepEqual(registrationFields({ registrationRequiredFields: ['sellTo', 'contactPerson'] }).map(([key]) => key), ['sellTo', 'contactPerson'])
+test('registration requires only sell-to and preserve customer identity', () => {
+  assert.equal(registrationFields({}).length, 1)
+  assert.deepEqual(registrationFields({ registrationRequiredFields: ['sellTo', 'contactPerson'] }).map(([key]) => key), ['sellTo'])
   assert.ok(validateBusinessRules({ registrationRequiredFields: [] }).length)
   assert.ok(validateBusinessRules({ registrationRequiredFields: ['sellTo', 'unknown'] }).length)
 })

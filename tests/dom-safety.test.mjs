@@ -48,7 +48,7 @@ test('file-input refs are optional before triggering native pickers', () => {
 
 test('empty Supabase hydration clears stale local slices', () => {
   const store = read('src/store.jsx')
-  assert.match(store, /if \(res\.empty\) \{[\s\S]*priceLists: \{\}/)
-  assert.match(store, /if \(res\.empty\) \{[\s\S]*users: \[\]/)
+  assert.match(store, /if \(!hydratedRef\.current\) \{[\s\S]*emptyState\(stateRef\.current\)[\s\S]*priceLists: \{\}/)
+  assert.match(store, /\.\.\.slices, demoData: false/)
   assert.doesNotMatch(store, /unexpectedEmptyBusinessSlice/)
 })

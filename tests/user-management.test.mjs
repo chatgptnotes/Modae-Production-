@@ -46,7 +46,8 @@ test('account role controls offer only the four application roles', () => {
   assert.match(page, /applicationRolePatch\(user, userDraft\?\.applicationRole\)/)
   assert.doesNotMatch(page, /select multiple|ASSIGNABLE|displayRoleLabel/)
   assert.match(page, /className="sheet users-table"/)
-  assert.match(page, /Owner names/)
+  assert.match(page, /aria-label="Accounts"/)
+  assert.doesNotMatch(page, /Owner names|saveRoleNames|role="tablist"/)
 })
 
 test('server deployment documentation keeps the service key server-side', () => {

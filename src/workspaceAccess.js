@@ -1,7 +1,7 @@
-import { canAccessPage, canPerform, effectiveAccess } from './accessPolicy.js'
+import { canAccessPage, canPerform, effectiveAccess, isNonSalesUser } from './accessPolicy.js'
 import { classRule, DEFAULT_CUSTOMER_CLASSES, noExceptionKeys } from './customerClasses.js'
 import { canOverrideCustomerKyc } from './kycPolicy.js'
-import { verificationSnapshot, leadVerificationComplete, redClearanceFor } from './leadVerification.js'
+import { verificationSnapshot, kycVerificationComplete, redClearanceFor } from './leadVerification.js'
 import { recordBooking } from './orderBookings.js'
 import { B_STEPS, canSignBStep } from './seed.js'
 import { releaseState, transitionBlockers } from './gates.js'
@@ -10,8 +10,8 @@ import { proposalApprovalSnapshot } from './approvalMemory.js'
 const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 const denied = message => { throw Object.assign(new Error(message || 'Your role does not have permission for this action.'), { status: 403 }) }
 const pick = (value, keys) => Object.fromEntries(keys.filter(key => key in (value || {})).map(key => [key, value[key]]))
-const PUBLIC_OPPORTUNITY = ['id', 'oppName', 'owner', 'sellTo', 'euc', 'eucName', 'customerStatus', 'oppType', 'route', 'context', 'stage', 'status', 'prob', 'expectedOrderDate', 'expectedDate', 'enquiryDate', 'created', 'lastUpdated', 'milestone', 'sourceLeadId', 'region', 'location', 'product', 'solution', 'closeReason', 'closeReasonNote', 'closedDate', 'leadVerification', 'valueK', 'orderDate', 'invoiceDate', 'offerDate', 'wonDate', 'proposalDate', 'createDate', 'closedReason', 'closedReasonNote']
-const PUBLIC_LEAD = ['id', 'subject', 'from', 'sender', 'company', 'customer', 'status', 'assignedOwner', 'suggestedOwner', 'oppId', 'ts', 'source', 'receivedAt', 'customerStatus']
+const PUBLIC_OPPORTUNITY = ['id', 'oppName', 'owner', 'sellTo', 'euc', 'eucName', 'customerStatus', 'legacyCustomerClass', 'customerClassificationVersion', 'oppType', 'route', 'context', 'stage', 'status', 'prob', 'expectedOrderDate', 'expectedDate', 'enquiryDate', 'created', 'lastUpdated', 'milestone', 'sourceLeadId', 'region', 'location', 'product', 'solution', 'closeReason', 'closeReasonNote', 'closedDate', 'leadVerification', 'valueK', 'orderDate', 'invoiceDate', 'offerDate', 'wonDate', 'proposalDate', 'createDate', 'closedReason', 'closedReasonNote']
+const PUBLIC_LEAD = ['id', 'subject', 'from', 'sender', 'company', 'customer', 'status', 'assignedOwner', 'suggestedOwner', 'oppId', 'ts', 'source', 'receivedAt', 'customerStatus', 'legacyCustomerClass', 'customerClassificationVersion']
 const PUBLIC_BOOKING = ['id','oppId','owner','customer','title','po','booked','valueK','status','confirmedAt','confirmedBy','source']
 export const projectBooking = booking => booking ? pick(booking,PUBLIC_BOOKING) : booking
 const publicSales = sales => ({
@@ -45,6 +45,11 @@ export function canReadWorkspaceRecord(user, entity, row, config, state) {
 export function projectWorkspace(state, user) {
   const config = state.config || {}
   const access = effectiveAccess(user, config)
+  if (isNonSalesUser(user)) return { config: {}, workspaceGeneration: state.workspaceGeneration, demoData: false,
+    users: [pick(user, ['id','authId','name','email','role','roles','status'])],
+    leads: [], opportunities: [], approvals: [], customers: [], proposals: {}, sparesLines: [], clarifications: [],
+    sales: {}, audit: [], svcEstimates: [], vendorQuotes: [], surveys: [], competitors: [], files: {}, communications: {},
+    poCompare: {}, handover: {}, bSteps: {}, bStepOwners: {}, rateSheets: {}, adhocParts: [], importedWorkbook: null, leadDeadlines: [], kyc: {}, leadArchive: [] }
   const freshUsers = (state.users || []).map(row => row.id === user.id || row.authId && row.authId === user.authId ? { ...row, ...user } : row)
   if (access.isAdmin) return { ...state, users: freshUsers.map(({ pw, password, passwordHash, ...profile }) => profile) }
   const commercial = canPerform(user, 'commercial.view', config)
@@ -102,8 +107,10 @@ function approvalRouting(request, config, state) {
     'Pricing threshold exception': { needed: config.approvalThresholds?.pricingApprovers?.length ? config.approvalThresholds.pricingApprovers : ['AH', 'LJS'], anyOf: (config.approvalThresholds?.pricingApprovers?.length || 2) > 1 },
   }
   if (fixed[request.type]) return fixed[request.type]
-  for (const cls of Object.keys({ ...DEFAULT_CUSTOMER_CLASSES, ...config.customerClasses })) {
-    const rule = classRule(config, cls)
+  const source = (state.leads || []).find(row => row.id === request.leadId) || (state.opportunities || []).find(row => row.id === request.oppId)
+  const rules = Object.keys({ ...DEFAULT_CUSTOMER_CLASSES, ...config.customerClasses }).map(cls => classRule(config, cls))
+  if (source) rules.push(classRule(config, source.customerStatus, source))
+  for (const rule of rules) {
     for (const gate of [rule?.gate, rule?.verification, rule?.advisory]) {
       if (gate?.approvalType === request.type && gate.approvers?.length) return { needed: gate.approvers, anyOf: !!gate.anyOf }
     }
@@ -139,6 +146,7 @@ function assertPurchaseOrders(previous, next, user, requireAction) {
 }
 
 export function assertWorkspaceRowWrite(user, entity, previous, next, config, state, id = next?.id || previous?.id, deleted = false) {
+  if (isNonSalesUser(user)) denied('Use the New Lead form to submit enquiries.')
   const access = effectiveAccess(user, config)
   const requireAction = action => {
     if (!canPerform(user, action, config)) denied()
@@ -203,7 +211,7 @@ export function assertWorkspaceRowWrite(user, entity, previous, next, config, st
       const customer = (state.customers || []).find(row => row.name === (next.sellTo || next.customerName))
       if (customer?.kyc !== 'Valid') denied('Existing customer KYC must be verified in the customer master.')
     }
-    if (!same(previous?.kycCompletedAt, next?.kycCompletedAt) && next?.kycCompletedAt && !leadVerificationComplete(next, next.customerStatus, { config })) denied('Complete the required KYC evidence before marking it verified.')
+    if (!same(previous?.kycCompletedAt, next?.kycCompletedAt) && next?.kycCompletedAt && !kycVerificationComplete(next, config)) denied('Complete the required KYC evidence before marking it verified.')
   }
   else if (entity === 'approvals') {
     if (!previous) assertApprovalRequest(next, user, config, state)
@@ -286,7 +294,7 @@ export function assertWorkspaceRowWrite(user, entity, previous, next, config, st
               const items = state.kyc?.[customer.name] || []
               const required = config.kycItems || []
               const masterComplete = required.length && required.every(item => items.some(row => row.name === item && ['Verified','Approved'].includes(row.state)))
-              if (!masterComplete && (!lead || !leadVerificationComplete(lead,lead.customerStatus,{config}))) denied('Customer KYC requires authoritative verification evidence.')
+              if (!masterComplete && (!lead || !kycVerificationComplete(lead,config))) denied('Customer KYC requires authoritative verification evidence.')
             }
           } else {
             const changed = changedKeys(before,customer)
@@ -353,7 +361,7 @@ export function assertWorkspaceRowWrite(user, entity, previous, next, config, st
         for (const item of next?.[name] || []) {
           if (['Approved','Verified'].includes(item.state) && !same(before.find(row => row.name === item.name),item)) {
             requireAction('approvals.decide')
-            if (!access.isAdmin && !(classRule(config,'Blue')?.gate?.approvers || []).includes(user.role)) denied('Only the configured KYC approver can verify customer-master evidence.')
+            if (!access.isAdmin && !(config.legacyCustomerClasses?.Blue?.gate?.approvers || ['AH']).includes(user.role)) denied('Only the configured KYC approver can verify customer-master evidence.')
           }
         }
       }

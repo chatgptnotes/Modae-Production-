@@ -116,12 +116,13 @@ export const seedOpportunities = [
 ]
 export const ROLES = {
   SUPER: { name: 'System Owner', label: 'Super Admin — Platform Owner', commercial: true, admin: true },
+  NON_SALES: { name: 'Non-sales', label: 'Non-sales User', commercial: false },
   ADMIN: { name: 'Admin', label: 'Admin — System Administrator', commercial: true, admin: true },
-  LJS: { name: 'L. J. Swaminathan', label: 'LJS — Strategic Approver / Application Administrator', commercial: true, admin: true },
+  LJS: { name: 'LJ Swaminathan', label: 'LJS — Strategic Approver / Application Administrator', commercial: true, admin: true },
   AH: { name: 'Ashwath Hegde', label: 'AH — Commercial & Ops Approver', commercial: true },
-  RS: { name: 'R. Sundaram', label: 'RS — Sales Owner', commercial: false, sales: true },
-  PP: { name: 'P. Prakash', label: 'PP — Sales Owner', commercial: false, sales: true },
-  SS: { name: 'S. Service Owner', label: 'SS — Service Sales Owner', commercial: false, sales: true },
+  RS: { name: 'Ruthvik Satish', label: 'RS — Sales Owner', commercial: false, sales: true },
+  PP: { name: 'Pragna Praveen', label: 'PP — Sales Owner', commercial: false, sales: true },
+  SS: { name: 'Sheetal.R', label: 'SS — Service Sales Owner', commercial: false, sales: true },
   PJS: { name: 'P. J. Sales', label: 'PJS — Parts Sales Owner', commercial: false, sales: true },
   RJS: { name: 'R. J. Sales', label: 'RJS — Flow Sales Owner', commercial: false, sales: true },
   SR: { name: 'S. R. Sales', label: 'SR — Service Sales Owner', commercial: false, sales: true },
@@ -174,6 +175,7 @@ const pages = list => (PORTAL_ENABLED ? list : list.filter(p => p !== 'portal'))
 const SALES_PAGES = ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders',
   'proposal', 'proposalSent', 'pricelists', 'analytics', 'customers', 'po', 'aimap', 'launcher', 'voice']
 export const PERMS = {
+  NON_SALES: ['newLead'],
   SUPER: pages(['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'proposalSent', 'pricelists',
     'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']),
   ADMIN: ['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'proposalSent', 'pricelists',
@@ -192,7 +194,8 @@ export const PERMS = {
 // IDs above. `role` remains the active persona/owner ID for compatibility,
 // while `roles` carries durable permission assignments.
 export const LEVEL3_ROLES = {
-  STANDARD_USER: { name: 'Standard User', label: 'Standard User', pages: SALES_PAGES },
+  NON_SALES: { name: 'Non-sales User', label: 'Non-sales User', pages: ['newLead'] },
+  STANDARD_USER: { name: 'Sales User', label: 'Sales User', pages: SALES_PAGES },
   TEAM_LEAD: { name: 'Team Lead (legacy)', label: 'Team Lead (legacy)', deprecated: true, pages: [...SALES_PAGES, 'approvals'] },
   MANAGEMENT: { name: 'Management User', label: 'Management User', pages: ['mydashboard', 'tracker', 'my', 'approvals', 'analytics', 'customers', 'audit', 'folders', 'po', 'launcher'] },
   ADMIN: { name: 'Admin User', label: 'Admin User', admin: true, pages: pages(['mydashboard', 'inbox', 'tracker', 'my', 'new', 'tender', 'approvals', 'folders', 'proposal', 'proposalSent', 'pricelists', 'analytics', 'customers', 'audit', 'users', 'aimap', 'admin', 'po', 'launcher', 'voice', 'portal']) },
@@ -322,17 +325,18 @@ export function proposalTypeForOpp(opp) {
 // clearly disclaimed on the login screen).
 export const DEMO_PASSWORD = 'Demo@1234'
 export const seedUsers = [
-  { id: 'U-001', name: 'System Owner', email: 'admin@modae.demo', role: 'SUPER', status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
-  { id: 'U-002', name: 'L. J. Swaminathan', email: 'ljs@modae.demo', role: 'LJS', status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
-  { id: 'U-003', name: 'Ashwath Hegde', email: 'ah@modae.demo', role: 'AH', status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
-  { id: 'U-004', name: 'R. Sundaram', email: 'rs@modae.demo', role: 'RS', status: 'Active', created: '2026-04-15', pw: DEMO_PASSWORD },
-  { id: 'U-005', name: 'P. Prakash', email: 'pp@modae.demo', role: 'PP', status: 'Active', created: '2026-04-15', pw: DEMO_PASSWORD },
-  { id: 'U-009', name: 'S. Service Owner', email: 'ss@modae.demo', role: 'SS', status: 'Active', created: '2026-08-17', pw: DEMO_PASSWORD },
-  { id: 'U-010', name: 'P. J. Sales', email: 'pjs@modae.demo', role: 'PJS', status: 'Active', created: '2026-08-17', pw: DEMO_PASSWORD },
-  { id: 'U-011', name: 'R. J. Sales', email: 'rjs@modae.demo', role: 'RJS', status: 'Active', created: '2026-08-17', pw: DEMO_PASSWORD },
-  { id: 'U-012', name: 'S. R. Sales', email: 'sr@modae.demo', role: 'SR', status: 'Active', created: '2026-08-17', pw: DEMO_PASSWORD },
-  { id: 'U-007', name: 'T. Rao', email: 'tech@modae.demo', role: 'TECH', status: 'Active', created: '2026-08-01', pw: DEMO_PASSWORD },
-  { id: 'U-008', name: 'Customer contact', email: 'customer@portal.demo', role: 'CUST', status: 'Active', created: '2026-08-01', pw: DEMO_PASSWORD },
+  { id: 'U-002', name: 'LJ Swaminathan', email: 'LJ.Swaminathan@mod-ae.com', role: 'LJS', roles: ['LJS', 'STANDARD_USER', 'MANAGEMENT', 'ADMIN'], status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
+  { id: 'U-003', name: 'Ashwath Hegde', email: 'Ashwath.Hegde@mod-ae.com', role: 'AH', roles: ['AH', 'MANAGEMENT', 'ADMIN'], status: 'Active', created: '2026-04-01', pw: DEMO_PASSWORD },
+  { id: 'U-004', name: 'Ruthvik Satish', email: 'ruthvik.satish@mod-ae.com', role: 'RS', roles: ['RS', 'STANDARD_USER'], status: 'Active', created: '2026-04-15', pw: DEMO_PASSWORD },
+  { id: 'U-005', name: 'Pragna Praveen', email: 'pragna.praveen@mod-ae.com', role: 'PP', roles: ['PP', 'STANDARD_USER'], status: 'Active', created: '2026-04-15', pw: DEMO_PASSWORD },
+  { id: 'U-009', name: 'Sheetal.R', email: 'sheetal.r@mod-ae.com', role: 'SS', roles: ['SS', 'STANDARD_USER'], status: 'Active', created: '2026-08-17', pw: DEMO_PASSWORD },
+  { id: 'U-013', name: 'Aishwarya Paul', email: 'aishwarya.paul@mod-ae.com', role: 'NON_SALES', roles: ['NON_SALES'], status: 'Active', created: '2026-10-17', pw: DEMO_PASSWORD },
+  { id: 'U-014', name: 'Anush Iyer', email: 'anush.iyer@mod-ae.com', role: 'NON_SALES', roles: ['NON_SALES'], status: 'Active', created: '2026-10-17', pw: DEMO_PASSWORD },
+  { id: 'U-015', name: 'Adarsh Goudar', email: 'adarsh.goudar@mod-ae.com', role: 'NON_SALES', roles: ['NON_SALES'], status: 'Active', created: '2026-10-17', pw: DEMO_PASSWORD },
+  { id: 'U-016', name: 'Ashwani Kumar', email: 'Ashwani.Kumar@mod-ae.com', role: 'NON_SALES', roles: ['NON_SALES'], status: 'Active', created: '2026-10-17', pw: DEMO_PASSWORD },
+  { id: 'U-017', name: 'Sandesh Kulkarni', email: 'sandesh.kulkarni@mod-ae.com', role: 'NON_SALES', roles: ['NON_SALES'], status: 'Active', created: '2026-10-17', pw: DEMO_PASSWORD },
+  { id: 'U-018', name: 'Pravin Sondagar', email: 'pravin.sondagar@mod-ae.com', role: 'NON_SALES', roles: ['NON_SALES'], status: 'Active', created: '2026-10-17', pw: DEMO_PASSWORD },
+  { id: 'U-019', name: 'Lokesh Bhardwaj', email: 'lokesh.bhardwaj@mod-ae.com', role: 'ADMIN', roles: ['MANAGEMENT', 'ADMIN'], status: 'Active', created: '2026-10-17', pw: DEMO_PASSWORD },
 ]
 
 export const SUBFOLDERS = ['Customer Specs', 'Partner Docs', 'Proposal', 'KYC']

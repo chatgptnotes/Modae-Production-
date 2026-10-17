@@ -1,5 +1,23 @@
 # Deploying WinTrack on Railway
 
+## Full backup setup
+
+Apply `supabase/migrations/20261017061909_full_workspace_backups.sql` after the
+individual-permissions migration and before the AI-integrations migration. Set
+server-only `BACKUP_SIGNING_KEY` to a stable random secret of at least 32 characters.
+Keep it outside source control and retain it so existing backup signatures remain
+verifiable. Local backups need no signing secret and cannot restore shared data.
+
+Admin → Backup & restore creates a ZIP with readable Excel, exact restore data and
+original file bytes. Never edit the ZIP/workbook used for restoration. Limits:
+100 MB compressed, 300 MB expanded, 10,000 entries and 10 MB per shared file.
+The API has a route-specific 150 MB JSON limit to accommodate base64 transport.
+Restore is limited to an empty business workspace; reviews expire in ten minutes
+and are bound to the authenticated account. Any intervening workspace change
+requires another review. Current accounts and credentials are retained, historical
+audit evidence is merged, and numbering counters never decrease. Provider keys
+must be configured separately. No live restore is part of local validation.
+
 WinTrack runs as one Railway service: Express serves the built React
 application and its same-origin `/api/*` endpoints.
 
@@ -92,6 +110,7 @@ SUPABASE_SERVICE_ROLE_KEY=...
 SUPABASE_ANON_KEY=...
 GEMINI_API_KEY=...
 AI_RATE_LIMIT=120
+INTEGRATIONS_ENCRYPTION_KEY=...
 GEONAMES_USERNAME=...
 GMAIL_ACCOUNT=...
 GMAIL_APP_PASSWORD=...
@@ -112,6 +131,60 @@ origins. The service binds to `0.0.0.0` and uses the platform-provided port.
 The `VITE_` values are public browser configuration. The service role, Gemini,
 GeoNames, and Gmail credentials must remain server-only. The server validates
 required production configuration before it starts.
+
+## Admin AI integrations
+
+Apply `supabase/migrations/20261017110000_ai_integrations.sql` before using
+**Admin → Integrations**. It adds revisions to the existing `ai_secrets` table
+and a service-only transaction that saves encrypted configuration and audit
+evidence together. Browser roles cannot read keys or invoke the save function.
+
+Configure `INTEGRATIONS_ENCRYPTION_KEY` in Railway with 32 random bytes encoded
+as base64 or 64 hexadecimal characters. For example, generate a value locally
+with `openssl rand -hex 32`, then put the result directly in the Railway variable.
+Use a separate key in staging and production. Keep each environment's key stable
+across deployments and retain it in your secret manager: changing or losing it
+makes saved credentials unreadable. This key is server-only; never use a `VITE_`
+prefix, add it to backups, or commit its value.
+
+An active connected administrator can add or replace credentials for Google
+Gemini, OpenAI, Anthropic Claude, xAI, DeepSeek, Mistral and OpenRouter. Select a
+provider, enter its key, and refresh its model catalogue. Saving a credential
+alone preserves the legacy `GEMINI_API_KEY` configuration until both the default
+text model and document/image model have been activated. Each activation retests
+the selected models and JSON response format; the document test sends a small
+synthetic image and PDF, never customer data. Catalogue capabilities restrict the
+choices. The full document selection currently supports Gemini, Claude, OpenAI
+and OpenRouter models with compatible image/PDF inputs; text-only connections
+remain available for the default model.
+
+The browser receives only masked credential status, model selections and
+revisions. Keys are AES-256-GCM encrypted in `ai_secrets`; active AI requests load
+their provider/model from server configuration and do not trust browser model
+hints. Updating a key, enabling a provider or changing an active model validates
+the candidate before replacing the current configuration. Concurrent saves return
+a conflict for reload. Disabling a selected provider deliberately stops its AI
+tasks until re-enabled or replaced; failures never silently choose another
+provider or the legacy key. Disabling alone does not probe unchanged connections,
+so another provider's outage cannot block it. Authenticated AI requests consult
+this server configuration even if an old browser setting selected local fallback.
+Existing approval gates remain in place.
+
+API keys, encryption keys and encrypted `ai_secrets` rows are excluded from
+workspace backups. Local demo sessions cannot change server AI credentials.
+Provider catalogue and adapter tests use synthetic fixtures; live verification
+requires each environment's actual credentials and provider quota. Run the
+disposable local PostgreSQL transaction check with:
+
+```bash
+PSQL_BIN=/Applications/Postgres.app/Contents/Versions/17/bin/psql \
+node scripts/test-ai-integrations-postgres.mjs
+```
+
+The script defaults to a local server on port 55441, creates a uniquely named
+test database, and removes it after checking access restrictions, revision
+conflicts, concurrent saves and audit rollback. Override the local admin URL
+with `AI_INTEGRATIONS_TEST_ADMIN_URL` if needed; remote database URLs are rejected.
 
 ## New staging Supabase project
 

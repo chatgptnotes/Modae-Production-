@@ -99,12 +99,28 @@ test('customer guidance is extracted as guidance rather than fictional customer 
   assert.deepEqual(classificationGuidance([['Customer status Management'], ['Criteria', 'Blue', 'Red', 'Amber', 'Green'], ['Payment Terms', 'NA', 'Advance', '30 Days', '30-45 Days']]), [{ label: 'Payment Terms', values: { Blue: 'NA', Red: 'Advance', Amber: '30 Days', Green: '30-45 Days' } }])
 })
 
-test('admin colour changes reach associated opportunities and leads without changing proposal terms', async () => {
+test('customer master classification changes preserve manual lead and opportunity decisions', async () => {
   const { applyCustomerChange } = await import('../src/excelLogic.js')
   const state = { customers: [{ name: 'Acme', status: 'Blue' }], opportunities: [{ id: 'A', sellTo: 'ACME', customerStatus: 'Blue', paymentTerms: 'Agreed' }], leads: [{ sellTo: ' Acme ', customerStatus: 'Blue' }], proposals: { A: { terms: [{ ourResponse: 'Agreed' }] } } }
   const result = applyCustomerChange(state, 'Acme', { status: 'Green' })
-  assert.equal(result.opportunities[0].customerStatus, 'Green')
-  assert.equal(result.leads[0].customerStatus, 'Green')
+  assert.equal(result.customers[0].status, 'Green')
+  assert.equal(result.opportunities, state.opportunities)
+  assert.equal(result.leads, state.leads)
+  assert.equal(result.opportunities[0].customerStatus, 'Blue')
+  assert.equal(result.leads[0].customerStatus, 'Blue')
   assert.equal(result.opportunities[0].paymentTerms, 'Agreed')
   assert.equal(result.proposals, state.proposals)
+})
+
+test('master classification updates preserve legacy controls on existing records and unrelated customers', async () => {
+  const { applyCustomerChange } = await import('../src/excelLogic.js')
+  const opportunity = { id: 'O', sellTo: 'Acme', customerStatus: 'Red', legacyCustomerClass: 'Blue', customerClassificationVersion: 2, leadVerification: { type: 'KYC', status: 'Pending' } }
+  const lead = { id: 'L', sellTo: 'Acme', customerStatus: 'Green', customerClassificationVersion: 2 }
+  const state = { customers: [{name:'Acme',status:'Red'}, {name:'Other',status:'Yellow'}], opportunities:[opportunity], leads:[lead] }
+  const result = applyCustomerChange(state, 'ACME', {status:'Yellow', legacyCustomerClass:'', customerClassificationVersion:2})
+  assert.equal(result.customers[0].status, 'Yellow')
+  assert.equal(result.customers[1], state.customers[1])
+  assert.equal(result.opportunities[0], opportunity)
+  assert.equal(result.leads[0], lead)
+  assert.equal(state.customers[0].status, 'Red')
 })

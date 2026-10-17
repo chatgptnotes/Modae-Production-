@@ -1,3 +1,5 @@
+import { isNonSalesUser } from '../accessPolicy.js'
+import NonSalesWorkspace from '../pages/NonSalesWorkspace.jsx'
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
@@ -119,6 +121,8 @@ function TabletWorkspace() {
   useEffect(() => {
     if (loc.pathname === '/') nav('/home', { replace: true })
   }, [loc.pathname, nav])
+
+  if (isNonSalesUser(store.auth?.user || store.roles || role)) return <NonSalesWorkspace />
 
   const routes = (role === 'CUST' || custAccount) ? (
     <Routes>

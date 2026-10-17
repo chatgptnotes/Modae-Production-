@@ -17,7 +17,7 @@ test('the shared workspace loads once per session and saves only explicit edits'
     'idle browsers must not connect/reconnect an automatic data stream')
   assert.match(store, /document\.addEventListener\('visibilitychange'/)
   assert.match(store, /window\.addEventListener\('online'/)
-  assert.match(store, /if \(!invalidateSupabaseAuth\(res\.error\)\) setLiveSyncStatus\('error'\)/)
+  assert.match(store, /if \(!invalidateSupabaseAuth\(error\)\) setLiveSyncStatus\('error'\)/)
   assert.match(store, /const initialHydrationRef = useRef\(null\)/)
   assert.match(store, /const userId = state\.auth\?\.user\?\.id \|\| ''/)
   assert.match(store, /initialHydrationRef\.current === userId/)
@@ -134,7 +134,7 @@ test('lead creation flushes before immediate inbox navigation', () => {
 
 test('empty workspace hydration does not republish the browser snapshot', () => {
   const store = read('src/store.jsx')
-  const emptyHydration = store.slice(store.indexOf('if (res.empty) {'), store.indexOf('} else {', store.indexOf('if (res.empty) {')))
+  const emptyHydration = store.slice(store.indexOf('if (!hydratedRef.current) {'), store.indexOf('} else applyServer', store.indexOf('if (!hydratedRef.current) {')))
   assert.match(emptyHydration, /hydratedRef\.current = true/)
   assert.match(emptyHydration, /priceLists: \{\}/)
   assert.doesNotMatch(emptyHydration, /setTimeout\(flushSaves, 0\)/,
@@ -172,11 +172,11 @@ test('live-event authentication failures stop reconnecting and recover the sessi
   assert.match(store, /if \(invalidateSupabaseAuth\(error\)\) return false/)
 })
 
-test('manual refresh remains the only full workspace pull after initial hydration', () => {
+test('manual refresh forces only the visible view instead of a full workspace pull', () => {
   const store = read('src/store.jsx')
   assert.match(store, /async refreshSharedData\(\)/)
-  assert.match(store, /datastore\.loadAll\(\{ force: true \}\)/)
-  assert.doesNotMatch(store, /location\.pathname/)
+  assert.match(store, /ensureWorkspaceView\(workspaceViewForPath\(window\.location\.pathname\), \{ force: true \}\)/)
+  assert.doesNotMatch(store, /datastore\.loadAll\(/)
 })
 
 test('approval decisions refresh only approvals and opportunities', () => {

@@ -93,13 +93,13 @@ test('desktop and phone show all Won value, estimated disclosure, and period con
     }))
     const all = renderPeriod('all')
     assert.match(all, /Won value/)
-    assert.match(all, /₹5\.0 L/)
+    assert.match(all, /₹5,00,000/)
     assert.match(all, /2 unverified Won/)
     if (phone) assert.match(all, /All history/)
     else assert.match(all, /Shown in YTD or QTD/)
     assert.doesNotMatch(all, /<span>Target<\/span><i><b class="target"/)
     const fy = renderPeriod('fy')
-    assert.match(fy, /₹3\.0 L/)
+    assert.match(fy, /₹3,00,000/)
     if (phone) assert.match(fy, /Full-year target/)
     else assert.match(fy, /<span>Target<\/span>/)
   }
@@ -114,7 +114,7 @@ test('desktop and phone compare verified Won value with a confirmed YTD target',
     const html = renderToStaticMarkup(React.createElement(component, { store, model, showMoney: true,
       scope: 'global', period: 'fy', setPeriod() {}, fy: store.sales.fy, canOpen: () => true, nav() {} }))
     assert.match(html, /Won value/)
-    assert.match(html, /₹1\.2 L/)
+    assert.match(html, /₹1,20,000/)
     if (component === module.exports.PhoneReports) {
       assert.match(html, /Full-year target/)
       assert.match(html, /Remaining to target/)
@@ -137,7 +137,7 @@ for (const phone of [false, true]) {
     assert.match(html, /aria-label="Won 1 \(50%\)/)
     assert.match(html, /aria-label="Lost 1 \(50%\)/)
     assert.match(html, /Won\/Lost Closed<\/dt><dd>2/)
-    assert.match(html, /Total Opportunity Value<\/dt><dd>₹3\.0 L/)
+    assert.match(html, /Total Opportunity Value<\/dt><dd>₹3,00,000/)
     assert.equal((html.match(/class="winloss-count-axis"/g) || []).length, 2)
     if (phone) assert.doesNotMatch(render(phone, store, false), /Total Opportunity Value/)
     assert.doesNotMatch(render(phone, { ...store, role: 'TECH' }), /Total Opportunity Value/)
@@ -184,7 +184,7 @@ for (const phone of [false, true]) {
     assert.match(budget, /2 low probability opportunities/)
     assert.match(budget, /<path[^>]*class="normal-funnel-high"/)
     assert.match(budget, /<path[^>]*class="normal-funnel-low"/)
-    assert.match(budget, /₹6\.0 L/)
+    assert.match(budget, /₹6,00,000/)
     const restricted = render(phone, { ...store, role: 'TECH' }, false)
     assert.match(restricted, /1 high probability opportunities/)
     assert.doesNotMatch(restricted, /normal-funnel-value|₹/)
@@ -309,7 +309,7 @@ for (const phone of [false, true]) {
       period: 'all', setPeriod() {}, fy: store.sales.fy, canOpen: () => true, nav() {} }))
     assert.match(html, /1 unverified Won value uses an opportunity estimate/)
     assert.match(html, /Won value/)
-    assert.match(html, /₹2\.0 L/)
+    assert.match(html, /₹2,00,000/)
     assert.doesNotMatch(html, /Full-year target/)
     assert.doesNotMatch(html, /class="reference-gap is-/)
   })
@@ -319,7 +319,7 @@ for (const phone of [false, true]) {
     ] } }
     const html = render(phone, store)
     assert.match(html, /Won value/)
-    assert.doesNotMatch(html, /₹2.5 L/)
+    assert.doesNotMatch(html, /₹2,50,000/)
     assert.doesNotMatch(html, /Remaining to target/)
   })
 }
@@ -358,16 +358,16 @@ test('authorized reviewers can open the per-owner target editor from Performance
   assert.doesNotMatch(restricted, />Manage targets<\/button>/)
 })
 
-test('target editor lists each owner with annual and quarterly inputs in lakh', () => {
+test('target editor lists each owner with annual and quarterly inputs in actual INR', () => {
   const html = renderToStaticMarkup(React.createElement(module.exports.TargetManagerDialog, {
     store: { role: 'LJS', sales: { fy: 'FY 2026-27', targets: { LJS: { annual: 60000, q: [15000, 15000, 15000, 15000] } } }, config: {} },
     onClose() {},
   }))
   assert.match(html, /role="dialog"[^>]*aria-modal="true"/)
   assert.match(html, /LJS/)
-  assert.match(html, /aria-label="LJS annual target \(₹ lakh\)"[^>]* value="600"/)
-  assert.match(html, /aria-label="LJS Q1 target \(₹ lakh\)"[^>]* value="150"/)
-  assert.match(html, /aria-label="PP annual target \(₹ lakh\)"[^>]* value="0"/)
+  assert.match(html, /aria-label="LJS annual target \(INR\)"[^>]* value="60000000"/)
+  assert.match(html, /aria-label="LJS Q1 target \(INR\)"[^>]* value="15000000"/)
+  assert.match(html, /aria-label="PP annual target \(INR\)"[^>]* value="0"/)
   assert.match(html, />Confirm target<\/button>/)
   assert.match(html, />Confirm all<\/button>/)
 })

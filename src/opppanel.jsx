@@ -1,10 +1,11 @@
+import { dbEnabled } from './datastore.js'
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from './store.jsx'
 import {
   displayOpportunityId, SUBFOLDERS,
 } from './seed.js'
-import { isAdminRole, fmt, fmtRupeesFromK, ddMmmYY, ddMMyyyy, canViewCommercial, canPriceProposal, productList, solutionLabel } from './utils.js'
+import { isAdminRole, fmt, fmtRupeesFromK, ddMmmYY, ddMMyyyy, canViewCommercial, canPriceProposal, productList, solutionLabel, displayRole } from './utils.js'
 import { nextActionWith } from './gates.js'
 import { Icon } from './icons.jsx'
 import { Chip, ClassChip } from './ui.jsx'
@@ -30,13 +31,33 @@ const SyncPill = ({ sync }) => {
   return <span className={`chip ${tone}`} title={title}>SP</span>
 }
 
-export default function OppPanel({ oppId, registerBeforeLeave }) {
+export default function OppPanel(props) {
+  const store = useStore(), ref = useRef(store)
+  ref.current = store
+  const [status, setStatus] = useState({ id: '', value: 'loading' })
+  const [retry, setRetry] = useState(0)
+  const connected = dbEnabled()
+  const actor = store.auth?.user?.id
+  useEffect(() => {
+    if (!connected) return
+    let active = true
+    setStatus({ id: props.oppId, value: 'loading' })
+    void ref.current.loadOpportunityDetails(props.oppId).then(ok => {
+      if (active) setStatus({ id: props.oppId, value: ok ? 'ready' : 'error' })
+    }).catch(() => { if (active) setStatus({ id: props.oppId, value: 'error' }) })
+    return () => { active = false }
+  }, [connected, props.oppId, actor, retry])
+  if (connected && (status.id !== props.oppId || status.value === 'loading')) return <p role="status">Loading opportunity…</p>
+  if (connected && status.value === 'error') return <div role="alert">Could not load opportunity details. <button onClick={() => setRetry(n => n + 1)}>Retry</button></div>
+  return <LoadedOppPanel {...props} />
+}
+function LoadedOppPanel({ oppId, registerBeforeLeave }) {
   const store = useStore()
   const nav = useNavigate()
   const editorRef = useRef(null)
   useEffect(() => registerBeforeLeave?.(() => editorRef.current?.confirmDiscard() !== false), [registerBeforeLeave])
 
-  const opp = store.opportunities.find(o => o.id === oppId)
+  const opp = store.loadedOpportunity?.(oppId) || store.opportunities.find(o => o.id === oppId)
   const files = store.files?.[oppId] || Object.fromEntries(SUBFOLDERS.map(f => [f, []]))
   const subNames = Object.keys(files)
   const tabItems = [
@@ -183,7 +204,7 @@ export default function OppPanel({ oppId, registerBeforeLeave }) {
             <Field label="Proposal Send Date"><div className="ro">{ddMMyyyy(opp.proposalDate) || '—'}</div></Field>
             {!editable && <Field label="Expected Order Date *"><div className="ro">{ddMMyyyy(opp.orderDate) || '—'}</div></Field>}
             {!editable && <Field label="Expected Ship Date *"><div className="ro">{ddMMyyyy(opp.invoiceDate) || '—'}</div></Field>}
-            <Field label="Next Action Pending"><div className="ro">{opp.nextActionOwner || na.owner || '— none —'}</div></Field>
+            <Field label="Next Action Pending"><div className="ro">{displayRole(opp.nextActionOwner || na.owner) || '— none —'}</div></Field>
             <Field label="Last Updated"><div className="ro">{ddMmmYY(opp.lastUpdated)}</div></Field>
           </div>
 
@@ -311,11 +332,9 @@ function KycPanel({ opp, store, nav }) {
           </tbody></table>
         </>
       ) : (
-        <p className="hint">{opp.sellTo} is not in the customer master yet — treated as a new (Blue) customer.</p>
+        <p className="hint">{opp.sellTo} is not in the customer master yet — classification is recorded manually. KYC is optional.</p>
       )}
-      {opp.customerStatus === 'Blue' && !verifiedAtLead && (
-        <div className="warnbox">Blue class: AH clearance required before proposal release.</div>
-      )}
+      <p className="hint">KYC is optional and does not block proposals, Won or PO validation.</p>
       {opp.kycOverride && (
         <div className="okbox">
           KYC overridden by {opp.kycOverride.by}: {opp.kycOverride.reason}
@@ -323,7 +342,7 @@ function KycPanel({ opp, store, nav }) {
         </div>
       )}
 
-      <div className="fgroup">{verifiedAtLead ? 'Lead-stage verification' : 'KYC checklist'}</div>
+      <div className="fgroup">{verifiedAtLead ? 'Lead-stage verification' : 'KYC checklist (optional)'}</div>
       {verifiedAtLead ? (
         <div className="check-row">
           <span>{opp.leadVerification.type === 'KYC' ? 'KYC' : 'Verification'}</span>

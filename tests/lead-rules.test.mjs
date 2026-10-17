@@ -151,13 +151,10 @@ test('customer requests are follow-up items and explicit company labels fill sel
   assert.ok(hardened.missing.includes('Tax rate or tax treatment'))
 })
 
-test('lead deadlines are generated from configurable rules', () => {
-  const lead = { id: 'LD-1', ts: '2026-08-01T00:00:00.000Z', customerStatus: 'Blue', ai: { missing: ['GST'] } }
-  const rows = deadlineForLead(lead, config)
-  assert.deepEqual(rows.map(r => r.type), ['kyc'])
-  // Stamped in IST, so compare the instant rather than its representation.
-  assert.equal(new Date(rows[0].dueAt).toISOString(), '2026-08-08T00:00:00.000Z')
-  assert.equal(expiredLeadDeadline(lead, config, new Date('2026-08-09T00:00:00.000Z')).type, 'kyc')
+test('optional intake checks never create automatic expiry deadlines', () => {
+  const lead = { id:'LD-1', ts:'2020-01-01', customerStatus:'Blue', ai:{missing:['GST']} }
+  assert.deepEqual(deadlineForLead(lead,config),[])
+  assert.equal(expiredLeadDeadline(lead,config,new Date('2026-10-16')),null)
 })
 
 // ---- supplying missing information by hand --------------------------------

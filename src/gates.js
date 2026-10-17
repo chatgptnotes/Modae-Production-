@@ -90,7 +90,7 @@ function customerChecklistComplete(opp, state, rule) {
 
 // Whether the evidence a class gate names has actually been provided.
 function gateSatisfied(opp, state, rule, gate, approvedFn) {
-  if (gate.evidence === 'customerKycChecklist') return customerChecklistComplete(opp, state, rule)
+  if (gate.evidence === 'customerKycChecklist') return true
   if (gate.evidence === 'approval') return !!approvedFn?.(gate.approvalType)
   if (gate.evidence) return opp[gate.evidence] === true
   return true
@@ -319,9 +319,9 @@ export function readiness(opp, proposal, state) {
   // and transitionBlockers blocks Registration on it. Readiness said `info`,
   // so the same unpaid fee read as advisory on one panel and blocking on the
   // other. It blocks in both.
-  const classGate = classRule(state.config, opp.customerStatus)?.gate
+  const classGate = classRule(state.config, opp.customerStatus, opp)?.gate
   if (classGate?.readiness) {
-    const rule = classRule(state.config, opp.customerStatus)
+    const rule = classRule(state.config, opp.customerStatus, opp)
     const overridden = customerGateOverridden(opp, state.config)
     if (!overridden && !gateSatisfied(opp, state, rule, classGate)) {
       b.push({ ...classGate.readiness })
@@ -467,7 +467,7 @@ export function nextActionWith(opp, proposal, state) {
 export function oppBlockers(opp, proposal, approvals, config = null) {
   if (!opp) return []
   const b = []
-  if (opp.status !== 'Closed' && classRule(config, opp.customerStatus)?.defaultAction === 'No Bid' && classRule(config, opp.customerStatus)?.verification?.requires !== 'jointApproval') b.push({ key: 'customer-no-bid', severity: 'block', text: 'No Bid — customer policy does not allow quoting' })
+  if (opp.status !== 'Closed' && classRule(config, opp.customerStatus, opp)?.defaultAction === 'No Bid' && classRule(config, opp.customerStatus, opp)?.verification?.requires !== 'jointApproval') b.push({ key: 'customer-no-bid', severity: 'block', text: 'No Bid — customer policy does not allow quoting' })
   const mine = approvals.filter(a => !a.supersededBy && a.oppId === opp.id)
   const currentApproval = (approval, type) => approval.approvalSnapshot
     ? !approvalAffectedByProposal(approval, type, proposal, opp)
@@ -498,7 +498,7 @@ export function oppBlockers(opp, proposal, approvals, config = null) {
   // the AH half of the joint decision that transitionBlockers and the inbox
   // both demand. Classes with no approval type of their own (Blue) carry
   // neither, exactly as before.
-  const advisory = classRule(config, opp.customerStatus)?.advisory
+  const advisory = classRule(config, opp.customerStatus, opp)?.advisory
   if (advisory && !(advisory.approvalType && hasApproved(advisory.approvalType))) {
     const waiting = advisory.approvalType && hasOpen(advisory.approvalType)
     if (waiting && advisory.waitKey) {
@@ -656,7 +656,7 @@ export function approvalForRev(type, proposal, approvals, oppId, opportunity) {
 // The §5C release, kept under its original name — it is the gate the
 // submission panel and the proposal builder read.
 export function releaseState(proposal, approvals, oppId, opportunity, config = {}) {
-  const rule = classRule(config, opportunity?.customerStatus)
+  const rule = classRule(config, opportunity?.customerStatus, opportunity)
   if (opportunity?.status !== 'Closed' && rule?.defaultAction === 'No Bid') {
     const clearance = rule.verification?.requires === 'jointApproval' && approvalForRev(rule.verification.approvalType, proposal, approvals, oppId, opportunity).approved
     if (!clearance) return { pending: null, release: null, required: true, reason: 'No Bid — continuation requires joint LJS/AH approval' }
@@ -720,7 +720,7 @@ export function transitionBlockers(opp, target, proposal, state) {
   const next = MILESTONES.indexOf(target)
   if (next <= current) return []
   const b = []
-  if (opp.status !== 'Closed' && classRule(state.config, opp.customerStatus)?.defaultAction === 'No Bid' && classRule(state.config, opp.customerStatus)?.verification?.requires !== 'jointApproval') b.push({ key: 'customer-no-bid', severity: 'block', text: 'No Bid — customer policy does not allow quoting' })
+  if (opp.status !== 'Closed' && classRule(state.config, opp.customerStatus, opp)?.defaultAction === 'No Bid' && classRule(state.config, opp.customerStatus, opp)?.verification?.requires !== 'jointApproval') b.push({ key: 'customer-no-bid', severity: 'block', text: 'No Bid — customer policy does not allow quoting' })
   const required = (state.config?.workflowRequiredFields?.length
     ? state.config.workflowRequiredFields.map(item => [item.field, item.text])
     : [
@@ -740,9 +740,9 @@ export function transitionBlockers(opp, target, proposal, state) {
   // waived the Red gate outright — the opportunity moved past Registration
   // with no clearance record in existence. With it, the real approval is
   // requested, and NO_EXCEPTION refuses the waiver at the model layer too.
-  const classGate = classRule(state.config, opp.customerStatus)?.gate
+  const classGate = classRule(state.config, opp.customerStatus, opp)?.gate
   if (classGate && next >= MILESTONES.indexOf(classGate.milestone)) {
-    const rule = classRule(state.config, opp.customerStatus)
+    const rule = classRule(state.config, opp.customerStatus, opp)
     const overridden = customerGateOverridden(opp, state.config)
     if (!overridden && !gateSatisfied(opp, state, rule, classGate, approved)) {
       const waiting = classGate.approvalType && pending(classGate.approvalType)

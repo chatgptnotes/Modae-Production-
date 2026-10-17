@@ -32,15 +32,15 @@ test('header mapping tolerates the wordings a client sheet actually uses', () =>
   assert.equal(fieldForHeader('Opportunity Value'), null, 'unknown columns are ignored, not guessed')
 })
 
-test('the class normalises to the four customer statuses, defaulting Blue pending verification', () => {
+test('explicit classes normalize and missing classes await manual review', () => {
   assert.equal(normalizeStatus('GREEN'), 'Green')
   assert.equal(normalizeStatus('green customer'), 'Green')
-  assert.equal(normalizeStatus('Yellow'), 'Amber')
+  assert.equal(normalizeStatus('Yellow'), 'Yellow')
   assert.equal(normalizeStatus('red'), 'Red')
-  assert.equal(normalizeStatus('New'), 'Blue')
+  assert.equal(normalizeStatus('New'), 'Unclassified')
   // Existing verified accounts are the whole point of the import.
-  assert.equal(normalizeStatus(''), 'Blue')
-  assert.equal(normalizeStatus('whatever'), 'Blue')
+  assert.equal(normalizeStatus(''), 'Unclassified')
+  assert.equal(normalizeStatus('whatever'), 'Unclassified')
 })
 
 test('a row without a recognisable name is dropped, not invented', () => {
@@ -60,7 +60,7 @@ test('an uploaded workbook round-trips into master records', () => {
   })
   assert.equal(rows[1].status, 'Red')
   assert.equal(rows[1].kyc, 'Pending', 'a non-Green import still needs verification')
-  assert.equal(rows[2].status, 'Blue')
+  assert.equal(rows[2].status, 'Unclassified')
   assert.equal(rows[2].payment, '—')
 })
 

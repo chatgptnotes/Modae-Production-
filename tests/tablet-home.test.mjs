@@ -53,10 +53,10 @@ test('every tile carries a key, label and route', () => {
 
 // Price Lists is a read-only reference for every internal persona. Editing
 // remains gated inside the page to commercial/admin roles.
-test('Price Lists is available to every internal role', () => {
+test('Price Lists is unavailable to customer and submit-only accounts', () => {
   for (const role of Object.keys(ROLES)) {
     const has = buildTabletTiles({ ...store, role }).some(t => t.key === 'pricelists')
-    assert.equal(has, role !== 'CUST', `${role} must ${role === 'CUST' ? 'not ' : ''}see the Price Lists tile`)
+    assert.equal(has, !['CUST', 'NON_SALES'].includes(role), `${role} Price Lists tile must follow workspace read permissions`)
   }
 })
 

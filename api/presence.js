@@ -1,4 +1,4 @@
-import { isActiveUser, isAccountAdmin, matchesAccount } from '../src/userManagement.js'
+import { isActiveUser, isAccountAdmin, accountProfileFor } from '../src/userManagement.js'
 import { getAdminSupabaseClient } from './_supabase-client.js'
 
 const ADMIN_ROLES = new Set(['SUPER', 'ADMIN', 'LJS'])
@@ -20,8 +20,7 @@ async function currentProfile(client, token) {
     .is('deleted_at', null)
     .maybeSingle()
   if (error) throw error
-  const profile = (Array.isArray(data?.data) ? data.data : [])
-    .find(user => matchesAccount(user, authData.user))
+  const profile = accountProfileFor(Array.isArray(data?.data) ? data.data : [], authData.user)
   return isActiveUser(profile) ? { auth: authData.user, isAdmin: isAccountAdmin(profile) } : null
 }
 

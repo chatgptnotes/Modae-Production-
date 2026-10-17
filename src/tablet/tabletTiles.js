@@ -21,7 +21,7 @@ export function buildTabletTiles(store) {
     { key: 'po', page: 'po', icon: 'clipboardCheck', label: isSalesOwner(role) ? 'My Purchase Orders' : 'Purchase Orders', hint: 'PO validation & booked orders', to: '/order', color: 'navy', badge: approver ? c.poReview : 0, badgeHint: 'POs in validation' },
     { key: 'aimap', page: 'aimap', icon: 'sparkles', label: 'AI and automation', hint: '28 AI interventions and live demonstrations', to: '/aimap', color: 'purple', show: admin || role === 'AH' || role === 'LJS' },
     { key: 'pricelists', page: 'pricelists', icon: 'tag', label: 'Price Lists', hint: 'B&K · Metrix · ad-hoc quotes', to: '/pricelists', color: 'amber' },
-    { key: 'customers', page: 'customers', icon: 'users', label: 'Customers', hint: 'Master + Green/Blue/Amber/Red', to: '/customers', color: 'rust' },
+    { key: 'customers', page: 'customers', icon: 'users', label: 'Customers', hint: 'Master + Green/Yellow/Red', to: '/customers', color: 'rust' },
     { key: 'launcher', page: 'launcher', icon: 'play', label: 'Demo launcher', hint: 'Guided demonstration scenarios', to: '/launcher', color: 'slate', show: admin },
     { key: 'admin', page: 'admin', icon: 'gear', label: 'Admin', hint: 'Rules, AI model, SharePoint, uploads', to: '/admin', color: 'wine', show: admin || role === 'LJS' },
     { key: 'audit', page: 'audit', icon: 'list', label: 'Audit Trail', hint: 'Who changed what, when', to: '/audit', color: 'slate', show: admin },

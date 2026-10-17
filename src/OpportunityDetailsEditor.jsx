@@ -1,3 +1,4 @@
+import { normalizeCustomerClass } from './customerClasses.js'
 import { releaseWorkspaceElementInputs } from './workspaceInputOwnership.js'
 import { workspaceSyncState } from './workspaceSyncState.js'
 import { changedOpportunityFields, validateOpportunityEdit } from './opportunityEdits.js'
@@ -29,7 +30,7 @@ const displayOpportunityScope = value => String(value || '')
   .trim()
 
 const fields = [
-  'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'sellTo', 'category', 'location', 'cogsK', 'forecast', 'remarks',
+  'owner', 'oppName', 'opportunityScope', 'rfqNumber', 'rfqDate', 'valueK', 'sellTo', 'customerStatus', 'category', 'location', 'cogsK', 'forecast', 'remarks',
   'eucName', 'eucLocation', 'oppType', 'bu', 'segment', 'solution', 'product', 'prob',
   'contactPerson', 'contactPhone', 'contactEmail', 'sellToCustomerLocation',
   'orderDate', 'invoiceDate', 'deliveryDate', 'offerDate',
@@ -41,7 +42,7 @@ const makeDraft = opp => ({
   rfqNumber: opp.rfqNumber || '', rfqDate: opp.rfqDate || '', valueK: opp.valueK == null ? '' : opp.valueK * 1000,
   cogsK: opp.cogsK == null ? '' : opp.cogsK * 1000, forecast: !!opp.forecast, remarks: opp.remarks || '',
   category: opp.category || '', location: opp.location || '',
-  customerStatus: opp.customerStatus || '', eucName: opp.eucName || '',
+  customerStatus: normalizeCustomerClass(opp.customerStatus), eucName: opp.eucName || '',
   eucLocation: opp.eucLocation || '', oppType: opp.oppType || '',
   bu: opp.bu || '', segment: opp.segment || '', solution: solutionList(opp.solution),
   product: productList(opp.product), prob: opp.prob || '',
@@ -82,7 +83,7 @@ export function OpportunityDetailsView({ opp, className = '', showValue = true }
         <ReadOnlyField label="Sell To Customer" value={opp.sellTo} />
         <ReadOnlyField label="Category" value={opp.category} />
         <ReadOnlyField label="Sell To Customer Location" value={opp.sellToCustomerLocation || opp.location} />
-        <ReadOnlyField label="Customer Status" value={opp.customerStatus} />
+        <ReadOnlyField label="Customer Status" value={normalizeCustomerClass(opp.customerStatus)} />
         <ReadOnlyField label="EUC Name" value={opp.eucName} />
         <ReadOnlyField label="EUC Location" value={opp.eucLocation} />
         <div className="opportunity-details-wide">
@@ -227,6 +228,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
         validateOpportunityEdit(key, changed[key])
         patch[key] = ['valueK', 'cogsK'].includes(key) ? (changed[key] === '' ? null : rupeesToK(changed[key])) : changed[key]
       }
+      if (Object.hasOwn(patch, 'customerStatus')) { patch.legacyCustomerClass = null; patch.customerClassificationVersion = 2 }
       if (Object.keys(patch).length) store.updateOpportunity(opp.id, patch)
       releaseWorkspaceElementInputs(formRef.current)
       if(workspaceSyncState.enabled && await store.flushPersistence([{entity:'opportunities',id:opp.id}])===false){setError('Changes were not saved. Review conflicts or retry.');return}
@@ -303,7 +305,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
           value={draft.sellTo}
           onChange={value => set('sellTo', value)}
           onCreate={name => {
-            const customer = { name, category: draft.category || 'EUC', status: 'Blue', kyc: 'Pending', payment: '—' }
+            const customer = { name, category: draft.category || 'EUC', status: 'Unclassified', kyc: 'Pending', payment: '—' }
             store.addCustomer(customer)
             return customer
           }}
@@ -311,7 +313,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
         />
         <Field label="Category"><select value={draft.category} onChange={e => set('category', e.target.value)} name="opportunity-details-editor-category">{[...new Set([CATEGORIES.includes(draft.category) ? null : draft.category, ...CATEGORIES])].filter(Boolean).map(x => <option key={x}>{x}</option>)}</select></Field>
         <Field label="Sell To Customer Location"><input type="text" value={draft.sellToCustomerLocation} onChange={e => { set('sellToCustomerLocation', e.target.value); set('location', e.target.value) }} name="opportunity-details-editor-sell-to-customer-location" /></Field>
-        <ReadOnlyField label="Customer Status · managed in Customer master" value={store.customers?.find(c => c.name === draft.sellTo)?.status || opp.customerStatus} />
+        <Field label="Customer classification"><select value={draft.customerStatus} onChange={e => set('customerStatus', e.target.value)} name="opportunity-customer-classification">{['Unclassified', 'Red', 'Yellow', 'Green'].map(value => <option key={value}>{value}</option>)}</select></Field>
         <CustomerPicker customers={store.customers} value={draft.eucName} onChange={value => set('eucName', value)} allowCreate={false} label="EUC Name" />
         <Field label="EUC Location"><input type="text" value={draft.eucLocation} onChange={e => set('eucLocation', e.target.value)} name="opportunity-details-editor-euc-location" /></Field>
         <div className="opportunity-details-wide">

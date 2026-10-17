@@ -1,5 +1,49 @@
 # Supabase production schema
 
+## Admin permissions, backups and AI integrations
+
+After the Stage 1 migration, apply in order:
+
+1. `migrations/20261017061731_individual_account_permissions.sql`
+2. `migrations/20261017061909_full_workspace_backups.sql`
+3. `migrations/20261017110000_ai_integrations.sql`
+
+Individual permissions extend the revision-checked access policy with stable
+roster IDs. `workspace_backup_snapshot` and `restore_workspace_backup` are
+service-only: restore compares the reviewed snapshot under transaction locks,
+retains current account lifecycle and audit rows, preserves maximum opportunity
+counters/reservations, writes file bytes atomically and advances generation.
+`save_ai_integrations` commits encrypted credentials, settings and audit together.
+AI and backup receipt namespaces reject ordinary forged audit inserts.
+No production table names are added. Keys stay outside exported workbooks and
+backups. See [deployment setup](../DEPLOYMENT.md) for server encryption and signing
+keys. Run disposable local PostgreSQL transaction checks before release; never
+point fixture scripts at a shared Supabase project.
+
+## Lead intake and atomic conversion
+
+After the atomic approval migration below, apply
+`migrations/20261016122935_stage_one_non_sales_access.sql` before deploying Stage 1.
+It denies direct workspace access to Non-sales accounts (including mixed legacy
+roles), which submit through `/api/lead-intake`. The service-only
+`convert_lead_to_opportunity` RPC commits the opportunity, converted lead and audit
+receipt together, checks revisions and workspace generation, and returns the
+existing conversion on retries. Ordinary opportunity saves cannot create a new
+lead link or change an existing one. No new tables are introduced.
+
+Run the disposable PostgreSQL regression with:
+
+```bash
+STAGE_ONE_TEST_ADMIN_URL=postgresql://postgres@localhost:55441/postgres \
+PSQL_BIN=/Applications/Postgres.app/Contents/Versions/17/bin/psql \
+node scripts/test-stage-one-postgres.mjs
+```
+
+The runner creates and removes a uniquely named local test database. It verifies
+concurrent conversion retries, revision/generation conflicts, receipt protection,
+ordinary subsequent edits and full rollback. Never point the fixture installer
+at a shared project.
+
 ## Atomic approval commands
 
 After migration 023, apply

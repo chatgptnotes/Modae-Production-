@@ -1,23 +1,22 @@
 import { CUSTOMER_COLOURS, WORKBOOK_CRITERIA, workbookDefaults, ruleForAction, validateWorkbookConfig } from '../workbookGovernance.js'
 
 const clone = value => JSON.parse(JSON.stringify(value))
-const ACTION_CELLS = { Blue: 'TBD', Red: 'No Bid', Amber: '₹25K pr Quote Fees', Green: 'OK to Quote' }
+const ACTION_CELLS = { Red: 'TBD', Yellow: '₹25K pr Quote Fees', Green: 'OK to Quote' }
 const ACCOUNT_CELLS = {
-  Blue: 'All New Leads\nKYC Reqd\nLead Validation Reqd.',
   Red: 'Unknown Leads\nTraders\nResellers\nFrequent RFQ’s\nNo Orders\nOutside Region\nOutside Focused Markets\nOutside Focused Domains\nOutside Focused Aplications\nDon’t Provide EUC',
-  Amber: 'Frequent RFQ’s\nNo Orders\nTraders\nResellers\nFrequent RFQ’s\nNo Orders\nOutside Region\nOutside Focused Markets\nOutside Focused Domains\nOutside Focused Aplications\nSmall EPC/OEM/MAC’s',
+  Yellow: 'Frequent RFQ’s\nNo Orders\nTraders\nResellers\nFrequent RFQ’s\nNo Orders\nOutside Region\nOutside Focused Markets\nOutside Focused Domains\nOutside Focused Aplications\nSmall EPC/OEM/MAC’s',
   Green: 'Past Business\nLarge OEM’s\nLarge EUC/EPC’s\nKey Accounts\nFocused Markets\nFocused Domains\nFocused Aplications\n>90% Win Probability\nUsers Of Promoted Products',
 }
 
 export function matrixDraft(config) {
   const defaults = workbookDefaults()
-  const saved = config.customerMatrixVersion === 1
+  const saved = config.customerMatrixVersion === 2
   return { ...defaults, ...clone(config),
     classificationCriteria: clone(saved ? config.classificationCriteria : WORKBOOK_CRITERIA).map(row => ({ ...row, label: saved ? row.label : row.label.replace(' (INR)', ''), cells: row.cells || clone(row.workbook || {}), remarks: row.remarks || '' })),
     customerActionCells: clone(saved ? config.customerActionCells : ACTION_CELLS),
     customerActionLabel: config.customerActionLabel || 'Proposed Opp/Lead Actions',
     customerActionRemarks: config.customerActionRemarks || '',
-    customerAccountCells: clone(config.customerAccountCells || ACCOUNT_CELLS),
+    customerAccountCells: clone(saved ? config.customerAccountCells : ACCOUNT_CELLS),
     customerAccountLabel: config.customerAccountLabel || 'Typical Accounts',
     customerAccountRemarks: config.customerAccountRemarks || '',
   }
@@ -64,7 +63,7 @@ export function compileMatrix(draft) {
     const aliases = { tbd: 'Pending validation', 'pending validation': 'Pending validation', 'no bid': 'No Bid', 'ok to quote': 'OK to Quote', 'approval required': 'Approval required' }
     const fee = text.replace(/,/g, '').match(/^(?:₹|INR\s*)?(\d+(?:\.\d+)?)\s*(K|Lacs?|Lakhs?)?\s*(?:per|pr|\/)\s*Quote\s*Fees?$/i)
     const action = fee ? 'Quote fee required' : aliases[text.toLowerCase()]
-    if (!action || (fee && colour !== 'Amber')) { errors.push(`${colour}: enter TBD, No Bid, OK to Quote, Approval required${colour === 'Amber' ? ' or ₹25K per Quote Fees' : ''}.`); continue }
+    if (!action || (fee && colour !== 'Yellow')) { errors.push(`${colour}: enter TBD, No Bid, OK to Quote, Approval required${colour === 'Yellow' ? ' or ₹25K per Quote Fees' : ''}.`); continue }
     config.customerClasses[colour] = ruleForAction(config.customerClasses[colour], action)
     if (action === 'No Bid') {
       config.customerClasses[colour].verification.requires = 'noBid'
@@ -75,7 +74,7 @@ export function compileMatrix(draft) {
     if (terms != null) config.customerClasses[colour].paymentTerms = /^NA$/i.test(terms.trim()) ? '' : terms.trim()
   }
   config.classRules = Object.fromEntries(CUSTOMER_COLOURS.map(colour => [colour, config.customerClasses[colour].paymentTerms]))
-  config.customerMatrixVersion = 1
+  config.customerMatrixVersion = 2
   errors.push(...validateWorkbookConfig(config))
   return { config, errors: [...new Set(errors)] }
 }

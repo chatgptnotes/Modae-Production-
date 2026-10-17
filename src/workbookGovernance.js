@@ -1,10 +1,10 @@
 import { validateBusinessRules } from './businessRules.js'
-import { DEFAULT_CUSTOMER_CLASSES, upgradeCustomerRules } from './customerClasses.js'
+import { DEFAULT_CUSTOMER_CLASSES, LEGACY_CUSTOMER_CLASSES, upgradeCustomerRules } from './customerClasses.js'
 
-export const WORKBOOK_POLICY_VERSION = 2
-export const CUSTOMER_COLOURS = ['Blue', 'Red', 'Amber', 'Green']
+export const WORKBOOK_POLICY_VERSION = 3
+export const CUSTOMER_COLOURS = ['Green', 'Yellow', 'Red']
 export const QUOTE_ACTIONS = ['Pending validation', 'No Bid', 'Quote fee required', 'OK to Quote', 'Approval required']
-const flex = ['Fx-1', 'Fx-2', 'Fx-3', 'Fx-4', 'Fx-5']
+const flex = []
 export const WORKBOOK_FIELDS = {
   owner: { label: 'Owner', values: ['LJS', 'PP', 'RS', 'SS', 'PJS', 'RJS', 'SR'] },
   oppType: { label: 'Opportunity type', values: ['Project', 'Upgrade', 'Retrofit', 'Service', 'Spares', 'Flow'] },
@@ -16,13 +16,13 @@ export const WORKBOOK_FIELDS = {
   prob: { label: 'Probability', fixed: true, values: ['Low', 'Medium', 'High'] },
   category: { label: 'Customer category', values: ['EUC', 'OEM', 'EPC', 'MAC', 'SI', 'ACP', 'RE/TR', ...flex] },
   closedReason: { label: 'Close reason', values: ['Relationship', 'Unique Product', 'Pedigreee', 'Best Price', 'Trade Compliance', 'Technical Compliance', 'Commercial Compliance', 'Capability', 'Lead Time', 'No Bid', 'Abandoned/Delayed', 'Duplicate Oppurtunity', 'Validity Expired', 'Others'] },
-  customerStatus: { label: 'Customer status', fixed: true, values: ['Red', 'Amber', 'Green', 'Blue'] },
+  customerStatus: { label: 'Customer status', fixed: true, values: ['Unclassified', 'Green', 'Yellow', 'Red'] },
 }
 const clone = value => JSON.parse(JSON.stringify(value))
-export const fieldRows = (config, key) => config?.fieldLists?.[key] ?? (WORKBOOK_FIELDS[key]?.values || []).map(value => ({ value, label: value, active: true }))
+export const fieldRows = (config, key) => (key === 'customerStatus' ? WORKBOOK_FIELDS.customerStatus.values.map(value => ({ value, label: value, active: true })) : (config?.fieldLists?.[key] ?? (WORKBOOK_FIELDS[key]?.values || []).map(value => ({ value, label: value, active: true })))).filter(row => !/^fx[ -]?\d+$/i.test(row.value))
 export function fieldValues(config, key, current = []) {
   const saved = Array.isArray(current) ? current : [current]
-  return [...new Set([...fieldRows(config, key).filter(row => row.active !== false).map(row => row.value), ...saved.filter(Boolean)])]
+  return [...new Set([...fieldRows(config, key).filter(row => row.active !== false).map(row => row.value), ...saved.filter(value => value && !/^fx[ -]?\d+$/i.test(value))])]
 }
 export const fieldLabel = (config, key, value) => fieldRows(config, key).find(row => row.value === value)?.label || value
 export const fieldBase = (config, key, value) => fieldRows(config, key).find(row => row.value === value)?.base || value
@@ -55,9 +55,9 @@ const criteriaSource = [
 ]
 export const WORKBOOK_CRITERIA = criteriaSource.map(([id, label, type, values, needsDefinition = false]) => ({
   id, label, type, enabled: true, needsDefinition,
-  workbook: Object.fromEntries(CUSTOMER_COLOURS.map((colour, i) => [colour, values[i]])),
+  workbook: Object.fromEntries(CUSTOMER_COLOURS.map((colour, i) => [colour, values[{ Green: 3, Yellow: 2, Red: 1 }[colour]]])),
   conditions: Object.fromEntries(CUSTOMER_COLOURS.map((colour, i) => [colour,
-    needsDefinition || ['NA', 'New Customers', ''].includes(values[i]) ? { op: 'ignore', value: '' } : { op: 'eq', value: values[i] }])),
+    needsDefinition || ['NA', 'New Customers', ''].includes(values[{ Green: 3, Yellow: 2, Red: 1 }[colour]]) ? { op: 'ignore', value: '' } : { op: 'eq', value: values[{ Green: 3, Yellow: 2, Red: 1 }[colour]] }])),
 }))
 
 export function ruleForAction(rule, action) {
@@ -74,17 +74,18 @@ export function ruleForAction(rule, action) {
   }
   if (requires === 'none') { next.gate = null; next.advisory = null }
   else {
-    const template = requires === 'fee' ? DEFAULT_CUSTOMER_CLASSES.Amber : requires === 'documents' ? DEFAULT_CUSTOMER_CLASSES.Blue : DEFAULT_CUSTOMER_CLASSES.Red
+    const template = requires === 'fee' ? DEFAULT_CUSTOMER_CLASSES.Yellow : requires === 'documents' ? LEGACY_CUSTOMER_CLASSES.Blue : LEGACY_CUSTOMER_CLASSES.Red
     next.gate = { ...clone(template.gate), ...(next.gate || {}), evidence: requires === 'fee' ? 'amberFeePaid' : requires === 'documents' ? 'customerKycChecklist' : 'approval' }
     if (requires !== 'jointApproval') { next.gate.approvalType = ''; next.advisory = null }
     else { next.gate.approvalType = next.verification.approvalType; next.gate.approvers = next.verification.approvers; next.advisory = null }
-    if (action === 'No Bid') { next.gate.text = 'No Bid — continuation requires joint LJS/AH approval'; next.gate.exceptionWaivable = false; next.gate.exceptionRequestable = false; next.advisory = clone(DEFAULT_CUSTOMER_CLASSES.Red.advisory) }
+    if (action === 'No Bid') { next.gate.text = 'No Bid — continuation requires joint LJS/AH approval'; next.gate.exceptionWaivable = false; next.gate.exceptionRequestable = false; next.advisory = clone(LEGACY_CUSTOMER_CLASSES.Red.advisory) }
   }
   return next
 }
 
 export function workbookDefaults() {
   return {
+    customerPolicyVersion: 2,
     workbookGovernanceVersion: WORKBOOK_POLICY_VERSION,
     fieldLists: Object.fromEntries(Object.entries(WORKBOOK_FIELDS).map(([key, field]) => [key, field.values.map(value => ({ value, label: value, active: true, ...(['oppType', 'stage'].includes(key) ? { base: value } : {}) }))])),
     classificationCriteria: clone(WORKBOOK_CRITERIA),
@@ -97,14 +98,14 @@ export function workbookDefaults() {
 }
 
 export function upgradeWorkbookConfig(config = {}) {
-  if (config.workbookGovernanceVersion === WORKBOOK_POLICY_VERSION) return config
+  if (config.workbookGovernanceVersion === WORKBOOK_POLICY_VERSION) return upgradeCustomerRules(config)
   const defaults = workbookDefaults()
   const upgraded = upgradeCustomerRules(config)
   return { ...defaults, ...upgraded, workbookGovernanceVersion: WORKBOOK_POLICY_VERSION,
     fieldLists: { ...defaults.fieldLists, ...config.fieldLists }, amberFee: { ...defaults.amberFee, ...config.amberFee },
     workbookPolicyPrevious: { customerClasses: config.customerClasses || {}, amberFee: config.amberFee || {}, fieldLists: config.fieldLists || {} },
     documentChecklists: { ...defaults.documentChecklists, ...config.documentChecklists }, kycItems: config.kycItems?.length ? config.kycItems : defaults.kycItems,
-    customerPolicyVersion: 1, classRules: upgraded.classRules }
+    customerPolicyVersion: upgraded.customerPolicyVersion, classRules: upgraded.classRules }
 }
 
 export function suggestCustomerClass(customer, config) {
@@ -166,7 +167,7 @@ export function workbookComparison(config) {
   return [
     ...Object.entries(WORKBOOK_FIELDS).map(([key, def]) => compare(def.label, [...def.values].sort(), fieldValues(config, key).map(value => fieldLabel(config, key, value)).sort())),
     ...CUSTOMER_COLOURS.flatMap(colour => [compare(`${colour} quoting action`, baseline.customerClasses[colour].defaultAction, config?.customerClasses?.[colour]?.defaultAction), compare(`${colour} payment terms`, baseline.customerClasses[colour].paymentTerms, config?.customerClasses?.[colour]?.paymentTerms)]),
-    compare('Amber quotation fee (INR)', 25000, Number(config?.amberFee?.amount)),
+    compare('Yellow quotation fee (INR)', 25000, Number(config?.amberFee?.amount)),
     ...(config?.classificationCriteria || WORKBOOK_CRITERIA).map(row => ({ label: row.label, expected: row.workbook, actual: row.conditions, status: row.needsDefinition ? 'Needs definition' : JSON.stringify(row.conditions) === JSON.stringify(WORKBOOK_CRITERIA.find(item => item.id === row.id)?.conditions) ? 'Matching' : 'Different' })),
   ]
 }

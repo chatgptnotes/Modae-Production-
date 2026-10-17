@@ -255,39 +255,9 @@ export function isFastTrackLead(lead, config = {}, customer = null) {
   return lead?.fastTrack === true || customer?.status === cfg.customerStatus || lead?.customerStatus === cfg.customerStatus
 }
 
-export function deadlineForLead(lead, config = {}, now = new Date()) {
-  const cfg = leadConfig(config)
-  const base = new Date(lead?.verification?.requestedAt || lead?.customerClassifiedAt || lead?.deadlineStartedAt || lead?.ts || now).getTime()
-  const add = (days, type, reason) => ({
-    type, reason,
-    dueAt: toISTISOString(new Date(base + Number(days || 0) * 86400000)),
-  })
-  const rows = []
-  // The class's own deadline, in the class's own terms. This used to read
-  // config.leadDeadlines directly, which meant the Amber timer edited on the
-  // Admin page (written to amberFee.days) was never actually applied.
-  const verification = classRule(config, lead?.customerStatus)?.verification
-  const days = classDeadlineDays(config, lead?.customerStatus)
-  if (verification?.required && days) {
-    const done = verification.requires === 'documents' ? lead?.kycCompletedAt
-      : verification.requires === 'fee' ? lead?.amberFeePaid === true
-      : true
-    if (!done) {
-      rows.push(add(days, verification.deadlineType || 'verification',
-        verification.requires === 'fee' ? 'Amber processing fee not received' : 'KYC documents not received'))
-    }
-  }
-  // Before registration, unanswered extraction gaps still need a follow-up
-  // deadline. Once the lead is converted they become optional opportunity
-  // follow-up and must not create a second registration prerequisite.
-  const isReceivedUnsimulatedLead = !lead?.simulated && Boolean(lead?.from || lead?.subject || lead?.body)
-  if (isReceivedUnsimulatedLead && lead?.status !== 'Converted' && (lead?.ai?.missing || []).length) {
-    const clarificationDays = Number(cfg.leadDeadlines?.clarificationDays || DEFAULT_LEAD_DEADLINES.clarificationDays)
-    if (clarificationDays > 0 && !lead?.clarificationCompletedAt) {
-      rows.push(add(clarificationDays, 'clarification', 'Customer clarification is still outstanding'))
-    }
-  }
-  return rows
+// Intake has no timed KYC, fee or AI clarification prerequisite.
+export function deadlineForLead() {
+  return []
 }
 
 // Supply a piece of information the AI could not find, by hand. Returns the

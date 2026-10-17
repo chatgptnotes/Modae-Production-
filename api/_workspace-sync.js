@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { isActiveUser, matchesAccount } from '../src/userManagement.js'
+import { isActiveUser, accountProfileFor } from '../src/userManagement.js'
 import { projectWorkspace, canReadWorkspaceRecord, workspaceProjectionVersion } from '../src/workspaceAccess.js'
 import { canAccessPage, canPerform, effectiveAccess } from '../src/accessPolicy.js'
 
@@ -65,8 +65,8 @@ export async function workspaceSync(client,auth,input) {
     read(client.from('records').select('id,data,rev').eq('entity','state').in('id',['users','workspace_generation']).is('deleted_at',null)),
     read(client.from('settings').select('data,rev').eq('id','config').is('deleted_at',null)),
   ])
-  const profile=(stateRows.find(r=>r.id==='users')?.data||[]).find(user=>matchesAccount(user,auth)&&isActiveUser(user))
-  if(!profile) fail('This account no longer has workspace access.',403,'WORKSPACE_ACCESS_REVOKED')
+  const profile=accountProfileFor(stateRows.find(r=>r.id==='users')?.data||[],auth)
+  if(!isActiveUser(profile)) fail('This account no longer has workspace access.',403,'WORKSPACE_ACCESS_REVOKED')
   const generation=String(stateRows.find(r=>r.id==='workspace_generation')?.data?.value ?? '')
   if(generation!==input.generation) fail('The workspace changed. Refresh before continuing.',409,'WORKSPACE_PURGED')
   const config=configRows[0]?.data||{}, state={config,users:[profile],opportunities:[]}

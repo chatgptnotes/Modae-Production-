@@ -1,3 +1,6 @@
+import WorkspaceDataBoundary from './ui/WorkspaceDataBoundary.jsx'
+import { isNonSalesUser } from './accessPolicy.js'
+import NonSalesWorkspace from './pages/NonSalesWorkspace.jsx'
 import React, { Suspense, useEffect, useRef, useState } from 'react'
 import { Routes, Route, NavLink, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { useStore } from './store.jsx'
@@ -256,6 +259,9 @@ function WorkspaceTopbar({ store, role, location, nav }) {
 }
 
 function AppShell() {
+  return <WorkspaceDataBoundary><LoadedAppShell /></WorkspaceDataBoundary>
+}
+function LoadedAppShell() {
   const store = useStore()
   const nav = useNavigate()
   const loc = useLocation()
@@ -304,6 +310,8 @@ function AppShell() {
   // and a way out rather than an app with every page denied. Ahead of the
   // tablet branch, so both shells are covered by the one guard.
   if (!PORTAL_ENABLED && (role === 'CUST' || custAccount)) return withConnectivity(<PortalParked />)
+
+  if (isNonSalesUser(store.auth?.user || store.roles || role)) return <RequireAuth><NonSalesWorkspace /></RequireAuth>
 
   if (tablet) return withConnectivity(<RequireAuth><Suspense fallback={<LoadingScreen />}><TabletApp /></Suspense></RequireAuth>) // if (tablet) return <RequireAuth><TabletApp /></RequireAuth>
 

@@ -1,3 +1,4 @@
+import { allocateTarget, targetRupees } from './myDashboard/targetAllocation.js'
 import { probabilityWeight, fieldBase } from '../workbookGovernance.js'
 import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
@@ -6,7 +7,7 @@ import { useStore } from '../store.jsx'
 import { ROLES, displayOpportunityId } from '../seed.js'
 
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
-import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtLakh, ddMmmYY, ddMMyyyy, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
+import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtRupeesFromK as fmtLakh, ddMmmYY, ddMMyyyy, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
 import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, PROB_WEIGHT, funnelRows } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
@@ -80,7 +81,7 @@ function AnalyticsOverview({ store, role, nav, scope = 'role', summary }) {
   const snapshot = analyticsSnapshot(store, role, { scope })
   const metric = row => snapshot.comm ? fmtLakh(row.valueK) : row.count
   const max = Math.max(1, ...snapshot.funnel.map(row => snapshot.comm ? row.valueK : row.count))
-  const scopeLabel = snapshot.owner ? `Your pipeline · ${snapshot.owner}` : 'Company pipeline'
+  const scopeLabel = snapshot.owner ? `Your pipeline · ${displayRole(snapshot.owner)}` : 'Company pipeline'
   const scoped = store.opportunities.filter(o => !snapshot.owner || o.owner === snapshot.owner)
   const closedInScope = scoped.filter(o => o.stage === 'Won' || o.stage === 'Lost')
   const canFilterOutcomeOwner = !snapshot.owner && (isAdminRole(role) || isApprover(role))
@@ -751,8 +752,7 @@ function SalesDashboard({ store, nav, role, c, open, blocked, nextActions, head,
 // ------------------------------------------------------------ team targets
 // LJS and AH (and admins) set the FY numbers each owner is measured against —
 // until now store.sales.targets was seed-only, with no way to change it.
-// Targets are stored in K₹; the editor speaks lakhs, the unit every widget
-// prints (1 L = 100 K₹).
+// Targets retain K₹ storage; the editor displays actual INR.
 function TeamTargetsCard({ store, span = 12 }) {
   const { OWNERS, labelFor } = useFieldLists()
 
@@ -761,8 +761,8 @@ function TeamTargetsCard({ store, span = 12 }) {
   const [targetError, setTargetError] = useState('')
   const targets = store.sales?.targets || {}
   const owners = [...new Set([...OWNERS, ...Object.keys(targets)])]
-  const toL = k => Math.round(k || 0) / 100
-  const toK = l => Math.round((parseFloat(l) || 0) * 100)
+  const toL = k => (Number(k) || 0) * 1000
+  const toK = l => (parseFloat(l) || 0) / 1000
 
   const begin = owner => {
     const t = targets[owner] || { annual: 0, q: [0, 0, 0, 0] }
@@ -778,16 +778,15 @@ function TeamTargetsCard({ store, span = 12 }) {
     } catch (err) { setTargetError(err.message) }
   }
   const split = () => setDraft(d => {
-    const total = Math.round((parseFloat(d.annual) || 0) * 100)
-    const each = Math.floor(total / 4)
-    return { ...d, q: [each, each, each, total - 3 * each].map(v => String(v / 100)) }
+    const total = toK(d.annual)
+    return { ...d, q: allocateTarget(total, [1, 1, 1, 1]).map(value => String(targetRupees(value))) }
   })
   const qSum = draft ? draft.q.reduce((s, v) => s + (parseFloat(v) || 0), 0) : 0
   const mismatch = draft && Math.abs(qSum - (parseFloat(draft.annual) || 0)) > 0.0001
 
   return (
     <Card title="Team targets" icon="target" tone="tone-sky" span={span}
-      action={<span className="hint">₹ lakh{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</span>}>
+      action={<span className="hint">INR{store.sales?.fy ? ` · ${store.sales.fy}` : ''}</span>}>
       <table className="ana-table targets-table">
         <thead>
           <tr>

@@ -259,7 +259,7 @@ test('the UI token layer reserves accessible semantic roles and technical type',
 
 test('customer classifications use their own labelled chip contract', () => {
   const ui = read('src/ui.jsx')
-  assert.match(ui, /customer-class customer-class-\$\{cls\}/)
+  assert.match(ui, /customer-class customer-class-\$\{value\}/)
   assert.doesNotMatch(ui, /className=\{`pill \$\{cls\}`\}/)
 })
 

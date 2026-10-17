@@ -17,12 +17,12 @@ import { customerPageSize } from './customerPageSize.js'
 // (payment pattern / KYC). Admin / super admin can correct a record in place;
 // every other role raises a 'Customer master change' approval instead, which
 // writes the patch only once AH / BU head clears it.
-const STATUSES = ['Green', 'Amber', 'Red', 'Blue']
+const STATUSES = ['Unclassified', 'Green', 'Yellow', 'Red']
 const KYC_STATES = ['Valid', 'Renewal due', 'Pending', '—']
 const FIELDS = [
   ['category', 'Category', 'category'],
   ['status', 'Status', STATUSES],
-  ['kyc', 'KYC', KYC_STATES],
+  ['kyc', 'KYC (optional)', KYC_STATES],
   ['payment', 'Payment pattern', null],
 ]
 
@@ -51,6 +51,10 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
     if (!changed.length) { setErr('Nothing changed.'); return }
     if (!reason.trim()) { setErr('A reason is required — it goes on the audit trail.'); return }
     const patch = { ...Object.fromEntries(changed.map(c => [c.k, c.to])), classificationReviewedAt: new Date().toISOString(), classificationReviewedBy: store.role, classificationPolicyRevision: store.config.workbookPolicyRevision || 0, classificationAssessment: suggestCustomerClass({ classificationCriteria: criteria }, store.config) }
+    if (changed.some(change => change.k === 'status')) {
+      patch.customerClassificationVersion = 2
+      patch.legacyCustomerClass = ''
+    }
     if (canEditDirect) {
       store.updateCustomer(customer.name, patch, reason.trim())
     } else {
@@ -135,7 +139,7 @@ function EditCustomer({ customer, canEditDirect, onClose }) {
 // as the file upload (store.importCustomers), just for a single row.
 function AddCustomer({ onClose }) {
   const store = useStore()
-  const [form, setForm] = useState({ name: '', category: 'EUC', status: 'Blue', kyc: 'Pending', payment: '—' })
+  const [form, setForm] = useState({ name: '', category: 'EUC', status: 'Unclassified', kyc: 'Pending', payment: '—' })
   const [err, setErr] = useState('')
   const exists = form.name.trim()
     && store.customers.some(c => c.name.toLowerCase() === form.name.trim().toLowerCase())
@@ -313,7 +317,7 @@ export default function Customers() {
           {canEditDirect
             ? ' As admin you can correct a record in place — every edit is audited.'
             : ' Sales is read-only: changes are requested here and applied once AH / BU head approves.'}
-          {' '}New customers are flagged Blue until verified.
+          {' '}New customers remain Unclassified until a salesperson classifies them. KYC is optional.
         </span>
         <span className="spacer" />
         {canEditDirect && (

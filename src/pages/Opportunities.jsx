@@ -1,3 +1,4 @@
+import { fmtRupeesFromK } from '../utils.js'
 import React, { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Tracker from './Tracker.jsx'
@@ -31,7 +32,7 @@ export default function Opportunities() {
   const stageStrip = ({ filters, onStage }) => (
     <section className="opportunity-stage-strip" aria-label="Pipeline stages">
       {insightModel.funnel.map(stage => <button type="button" key={stage.key} aria-pressed={filters.stage?.size === stage.stages.length && stage.stages.every(value => filters.stage.has(value)) && filters.status?.size === 1 && filters.status.has(stage.key === 'won' ? 'Closed' : 'Open')} onClick={() => onStage(stage.stages, stage.key === 'won' ? 'Closed' : 'Open')}>
-        <span>{stage.label}</span><b>{stage.count}</b>{canSeePage(store.role, 'analytics') && <small>{stage.valueK ? `₹${(stage.valueK / 100).toFixed(1)} L` : '—'}</small>}
+        <span>{stage.label}</span><b>{stage.count}</b>{canSeePage(store.role, 'analytics') && <small>{stage.valueK ? fmtRupeesFromK(stage.valueK) : '—'}</small>}
       </button>)}
     </section>
   )

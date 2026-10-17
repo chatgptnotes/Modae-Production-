@@ -31,13 +31,14 @@ test('approval request cards and summary expand with the page in both themes', (
   assert.match(rule, /min-width:\s*0/)
 })
 
-test('opportunity classifications share light palette roles across themes', () => {
-  for (const [name, token] of [['Green', 'green'], ['Blue', 'blue'], ['Amber', 'amber'], ['Red', 'red']]) {
+test('opportunity IDs stay white while classification colours remain on customer status', () => {
+  for (const name of ['Green', 'Blue', 'Amber', 'Red']) {
     const selector = `.shell .tracker-page table.sheet td.oppid.${name}`
     const start = styles.indexOf(selector)
-    assert.ok(start >= 0, `${name} tint must exist`)
-    assert.ok(styles.slice(start, styles.indexOf('}', start)).includes(`var(--register-id-${token}-bg)`))
+    assert.ok(start >= 0, `${name} ID override must exist`)
+    assert.match(styles.slice(start, styles.indexOf('}', start)), /background:\s*#fff\s*!important/)
   }
+  assert.match(styles, /table\.sheet td\.cstat\.Green[\s\S]*?background/)
 })
 
 test('pipeline uses the shared curved renderer for both views', () => {

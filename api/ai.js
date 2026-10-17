@@ -2,11 +2,12 @@ import { opportunitySearchPayload, opportunitySearchPrompt, opportunitySearchSch
 import { validateSearchResult, requiredSearchClarification } from '../src/opportunitySearch.js'
 import { activeProfile } from './_user-roster.js'
 import { getAdminSupabaseClient } from './_supabase-client.js'
+import { activeAiConnection } from './_ai-integrations.js'
+import { providerRequest, providerText, ProviderError, AI_UPSTREAM_TIMEOUT_MS } from './_ai-providers.js'
 
 // Railway Gemini proxy for the browser AI contract.
 // GEMINI_API_KEY is read only on the server. Never expose it through VITE_.
 
-const API = 'https://generativelanguage.googleapis.com/v1beta/models'
 const DEFAULT_MODEL = 'gemini-3.6-flash'
 const MODEL_ALIASES = {
   'gemini-pro': DEFAULT_MODEL,
@@ -888,8 +889,7 @@ export default async function handler(req, res) {
   const ip = String(req.headers?.['x-forwarded-for'] || req.headers?.['x-real-ip'] || '').split(',')[0].trim()
   if (!allowRequest(auth.user.id, ip)) return fail(res, 429, 'AI_RATE_LIMITED', 'Too many AI requests. Please wait a few minutes and try again.')
 
-  const key = String(process.env.GEMINI_API_KEY || '').trim()
-  if (!key) return fail(res, 503, 'AI_KEY_MISSING', 'Gemini is not configured for this Railway environment')
+  let key = String(process.env.GEMINI_API_KEY || '').trim()
 
   let input
   try { input = typeof req.body === 'string' ? JSON.parse(req.body) : (req.body || {}) }
@@ -911,7 +911,7 @@ export default async function handler(req, res) {
     : DEFAULT_MODEL
   // All AI tasks use the same stable multimodal model. Health checks may still
   // request a specific model so Admin can verify a configured endpoint.
-  const model = task === 'health' ? requested : DEFAULT_MODEL
+  let model = task === 'health' ? requested : DEFAULT_MODEL
   if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
@@ -967,13 +967,19 @@ export default async function handler(req, res) {
   }
 
   try {
+    const connection = await activeAiConnection(authClient(), requestBody.contents[0].parts.some(part => part.inlineData))
+    key = connection.key
+    if (!key) return fail(res, 503, 'AI_KEY_MISSING', 'AI is not configured for this Railway environment')
+    model = connection.capabilities ? connection.model : model
+    const provider = connection.provider
+    const request = providerRequest(provider, model, key, requestBody, connection.capabilities)
     let upstream
     for (let attempt = 0; attempt <= MAX_UPSTREAM_RETRIES; attempt += 1) {
-      upstream = await fetch(`${API}/${model}:generateContent`, {
+      upstream = await fetch(request.url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify(requestBody),
-        signal: AbortSignal.timeout(10_000),
+        headers: request.headers,
+        body: JSON.stringify(request.body),
+        signal: AbortSignal.timeout(AI_UPSTREAM_TIMEOUT_MS),
       })
       if (upstream.status !== 429 || attempt === MAX_UPSTREAM_RETRIES) break
       await new Promise(resolve => setTimeout(resolve, retryDelayMs(upstream, attempt)))
@@ -987,16 +993,16 @@ export default async function handler(req, res) {
           ? 'AI_RATE_LIMITED'
           : 'AI_UPSTREAM_FAILED'
       const error = errorCode === 'AI_KEY_REJECTED'
-        ? 'Gemini rejected the configured server credential'
+        ? 'AI provider rejected the configured server credential'
         : errorCode === 'AI_MODEL_UNAVAILABLE'
-          ? `The Gemini model ${model} is unavailable for this API key. Check the server AI configuration.`
+          ? `The AI model ${model} is unavailable for this API key. Check Admin Integrations.`
         : errorCode === 'AI_RATE_LIMITED'
-          ? 'Gemini is temporarily busy or rate limited; retry shortly'
-          : `Gemini service returned HTTP ${upstream.status}`
+          ? 'AI provider is temporarily busy or rate limited; retry shortly'
+          : `AI provider returned HTTP ${upstream.status}`
       return fail(res, 502, errorCode, error)
     }
     const out = await upstream.json()
-    const text = out?.candidates?.[0]?.content?.parts?.map(p => p?.text || '').join('') || ''
+    const text = providerText(provider, out)
     if (!text) return fail(res, 502, 'AI_EMPTY_RESPONSE', 'Gemini returned no usable output')
     if (task === 'health' || !structuredTasks.has(task)) return send(res, 200, { ok: true, model, text })
     if (task === 'opportunity.search') {
@@ -1005,7 +1011,8 @@ export default async function handler(req, res) {
     }
     return send(res, 200, { ok: true, model, data: JSON.parse(text) })
   } catch (error) {
-    console.error('Railway Gemini proxy failed', error?.message || error)
-    return fail(res, 502, 'AI_NETWORK_ERROR', 'Gemini could not be reached; try again shortly')
+    if (error instanceof ProviderError) return fail(res, error.status, error.code, error.message)
+    console.error('AI proxy failed')
+    return fail(res, 502, 'AI_NETWORK_ERROR', 'AI provider could not be reached; try again shortly')
   }
 }

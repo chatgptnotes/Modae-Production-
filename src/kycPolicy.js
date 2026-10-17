@@ -3,7 +3,7 @@ import { classRule } from './customerClasses.js'
 // Operational approvers are configured per customer class. Application admins
 // may record an exception too; ordinary sales access never implies approval.
 export function canOverrideCustomerKyc(actor, opp, config) {
-  const gate = classRule(config, opp?.customerStatus)?.gate
+  const gate = classRule(config, opp?.customerStatus, opp)?.gate
   if (gate?.overrideField !== 'kycOverride' || gate.exceptionWaivable === false) return false
   const identities = typeof actor === 'string' ? [actor] : [actor?.role, ...(actor?.roles || [])]
   return identities.some(id => ['ADMIN', 'SUPER', 'LJS', ...(gate.approvers || [])].includes(id))
@@ -20,7 +20,7 @@ export function createKycOverride(actor, opp, config, reason, now = new Date()) 
 }
 
 export function customerGateOverridden(opp, config) {
-  const gate = classRule(config, opp?.customerStatus)?.gate
+  const gate = classRule(config, opp?.customerStatus, opp)?.gate
   if (!gate?.overrideField || gate.exceptionWaivable === false) return false
   const decision = opp[gate.overrideField]
   if (gate.overrideField !== 'kycOverride') return !!decision

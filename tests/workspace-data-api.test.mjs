@@ -80,6 +80,26 @@ test('a stale browser cannot write after a permission is revoked', async () => {
   assert.equal(res.statusCode, 403)
   assert.equal(f.calls.length, 0)
 })
+test('individual deny blocks a direct workspace write before database mutation', async () => {
+  const f = fixture(), res = response()
+  f.config.accessPolicy.users = { u: { actions: { 'opportunities.create': 'deny' } } }
+  await f.handler(f.request({ operation: 'rpc', name: 'save_rows', args: { p_entity: 'opportunities', p_rows: [{ id: 'O2', rev: 0, data: { id: 'O2', owner: 'RS' } }] } }), res)
+  assert.equal(res.statusCode, 403)
+  assert.equal(f.calls.length, 0)
+})
+test('admin policy rejects unknown accounts and preserves valid individual overrides', async () => {
+  const f = fixture('ADMIN'), handler = createAdminPolicyHandler(() => f.client)
+  const accessPolicy = { ...f.config.accessPolicy, users: { missing: { pages: { inbox: 'deny' } } } }
+  const bad = response()
+  await handler(f.request({ ...f.config, accessPolicy, rev: 3, reason: 'Individual access' }), bad)
+  assert.equal(bad.statusCode, 400)
+  assert.equal(f.calls.length, 0)
+  accessPolicy.users = { u: { pages: { inbox: 'deny' } } }
+  const good = response()
+  await handler(f.request({ ...f.config, accessPolicy, rev: 3, reason: 'Individual access' }), good)
+  assert.equal(good.statusCode, 200)
+  assert.deepEqual(f.calls[0].args.p_policy.users, accessPolicy.users)
+})
 test('generation mismatch aborts before any revision-aware save', async () => {
   const f = fixture('ADMIN'), res = response()
   f.state.workspaceGeneration = 2
@@ -158,4 +178,59 @@ test('a forbidden audit rewrite is denied without invalidating the session', asy
   assert.equal(res.statusCode, 403)
   assert.equal(isSupabaseAuthError({ status: res.statusCode, code: res.body.code }), false)
   assert.equal(f.calls.length, 0)
+})
+
+test('lead conversion authenticates and carries server-owned enquiry context into one RPC', async () => {
+  const f = fixture('ADMIN'), res = response()
+  f.state.leads = [{id:'LD-1',status:'Qualified',assignedOwner:'RS',subject:'Original',body:'Request',originator:{id:'originator'},attachments:[{name:'drawing.pdf'}]}]
+  f.database.settings.push({id:'opportunity_reserved_O2',data:{id:'O2',actor:'u'}})
+  await f.handler(f.request({operation:'lead_conversion',leadId:'LD-1',leadRev:3,opportunity:{id:'O2',sellTo:'Customer',owner:'RS',originator:{id:'forged'}}}),res)
+  assert.equal(res.statusCode,200)
+  assert.equal(f.calls.length,1)
+  assert.equal(f.calls[0].name,'convert_lead_to_opportunity')
+  assert.equal(f.calls[0].args.p_lead_rev,3)
+  assert.deepEqual(f.calls[0].args.p_opportunity.originator,{id:'originator'})
+  assert.equal(f.calls[0].args.p_opportunity.sourceBody,'Request')
+  assert.equal(f.calls[0].args.p_opportunity.sourceLeadId,'LD-1')
+})
+test('lead conversion rejects unreserved numbers and changed workspace generation', async () => {
+  const f = fixture('ADMIN')
+  f.state.leads=[{id:'LD-1',status:'Qualified',assignedOwner:'RS'}]
+  const body={operation:'lead_conversion',leadId:'LD-1',leadRev:1,opportunity:{id:'O2',sellTo:'Customer',owner:'RS'}}
+  let res=response();await f.handler(f.request(body),res);assert.equal(res.statusCode,403)
+  f.database.settings.push({id:'opportunity_reserved_O2',data:{id:'O2',actor:'u'}})
+  res=response();const req=f.request(body);req.headers['x-workspace-generation']='9';await f.handler(req,res)
+  assert.equal(res.statusCode,409);assert.deepEqual(f.calls,[])
+})
+
+test('view reads authenticate and defer heavy data while preserving authorized revision metadata', async () => {
+  const f = fixture('ADMIN')
+  f.state.proposals = { O1: { bom: [{ secretCost: 400 }] }, OTHER: { bom: [2] } }
+  f.state.sparesLines = [{ id: 'S1', oppId: 'O1' }, { id: 'S2', oppId: 'OTHER' }]
+  f.state._revisions = { opportunities: f.database.opportunities, proposals: [{ id: 'O1', rev: 7, data: f.state.proposals.O1 }] }
+  const overview = response()
+  await f.handler(f.request({ operation: 'view', view: { kind: 'overview' } }), overview)
+  assert.equal(overview.statusCode, 200)
+  assert.equal(overview.body.slices.opportunities, undefined)
+  assert.equal(overview.body.slices.proposals, undefined)
+  assert.equal(overview.body.revisions.some(row => row.entity === 'opportunities'), false)
+  assert.equal(JSON.stringify(overview.body).includes('secretCost'), false)
+  const detail = response()
+  await f.handler(f.request({ operation: 'view', view: { kind: 'detail', id: 'O1' } }), detail)
+  assert.equal(detail.statusCode, 200)
+  assert.deepEqual(Object.keys(detail.body.slices.proposals), ['O1'])
+  assert.deepEqual(detail.body.slices.sparesLines.map(row => row.id), ['S1'])
+  assert.deepEqual(detail.body.revisions.find(row => row.entity === 'proposals'), { entity: 'proposals', id: 'O1', rev: 7 })
+  f.profile.status = 'Disabled'
+  const denied = response()
+  await f.handler(f.request({ operation: 'view', view: { kind: 'full' } }), denied)
+  assert.equal(denied.statusCode, 403)
+})
+test('view summaries cannot restore commercial fields redacted by access policy', async () => {
+  const f = fixture()
+  const res = response()
+  await f.handler(f.request({ operation: 'view', view: { kind: 'overview' } }), res)
+  assert.equal(res.statusCode, 200)
+  assert.equal(res.body.summary.opportunities[0].value, undefined)
+  assert.equal(res.body.summary.opportunities[0].oppName, 'Shared opportunity')
 })

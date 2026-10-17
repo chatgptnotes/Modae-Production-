@@ -1,3 +1,5 @@
+import { fetchWorkspaceView } from './workspaceApi.js'
+import { createWorkspaceViewCache } from './workspaceViewCache.js'
 import { commitWorkspaceRecords } from './workspaceExplicitSave.js'
 import { workspaceDrafts, SYNC_ENTITIES } from './workspaceDrafts.js'
 import { workspaceSyncState, committedWorkspace } from './workspaceSyncState.js'
@@ -25,6 +27,8 @@ export const LOCAL_ONLY = ['_approvalRevisions', 'viewMode', 'viewModePinned', '
   // after hydration, even though they are not authoritative business rows.
   'catalogRev', 'oneTimeCleanups', 'leadDeadlines']
 
+const viewCache = createWorkspaceViewCache()
+let viewReadsEnabled = false
 let localDemoMode = false
 
 export const setLocalDemoMode = enabled => { localDemoMode = Boolean(enabled) }
@@ -256,6 +260,7 @@ async function saveConsolidatedState(dirty = {}) {
 }
 
 export function invalidateLoadCache() {
+  viewCache.clear()
   loadCache = null
   loadCacheAt = 0
 }
@@ -411,8 +416,6 @@ export async function loadSourcingData() {
 // stale or omitted a row that is still present in the normalized table.
 export async function loadOpportunity(id) {
   if (!supabase || !id) return null
-  const serverWorkspace = await loadWorkspaceFromServer()
-  if (serverWorkspace) return (serverWorkspace.opportunities || []).find(row => row?.id === id) || null
   const result = await supabase.from('opportunities')
     .select('id, data, rev')
     .eq('id', id)
@@ -539,7 +542,7 @@ async function saveSlicesNow(dirty) {
   }
   const collaborativeDirty = Object.fromEntries(Object.entries(normalizedDirty)
     .filter(([key]) => key === 'leads' || key === 'opportunities' || key === 'approvals'))
-  if (!workspaceSyncState.enabled && Object.keys(collaborativeDirty).length) {
+  if (!viewReadsEnabled && !workspaceSyncState.enabled && Object.keys(collaborativeDirty).length) {
     const savedByServer = await saveWorkspaceToServer(collaborativeDirty)
     if (!savedByServer) throw new Error('A signed-in server session is required to save shared leads, opportunities, and approvals.')
     normalizedDirty = { ...normalizedDirty }
@@ -806,7 +809,7 @@ async function saveNormalizedRowsNow(entity, rows, retainedIds = new Set()) {
   // Audit is append-only. Never echo redacted command receipts or historical
   // events back as updates/deletes when a new local event is appended.
   if (entity === 'audit') {
-    const fresh = rows.filter(row => row.kind !== 'approval_command' && !String(row.id).startsWith('APPROVAL-COMMAND:') && !normalizedRecords.has(normalizedKey(entity, row.id)))
+    const fresh = rows.filter(row => !['approval_command','ai_integration_command','backup_restore_command'].includes(row.kind) && !['APPROVAL-COMMAND:','AI-INTEGRATIONS:','BACKUP-RESTORE:'].some(prefix => String(row.id).startsWith(prefix)) && !normalizedRecords.has(normalizedKey(entity, row.id)))
     if (!fresh.length) return
     const result = await supabase.rpc('save_rows', { p_entity: entity, p_rows: fresh.map(data => ({ id: data.id, data, rev: 0, by: actor })) })
     if (result.error) throw annotateRpcError(entity, result.error)
@@ -1059,3 +1062,60 @@ export function acceptWorkspaceRecord(row) {
 }
 
 export const saveSelectedWorkspaceRecords=(records,isCurrent)=>commitWorkspaceRecords(records,(name,args)=>supabase.rpc(name,args),isCurrent)
+
+export async function loadWorkspaceView(view, { force = false, isCurrent = () => true } = {}) {
+  if (!dbEnabled()) return null
+  const { data } = await supabase.auth.getSession()
+  const actor = data?.session?.user?.id
+  const generation = getWorkspaceGeneration()
+  const key = JSON.stringify([actor, generation, view])
+  const read = refresh => viewCache.read(key, () => fetchWorkspaceView(view, { isCurrent }), { force: refresh })
+  let result
+  try { result = await read(force) }
+  catch (error) {
+    if (error.code !== 'VIEW_READ_INVALIDATED' || !isCurrent()) throw error
+    result = await read(true)
+  }
+  if (!isCurrent()) throw new Error('Session changed.')
+  viewReadsEnabled = true
+  return result
+}
+export function installWorkspaceViewRevisions(result, isDirty = () => false) {
+  const entityKey = entity => ({ spares_lines: 'sparesLines', settings: 'config' }[entity] || entity)
+  const returned = new Set((result.revisions || []).map(row => normalizedKey(row.entity, row.id)))
+  // Reconcile known baselines only within the returned scope. Omitted slices
+  // and drafts retain their existing revisions; missing scoped rows are gone.
+  for (const [id] of opportunityRecords) {
+    if (result.view.kind === 'overview' || result.view.kind === 'detail' && id !== result.view.id) continue
+    if (!returned.has(normalizedKey('opportunities', id)) && !isDirty('opportunities', id)) { opportunityRecords.delete(id); opportunityRevisions.delete(id) }
+  }
+  for (const [key, previous] of normalizedRecords) {
+    const separator = key.indexOf('|'), entity = key.slice(0, separator), id = key.slice(separator + 1)
+    const sliceKey = entityKey(entity)
+    const included = entity === 'state' ? Object.hasOwn(result.slices, id) : Object.hasOwn(result.slices, sliceKey)
+    if (!included || returned.has(key) || workspaceDrafts.get(entity, id) || isDirty(entity, id)) continue
+    if (result.view.kind === 'detail' && ['proposals', 'spares_lines', 'clarifications', 'audit'].includes(entity)) {
+      const related = entity === 'proposals' ? id === result.view.id : previous.data?.oppId === result.view.id || previous.data?.opportunityId === result.view.id || previous.data?.ref === result.view.id
+      if (!related) continue
+    }
+    normalizedRecords.delete(key); normalizedRevisions.delete(key)
+  }
+  for (const row of result.revisions || []) {
+    if (workspaceDrafts.get(row.entity, row.id) || isDirty(row.entity, row.id)) continue
+    const slice = result.slices[entityKey(row.entity)]
+    const data = row.entity === 'state' ? result.slices[row.id] : row.entity === 'settings' ? slice : Array.isArray(slice) ? slice.find(item => item.id === row.id) : slice?.[row.id]
+    if (data === undefined) continue
+    if (row.entity === 'opportunities') {
+      opportunityRecords.set(row.id, { data, rev: row.rev }); opportunityRevisions.set(row.id, row.rev)
+    } else {
+      normalizedRecords.set(normalizedKey(row.entity, row.id), { data, rev: row.rev })
+      normalizedRevisions.set(normalizedKey(row.entity, row.id), row.rev)
+    }
+  }
+}
+
+export function resetWorkspaceViewRecords() {
+  viewCache.clear()
+  opportunityRecords.clear(); opportunityRevisions.clear()
+  normalizedRecords.clear(); normalizedRevisions.clear()
+}

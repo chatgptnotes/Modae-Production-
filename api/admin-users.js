@@ -1,4 +1,4 @@
-import { isActiveUser, isDeletedUser, isAccountAdmin, matchesAccount } from '../src/userManagement.js'
+import { isActiveUser, isDeletedUser, isAccountAdmin, accountProfileFor } from '../src/userManagement.js'
 import { readRoster, saveRoster } from './_user-roster.js'
 import { changeAccount, targetAuth } from './_user-lifecycle.js'
 import { applicationRolePatch, newUserRole } from '../src/userApplicationRole.js'
@@ -6,7 +6,7 @@ import { getAdminSupabaseClient } from './_supabase-client.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const ADMIN_ROLES = new Set(['SUPER', 'ADMIN', 'LJS'])
-const STANDARD_ROLES = new Set(['STANDARD_USER', 'MANAGEMENT', 'ADMIN'])
+const STANDARD_ROLES = new Set(['STANDARD_USER', 'MANAGEMENT', 'ADMIN', 'NON_SALES'])
 const ASSIGNABLE_ROLES = new Set(['ADMIN', 'LJS', 'AH', 'RS', 'PP', 'SS', 'PJS', 'RJS', 'SR', 'AN', 'TECH', ...STANDARD_ROLES])
 const PROVISIONABLE_ROLES = new Set([...ASSIGNABLE_ROLES, 'SUPER', 'CUST'])
 
@@ -39,7 +39,7 @@ async function currentAdmin(client, token) {
   const { data: authData, error: authError } = await client.auth.getUser(token)
   if (authError || !authData?.user?.email) return null
   const profiles = await loadUserProfiles(client)
-  const profile = profiles.find(user => matchesAccount(user, authData.user))
+  const profile = accountProfileFor(profiles, authData.user)
   return isActiveUser(profile) && isAccountAdmin(profile) ? { auth: authData.user, profile } : null
 }
 

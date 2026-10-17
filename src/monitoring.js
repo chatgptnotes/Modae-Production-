@@ -22,7 +22,7 @@ export function computeAlerts(state, today = new Date()) {
     if (opp.status !== 'Open' || !ownsOpportunity(opp, role)) continue
     const when = opp.lastUpdated
     if (opp.kycDue && new Date(opp.kycDue).getTime() < now) add('overdue-kyc', 'high', opp.id, `${displayOpportunityId(opp.id)} has overdue KYC`, 'Open Customer/KYC', opp.kycDue)
-    if (opp.amberFeeDue && new Date(opp.amberFeeDue).getTime() < now) add('amber-fee-expiry', 'high', opp.id, `${displayOpportunityId(opp.id)} Amber fee has expired`, 'Review Amber fee', opp.amberFeeDue)
+    if (opp.amberFeeDue && new Date(opp.amberFeeDue).getTime() < now) add('amber-fee-expiry', 'high', opp.id, `${displayOpportunityId(opp.id)} Yellow fee has expired`, 'Review Yellow fee', opp.amberFeeDue)
     if (opp.proposalExpiry && new Date(opp.proposalExpiry).getTime() < now) add('proposal-expiry', 'high', opp.id, `${displayOpportunityId(opp.id)} proposal has expired`, 'Revise proposal', opp.proposalExpiry)
     // One actionable follow-up alert per opportunity. Missing a next action is
     // the more useful explanation, so it takes precedence over inactivity.

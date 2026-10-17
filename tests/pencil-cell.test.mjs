@@ -12,8 +12,8 @@ test('cells start as complete readable values without individual edit buttons', 
   assert.doesNotMatch(html, /<(input|textarea|select)\b/)
 })
 test('select cells display their full label, not an internal role identifier', () => {
-  const html = renderToStaticMarkup(React.createElement(Cell, { as: 'select', value: 'LJS', label: 'Owner' }, React.createElement('option', { value: 'LJS' }, 'L. J. Swaminathan')))
-  assert.ok(html.includes('L. J. Swaminathan'))
+  const html = renderToStaticMarkup(React.createElement(Cell, { as: 'select', value: 'LJS', label: 'Owner' }, React.createElement('option', { value: 'LJS' }, 'LJ Swaminathan')))
+  assert.ok(html.includes('LJ Swaminathan'))
   assert.doesNotMatch(html, /<select\b/)
 })
 test('protected and empty cells have no individual edit controls', () => {

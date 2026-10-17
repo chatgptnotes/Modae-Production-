@@ -14,13 +14,12 @@ import CustomerPicker from '../CustomerPicker.jsx'
 const empty = {
   sellTo: '', sellToCustomerLocation: '', category: '', location: '', eucName: '', eucLocation: '',
   oppName: '', owner: '', oppType: '', bu: '', segment: '', product: [],
-  inquiryType: '', contactPerson: '', contactPhone: '', contactEmail: '', valueK: '', rfqNumber: '', rfqDate: '',
+  source: '', notes: '', inquiryType: '', contactPerson: '', contactPhone: '', contactEmail: '', valueK: '', rfqNumber: '', rfqDate: '',
 }
 
 // Shared by the submit gate and by the post-extraction check, so "required" and
 // "the document should have given us this" can never drift apart.
-const REQUIRED_FIELDS = ['sellTo', 'sellToCustomerLocation', 'category', 'eucName', 'eucLocation', 'oppName', 'owner', 'inquiryType',
-  'oppType', 'bu', 'segment', 'product', 'contactPerson', 'contactPhone']
+const REQUIRED_FIELDS = ['sellTo']
 
 // Select/Pills/Input live at module scope, not inside IntakeForm. A component
 // declared in the render body is a brand-new element type on every render, so
@@ -128,6 +127,9 @@ export default function IntakeForm({ destinationPicker = null }) {
     owner: (loc.state?.prefill || {}).owner || (OWNERS.includes(store.role) ? store.role : '')
   }))
   const [touched, setTouched] = useState({})
+  const submitLock = useRef(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [pendingId, setPendingId] = useState('')
 
   // Document upload and AI processing state
   const [uploadedFile, setUploadedFile] = useState(null)
@@ -150,7 +152,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
   const knownCustomer = store.customers.find(c => c.name.toLowerCase() === f.sellTo.trim().toLowerCase())
   const createCustomer = name => {
-    const customer = { name, category: f.category || 'EUC', status: 'Blue', kyc: 'Pending', payment: '—' }
+    const customer = { name, category: f.category || 'EUC', status: 'Unclassified', kyc: 'Pending', payment: '—' }
     store.addCustomer(customer)
     return customer
   }
@@ -160,15 +162,12 @@ export default function IntakeForm({ destinationPicker = null }) {
   // Calculate validation status in real-time
   const validation = useMemo(() => {
     const missing = required.filter(k => k === 'product' ? selectedProducts.length === 0 : !f[k])
-    if (f.inquiryType === 'Firm/RFQ') {
-      if (!f.rfqNumber) missing.push('rfqNumber')
-      if (!f.rfqDate) missing.push('rfqDate')
-    }
+
     const filled = required.length - missing.length
     return {
       missing,
       filled,
-      total: required.length + (f.inquiryType === 'Firm/RFQ' ? 2 : 0),
+      total: required.length,
       isComplete: missing.length === 0,
       fields: required.reduce((acc, field) => {
         acc[field] = {
@@ -183,18 +182,20 @@ export default function IntakeForm({ destinationPicker = null }) {
 
   const submit = async e => {
     e.preventDefault()
-    if (!validation.isComplete || store.canPerform?.('opportunities.create') === false) return
+    if (!validation.isComplete || submitLock.current || store.canPerform?.('opportunities.create') === false) return
+    submitLock.current = true
+    setSubmitting(true)
     const today = new Date().toISOString().slice(0, 10)
     // The permanent ID must use the same Admin city/state routing used by the
     // lead inbox. Keep a manually selected owner only when no location exists.
-    const owner = opportunityOwnerFor({
+    const owner = f.owner || opportunityOwnerFor({
       location: f.eucLocation || f.location,
       config: store.config,
       fallback: f.owner || store.role || 'LJS',
     })
     let id
     try { id = await reserveOppId(store.opportunities, owner, store.config?.roleNames, store.config?.opportunityNumbering) }
-    catch (error) { window.alert(error.message); return }
+    catch (error) { submitLock.current = false; setSubmitting(false); window.alert(error.message); return }
     const maxSl = Math.max(0, ...store.opportunities.map(o => o.sl || 0))
     const extractedFields = [...aiFilledFields]
       .filter(key => f[key] !== undefined && f[key] !== '')
@@ -208,12 +209,14 @@ export default function IntakeForm({ destinationPicker = null }) {
     // opportunity folder is created (same as the current manual process).
     const sellTo = f.sellTo.trim()
     if (!knownCustomer) {
-      store.addCustomer({ name: sellTo, category: f.category, status: 'Blue', kyc: 'Pending', payment: '—' })
+      store.addCustomer({ name: sellTo, category: f.category, status: 'Unclassified', kyc: 'Pending', payment: '—' })
     }
+    const attachments = uploadedFile ? [{name:uploadedFile.name,type:uploadedFile.type,size:uploadedFile.size,dataUrl:await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(reader.error);reader.readAsDataURL(uploadedFile)})}] : []
     store.addOpportunity({
-      sl: maxSl + 1, id,
+      sl: maxSl + 1, id, attachments,
+      source: f.source || '', notes: f.notes || '', originator: store.auth?.user || null,
       sellTo, category: f.category, location: f.location, sellToCustomerLocation: f.sellToCustomerLocation,
-      customerStatus: knownCustomer ? knownCustomer.status : 'Blue',
+      customerStatus: 'Unclassified', customerClassificationVersion: 2,
       eucName: f.eucName, eucLocation: f.eucLocation, oppName: f.oppName,
       owner, oppType: f.oppType, bu: f.bu, segment: f.segment,
       product: selectedProducts,
@@ -227,11 +230,15 @@ export default function IntakeForm({ destinationPicker = null }) {
       contactPerson: f.contactPerson, contactPhone: f.contactPhone, contactEmail: f.contactEmail || '',
       lastUpdated: today, forecast: false, remarks: '', nextActionOwner: '',
     })
+    setPendingId(id)
+    for (const attachment of attachments) store.addFile(id,'Customer Specs',{...attachment,webUrl:attachment.dataUrl,date:today})
     // A lead qualified from the inbox converts only on actual submit.
-    if (loc.state?.leadId) store.updateLead(loc.state.leadId, { status: 'Qualified', oppId: id })
+    if (loc.state?.leadId) store.updateLead(loc.state.leadId, { status: 'Converted', oppId: id })
     setAiNotice(`Opportunity ${id} created. A row was added to the Sales Pipeline sheet and its Customer Specs, Partner Docs and Proposal folders were created.`)
     // Open the newly created opportunity in its route-aware workspace. The
     // workspace consumes `created=1` to show the first-run handoff panel.
+    if (!await store.flushPersistence([{entity:'opportunities',id}])) {setAiError('Opportunity has unsaved changes. Retry saving before leaving.');return}
+    if (store.saveOtherWorkspaceChanges && !await store.saveOtherWorkspaceChanges()) {setAiError('Supporting details have unsaved changes. Retry saving before leaving.');return}
     nav(`/opp/${id}?created=1`)
   }
 
@@ -442,14 +449,14 @@ export default function IntakeForm({ destinationPicker = null }) {
           <div className="forms-head-top">
             <h1>Create Opportunity</h1>
             <div className="req-note">
-              <span className="star">*</span> required ·{' '}
+               required ·{' '}
               {validation.isComplete
                 ? <span className="ok">✓ All {validation.total} required fields complete</span>
                 : <span>{validation.missing.length} of {validation.total} required fields missing</span>}
             </div>
           </div>
           <div className="forms-head-content">
-            <div className="forms-note">Register a new sales opportunity — complete every field below in one screen. Submitting creates a pipeline row and an opportunity folder.</div>
+            <div className="forms-note">Register a new sales opportunity — enter the company and complete any other details available. Submitting creates a pipeline row and an opportunity folder.</div>
 
             <button
               type="button"
@@ -524,7 +531,7 @@ export default function IntakeForm({ destinationPicker = null }) {
             <div className="forms-col-head">Customer Info</div>
 
             <div className="q">
-              <div className="q-label">Inquiry Type<span className="star">*</span></div>
+              <div className="q-label">Inquiry Type</div>
               <Select field="inquiryType" options={['Budgetary', 'Firm/RFQ']} placeholder="Select inquiry type" />
               <div className="hint">Firm/RFQ requires RFQ number and RFQ date.</div>
             </div>
@@ -541,7 +548,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
             <div className="q">
               <div className="q-label">
-                1. Sell To Customer<span className="star">*</span>
+                1. Sell To Customer *
                 {aiFilledFields.has('sellTo') && <span className="ai-badge">AI</span>}
               </div>
               {/* Free text with the master as suggestions, not a closed
@@ -567,13 +574,13 @@ export default function IntakeForm({ destinationPicker = null }) {
             </div>
 
             <div className="q">
-              <div className="q-label">Sell To Customer Location<span className="star">*</span></div>
+              <div className="q-label">Sell To Customer Location</div>
               <Input field="sellToCustomerLocation" placeholder="Enter customer location" />
             </div>
 
             <div className="q">
               <div className="q-label">
-                2. Category<span className="star">*</span>
+                2. Category
                 {aiFilledFields.has('category') && <span className="ai-badge">AI</span>}
               </div>
               <Select field="category" options={CATEGORIES} placeholder="Select category" />
@@ -588,13 +595,13 @@ export default function IntakeForm({ destinationPicker = null }) {
             </div>
 
             <div className="q">
-              <div className="q-label">4. EUC Name<span className="star">*</span></div>
+              <div className="q-label">4. EUC Name</div>
               <CustomerPicker customers={store.customers} value={f.eucName} onChange={value => setF(previous => ({ ...previous, eucName: value }))} allowCreate={false} label="" />
             </div>
 
             <div className="q">
               <div className="q-label">
-                5. EUC Location<span className="star">*</span>
+                5. EUC Location
                 {aiFilledFields.has('eucLocation') && <span className="ai-badge">AI</span>}
               </div>
               <Input field="eucLocation" placeholder="Enter end user location" />
@@ -607,14 +614,14 @@ export default function IntakeForm({ destinationPicker = null }) {
 
             <div className="q">
               <div className="q-label">
-                6. Opportunity Name / Description<span className="star">*</span>
+                6. Opportunity Name / Description
                 {aiFilledFields.has('oppName') && <span className="ai-badge">AI</span>}
               </div>
               <Input field="oppName" placeholder="Enter opportunity description" />
             </div>
 
             <div className="q">
-              <div className="q-label">7. Owner<span className="star">*</span></div>
+              <div className="q-label">7. Owner</div>
               <Select field="owner" options={OWNERS} placeholder="Select owner" />
               <div className="hint" style={{ marginTop: 2 }}>
                 {OWNERS.includes(store.role) && f.owner === store.role && (
@@ -625,7 +632,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
             <div className="q">
               <div className="q-label">
-                8. Opp Type<span className="star">*</span>
+                8. Opp Type
                 {aiFilledFields.has('oppType') && <span className="ai-badge">AI</span>}
               </div>
               <Select field="oppType" options={OPP_TYPES} placeholder="Select opportunity type" />
@@ -638,7 +645,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
             <div className="q">
               <div className="q-label">
-                10. Contact Person<span className="star">*</span>
+                10. Contact Person
                 {aiFilledFields.has('contactPerson') && <span className="ai-badge">AI</span>}
               </div>
               <Input field="contactPerson" placeholder="Enter contact name" />
@@ -646,7 +653,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
             <div className="q">
               <div className="q-label">
-                11. Contact Phone<span className="star">*</span>
+                11. Contact Phone
                 {aiFilledFields.has('contactPhone') && <span className="ai-badge">AI</span>}
               </div>
               <Input field="contactPhone" type="tel" placeholder="Enter contact phone" />
@@ -659,7 +666,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
             <div className="q">
               <div className="q-label">
-                12. BU<span className="star">*</span>
+                12. BU
                 {aiFilledFields.has('bu') && <span className="ai-badge">AI</span>}
               </div>
               <Pills field="bu" options={BUS} />
@@ -667,7 +674,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
             <div className="q">
               <div className="q-label">
-                13. Segment<span className="star">*</span>
+                13. Segment
                 {aiFilledFields.has('segment') && <span className="ai-badge">AI</span>}
               </div>
               <Pills field="segment" options={SEGMENTS} />
@@ -675,7 +682,7 @@ export default function IntakeForm({ destinationPicker = null }) {
 
             <div className="q">
               <div className="q-label">
-                14. Equipment / Product Family<span className="star">*</span>
+                14. Equipment / Product Family
                 {aiFilledFields.has('product') && <span className="ai-badge">AI</span>}
               </div>
               <Pills field="product" options={PRODUCTS} />
@@ -698,9 +705,11 @@ export default function IntakeForm({ destinationPicker = null }) {
           </div>
         </div>
 
+        <div className="forms-columns"><label className="q">Source<Input field="source" /></label><label className="q">Notes<Input field="notes" /></label></div>
         <div className="forms-actions">
+          {pendingId && <button type="button" onClick={async () => {if (await store.flushPersistence([{entity:'opportunities',id:pendingId}]) && await store.saveOtherWorkspaceChanges()) nav(`/opp/${pendingId}?created=1`)}}>Retry saving created opportunity</button>}
           <button type="button" onClick={resetForm} className="secondary">Clear Form</button>
-          <button type="submit" className="submit" disabled={!validation.isComplete || store.canPerform?.('opportunities.create') === false} style={{ marginLeft: '8px' }}
+          <button type="submit" className="submit" disabled={submitting || !validation.isComplete || store.canPerform?.('opportunities.create') === false} style={{ marginLeft: '8px' }}
             title={validation.isComplete ? 'Create Opportunity' : `Missing: ${validation.missing.join(', ')}`}>
             Create Opportunity
           </button>

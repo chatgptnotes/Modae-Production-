@@ -37,7 +37,7 @@ export const PROP_SECTIONS = [
 export function recommendTerms(opp, config = {}) {
   // Per-class payment terms live on the class rule; classRules is the legacy
   // key kept for states saved before the rules became configurable.
-  const payment = classRule(config, opp.customerStatus)?.paymentTerms
+  const payment = classRule(config, opp.customerStatus, opp)?.paymentTerms
     ?? config.classRules?.[opp.customerStatus]
     ?? ''
   const delivery = opp.route === 'Spares' ? '6-8 weeks ex-works'

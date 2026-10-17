@@ -1,3 +1,4 @@
+import { normalizeCustomerClass } from './customerClasses.js'
 // Workbook contract shared by the table, importer and server. Contains no customer data.
 const columns = [
   ['id', 'Opp ID', 11], ['sellTo', 'Sell To Customer*', 16], ['category', 'Category*', 6],
@@ -41,14 +42,14 @@ export function customersFromOpportunities(opportunities) {
     if (!key) continue
     let customer = customers.get(key)
     if (!customer) {
-      customer = { name: row.sellTo.trim(), category: row.category || '', status: row.customerStatus || 'Blue',
+      customer = { name: row.sellTo.trim(), category: row.category || '', status: normalizeCustomerClass(row.customerStatus), ...(row.legacyCustomerClass || ['Blue', 'Amber'].includes(row.customerStatus) ? { legacyCustomerClass: row.legacyCustomerClass || row.customerStatus } : {}),
         kyc: 'Pending', payment: '', email: '', location: row.location || '', source: 'Excel workbook',
         classificationCriteria: {}, classificationNeedsReview: !row.customerStatus, importedStatuses: [] }
       customers.set(key, customer)
     }
     if (row.customerStatus) {
       customer.importedStatuses = [...new Set([...customer.importedStatuses, row.customerStatus])]
-      customer.status = customer.importedStatuses[0]
+      customer.status = normalizeCustomerClass(customer.importedStatuses[0])
       customer.classificationNeedsReview = customer.importedStatuses.length > 1
     }
   }
@@ -94,10 +95,9 @@ export function classificationGuidance(sheet) {
 
 export function applyCustomerChange(state, name, patch) {
   const matches = value => customerKey(value) === customerKey(name)
-  const colourPatch = patch.status ? { customerStatus: patch.status } : {}
+  // Classification is chosen on each lead/opportunity; a master update must
+  // not silently overwrite that decision or its historical control evidence.
   return { ...state,
     customers: state.customers.map(row => matches(row.name) ? { ...row, ...patch } : row),
-    opportunities: (state.opportunities || []).map(row => matches(row.sellTo) ? { ...row, ...colourPatch } : row),
-    leads: (state.leads || []).map(row => matches(row.sellTo || row.customerName) ? { ...row, ...colourPatch } : row),
   }
 }

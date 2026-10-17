@@ -9,14 +9,15 @@ test('Excel matrix compiles quoting actions, fee, payment terms and remarks into
   const draft = matrixDraft(workbookDefaults())
   draft.classificationCriteria.find(r => r.id === 'paymentTerms').cells.Green = '60 Days'
   draft.classificationCriteria[0].remarks = 'Confirm company age'
-  draft.customerActionCells.Amber = '₹40K per Quote Fees'
+  draft.customerActionCells.Yellow = '₹40K per Quote Fees'
+  draft.customerActionCells.Red = 'No Bid'
   const { config, errors } = compileMatrix(draft)
   assert.deepEqual(errors, [])
   assert.equal(config.amberFee.amount, 40000)
   assert.equal(config.customerClasses.Green.paymentTerms, '60 Days')
   assert.equal(config.classificationCriteria[0].remarks, 'Confirm company age')
-  assert.equal(leadVerificationComplete({}, 'Red', { config, redCleared: true }), false)
-  const opp = { id: 'red-matrix', customerStatus: 'Red', status: 'Open', milestone: 'Proposal' }
+  assert.equal(leadVerificationComplete({}, 'Red', { config, redCleared: true }), true)
+  const opp = { id: 'red-matrix', customerStatus: 'Red', customerClassificationVersion: 2, status: 'Open', milestone: 'Proposal' }
   const state = { config, approvals: [{ oppId: opp.id, type: 'Red customer clearance', status: 'Approved' }] }
   assert.ok(readiness(opp, {}, state).some(blocker => blocker.key === 'customer-no-bid'))
   assert.ok(transitionBlockers(opp, 'Submitted', {}, state).some(blocker => blocker.key === 'customer-no-bid'))
@@ -40,6 +41,6 @@ test('approximate cells stay visible for review; invalid edits prevent saving', 
   assert.equal(parseMatrixCell('~10 Years', 'number').needsDefinition, true)
   assert.equal(parseMatrixCell('<5>', 'number').needsDefinition, true)
   draft.customerActionCells.Red = 'Something unknown'
-  draft.classificationCriteria.find(r => r.id === 'rfqCount').cells.Blue = '-2'
+  draft.classificationCriteria.find(r => r.id === 'rfqCount').cells.Red = '-2'
   assert.ok(compileMatrix(draft).errors.length >= 2)
 })

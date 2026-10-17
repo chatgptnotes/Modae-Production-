@@ -241,6 +241,21 @@ directory convention, or validation requirement changes.
 - Preserve opportunity counters and reservation history through all resets.
   Connected ID creation must never fall back to a local counter.
 
+## Admin extensions
+
+- Migrations `20261017061731_individual_account_permissions.sql`,
+  `20261017061909_full_workspace_backups.sql` and
+  `20261017110000_ai_integrations.sql` extend the existing contract without new
+  tables. Per-account grants are keyed by stable roster IDs, with Admin precedence
+  and Non-sales restrictions retained. Resolve authenticated profiles uniquely,
+  preferring exact auth bindings over eligible email fallbacks.
+- Full backups exclude secrets and require original bytes. Connected archives
+  are signed and restricted to the same workspace; only service-owned restoration
+  may insert historical guarded receipts. Never restore account credentials or
+  lifecycle state, decrease sequence counters, or replace retained audit evidence.
+- AI credentials use server-only `INTEGRATIONS_ENCRYPTION_KEY`; archive signatures
+  use `BACKUP_SIGNING_KEY`. Never add either secret to browser state or backups.
+
 ## Personal appearance preferences
 
 - `GET`/`PUT /api/user-preferences` reads/writes only the authenticated account's
@@ -261,3 +276,35 @@ coalesced activation checks, and local committed snapshots. Keep HTTP 409 partia
 results intact. Existing form-local inputs require owner acknowledgement before
 merging or leaving. Ephemeral presence stays in Railway memory; do not resume
 browser heartbeat writes to `user_presence`. Multiple replicas need shared limits.
+
+## Stage 1 lead workflow
+
+- `NON_SALES` is submit-only even when mixed with old broader roles. Route it to
+  New Lead/personal settings; `/api/lead-intake` supplies safe assignee choices
+  and validates submissions without exposing business records.
+- Connected qualification registration uses the service-only
+  `convert_lead_to_opportunity` RPC via `lead_conversion` at `/api/workspace/data`.
+  Apply `supabase/migrations/20261016122935_stage_one_non_sales_access.sql` after
+  atomic approvals. Preserve sourceLeadId and reserved `LEAD-CONVERSION:` receipts.
+  Run `scripts/test-stage-one-postgres.mjs` against a disposable local server for
+  conversion transaction changes.
+- Customer class is manual: new records remain Unclassified until chosen.
+  Preserve `legacyCustomerClass` provenance when migrating Blue/Amber and existing
+  Red policy. KYC is optional throughout; never mark it Verified without evidence.
+- Dashboard/register/target inputs use actual INR. Internal valueK/cogsK and
+  booking snapshots retain K units; convert only at display/edit/export boundaries.
+
+## Demand-loaded workspace data
+
+- `view` reads at `/api/workspace/data` support overview, list, detail and full
+  scopes. Always apply `projectWorkspace` before building summaries or revisions.
+- Dashboard summary rows are read-only; never install them into canonical store
+  state or datastore revision baselines. Related detail collections are partial:
+  merge by opportunity, preserve unrelated loaded rows, and never infer deletion
+  from a collection that was not loaded. Partial stores use revision-aware saves
+  even when event-driven sync is disabled.
+- `WorkspaceDataBoundary` gates desktop and phone route editors. Row-edit and
+  Details drawer entry must load the selected opportunity's dependencies first.
+- View caching is session-local, coalesced and bounded to 15 seconds; writes and
+  account changes invalidate it. Activation refreshes only the visible view;
+  manual refresh bypasses the cache. Do not add idle or typing-triggered reads.

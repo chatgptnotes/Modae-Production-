@@ -1,8 +1,11 @@
+import { workspaceView } from '../src/workspaceViews.js'
+import { readiness, nextActionWith, actionableClarifications, isClarificationResolved, isClarificationCoveredByAnswer } from '../src/gates.js'
+import { newProposal } from '../src/seed.js'
 import { workspaceSync, admitSync, admitSyncActor } from './_workspace-sync.js'
 import { assertReservedOpportunityIds } from './_opportunity-reservations.js'
 import { getAdminSupabaseClient } from './_supabase-client.js'
 import { activeProfile } from './_user-roster.js'
-import { canAccessPage, canPerform, effectiveAccess } from '../src/accessPolicy.js'
+import { canAccessPage, canPerform, effectiveAccess, isNonSalesUser } from '../src/accessPolicy.js'
 import { assertWorkspaceRowWrite, projectWorkspace, canReadPricing } from '../src/workspaceAccess.js'
 import { createWorkspaceReader } from '../src/server/workspace.js'
 import { validateApprovalCommand, executeApprovalCommand, approvalErrorStatus, admitApprovalCommand } from './_approval-command.js'
@@ -43,6 +46,7 @@ export function projectedRows(table, records, state, profile) {
     : { ...state, [keys[table] || table]: records.map(row => row.data) }
   const projected = projectWorkspace(override, profile)
   if (effectiveAccess(profile, config).isAdmin) return records.map(row => table === 'records' && row.entity === 'state' && row.id === 'users' ? { ...row, data: projected.users } : row)
+  if (isNonSalesUser(profile) && table === 'settings') return []
   if (table === 'settings') return records.filter(row => row.id === 'config')
   if (['price_lists', 'price_list_versions'].includes(table)) return canAccessPage(profile, 'pricelists', config) || canPerform(profile, 'proposals.price', config) ? records : []
   return records.flatMap(row => {
@@ -76,7 +80,7 @@ export function createWorkspaceDataHandler({ getClient = getAdminSupabaseClient,
         res.setHeader?.('Cache-Control', 'no-store')
       }
       const deployment=process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || 'local'
-      if (process.env.WORKSPACE_SYNC_ENABLED==='true' && deployment!=='local' && ['rpc','delete','approval_decision'].includes(req.body?.operation) && req.headers?.['x-workspace-deployment']!==deployment) fail('The application was deployed again. Reload before saving.',409,'DEPLOYMENT_CHANGED')
+      if (process.env.WORKSPACE_SYNC_ENABLED==='true' && deployment!=='local' && ['rpc','delete','approval_decision','lead_conversion'].includes(req.body?.operation) && req.headers?.['x-workspace-deployment']!==deployment) fail('The application was deployed again. Reload before saving.',409,'DEPLOYMENT_CHANGED')
       if (req.body?.operation === 'approval_decision') releaseCommand = admitApprovalCommand(token)
       const auth = await client.auth.getUser(token)
       if (auth.error || !auth.data?.user) fail('Your session has expired.', 401)
@@ -92,11 +96,35 @@ export function createWorkspaceDataHandler({ getClient = getAdminSupabaseClient,
       }
       const profile = await activeProfile(client, auth.data.user)
       if (!profile) fail('This account no longer has workspace access.', 403, 'WORKSPACE_ACCESS_REVOKED')
-      const reader = getReader()
+      const reader = getReader({ includeRevisions: req.body?.operation === 'view' })
       if (!reader) fail('Workspace data is not configured.', 503)
       const state = await reader()
       const config = state.config || {}
       const input = req.body || {}
+      if (input.operation === 'view') {
+        if (!['overview', 'list', 'detail', 'full'].includes(input.view?.kind) || input.view.kind === 'detail' && (typeof input.view.id !== 'string' || !input.view.id || input.view.id.length > 200)) fail('Invalid workspace view.', 400)
+        const { _revisions, ...business } = state
+        const projected = projectWorkspace(business, profile)
+        const signals = Object.fromEntries((projected.opportunities || []).map(opp => {
+          const proposal = projected.proposals?.[opp.id] || newProposal(opp.id, opp, { validityDays: config.proposalValidityDays, currencyRates: config.currencyRates, costingDefaults: config.costingDefaults })
+          return [opp.id, { blockers: readiness(opp, proposal, projected), action: nextActionWith(opp, proposal, projected),
+            clarificationDue: actionableClarifications(opp, projected).filter(row => !isClarificationResolved(row) && !isClarificationCoveredByAnswer(opp, row, projected.clarifications || [])).map(row => row.due).filter(Boolean).sort()[0] || '' }]
+        }))
+        const result = workspaceView(projected, input.view, signals)
+        // Revisions accompany only rows actually returned, after permission projection.
+        const revisions = []
+        for (const [table, entries] of Object.entries(_revisions || {})) {
+          const key = table === 'settings' ? 'config' : keys[table] || table
+          for (const row of entries) {
+            const slice = table === 'records' ? result.slices[row.id] : result.slices[key]
+            const data = table === 'records' || table === 'settings' ? slice : Array.isArray(slice) ? slice.find(item => item.id === row.id) : slice?.[row.id]
+            if (data !== undefined && (table !== 'records' || row.entity === 'state')) revisions.push({ entity: table === 'records' ? 'state' : table, id: row.id, rev: Number(row.rev) || 0 })
+          }
+        }
+        result.slices._approvalRevisions = Object.fromEntries(revisions.filter(row => row.entity === 'approvals').map(row => [row.id, row.rev]))
+        res.setHeader?.('Cache-Control', 'no-store')
+        return res.status(200).json({ ...result, revisions, generation: String(state.workspaceGeneration || 0) })
+      }
       if (input.operation === 'select' || input.operation === 'select_many') {
         const queries = input.operation === 'select' ? [input] : input.queries
         if (!Array.isArray(queries) || !queries.length || queries.length > 20) fail('Choose between one and twenty read queries.', 400)
@@ -109,6 +137,24 @@ export function createWorkspaceDataHandler({ getClient = getAdminSupabaseClient,
           catch (error) { return { data: null, error: { message: 'Workspace query failed.', code: error.code || String(error.status || 503) } } }
         }))
         return res.status(200).json({ results })
+      }
+      if (input.operation === 'lead_conversion') {
+        const leadId = String(input.leadId || '')
+        const opportunity = input.opportunity
+        if (!leadId || !opportunity?.id || !Number.isSafeInteger(input.leadRev) || input.leadRev < 1) fail('Invalid lead conversion.',400)
+        const lead = (state.leads || []).find(row => row.id === leadId)
+        if (!lead) fail('Lead is unavailable.',404)
+        if (!canPerform(profile,'opportunities.create',config) || !canPerform(profile,'leads.edit',config)) fail('Lead conversion is not permitted.')
+        assertWorkspaceRowWrite(profile,'leads',lead,{...lead,status:'Converted'},config,state,leadId)
+        const next = { ...opportunity, sourceLeadId:leadId, sourceLeadSnapshot:lead, source:opportunity.source ?? lead.source ?? '', originator:lead.originator || null, sourceSubject:lead.subject || '', sourceBody:lead.body || '', attachments:lead.attachments || [] }
+        assertWorkspaceRowWrite(profile,'opportunities',undefined,next,config,state,next.id)
+        if (!lead.oppId) await assertReservedOpportunityIds(client,[next.id],auth.data.user.id)
+        const generation = Number(req.headers?.['x-workspace-generation'])
+        if (!Number.isSafeInteger(generation) || generation !== Number(state.workspaceGeneration || 0)) fail('Workspace changed. Reload before converting.',409,'WORKSPACE_PURGED')
+        const result = await client.rpc('convert_lead_to_opportunity', {p_lead_id:leadId,p_lead_rev:input.leadRev,p_opportunity:next,p_actor:auth.data.user.id,p_expected_generation:generation})
+        if (result.error) throw result.error
+        invalidate()
+        return res.status(200).json({data:result.data,error:null})
       }
       if (input.operation !== 'rpc' || input.name !== 'save_rows') fail('Unsupported workspace operation.', 400)
       const { p_entity: entity, p_rows: requested } = input.args || {}

@@ -7,7 +7,7 @@
 // when they don't, the seeded defaults apply, which is the behaviour that used
 // to be hardcoded here.
 import {
-  DEFAULT_CUSTOMER_CLASSES, classRule, classDeadlineDays, checklistFor,
+  LEGACY_CUSTOMER_CLASSES, classRule, classDeadlineDays, checklistFor,
 } from './customerClasses.js'
 
 // Derived rather than authored, but still exported: the lead KYC document list
@@ -18,9 +18,9 @@ export const BLUE_KYC_ITEMS = checklistFor(null, 'Blue')
 // joint LJS + AH approval record, so the caller resolves it and passes the
 // answer in. This module must stay importable by `node --test`, which means no
 // reaching into the store from here.
-export const RED_CLEARANCE = DEFAULT_CUSTOMER_CLASSES.Red.verification.approvalType
-export const RED_BLOCKER = DEFAULT_CUSTOMER_CLASSES.Red.verification.blockerText
-const APPROVED = DEFAULT_CUSTOMER_CLASSES.Red.verification.approvedStatuses
+export const RED_CLEARANCE = LEGACY_CUSTOMER_CLASSES.Red.verification.approvalType
+export const RED_BLOCKER = LEGACY_CUSTOMER_CLASSES.Red.verification.blockerText
+const APPROVED = LEGACY_CUSTOMER_CLASSES.Red.verification.approvedStatuses
 
 const approvedStatuses = (config, customerStatus = 'Red') =>
   classRule(config, customerStatus)?.verification?.approvedStatuses || APPROVED
@@ -39,7 +39,7 @@ export const isRedCleared = (approval, config = null, customerStatus = 'Red') =>
   !!approval && approvedStatuses(config, customerStatus).includes(approval.status)
 
 export function verificationDeadline(lead, customerStatus, config = {}, now = new Date()) {
-  const rule = classRule(config, customerStatus)
+  const rule = classRule(config, customerStatus, lead)
   const days = classDeadlineDays(config, customerStatus)
   // Green needs nothing, and Red's clearance is an approval rather than a
   // countdown the salesperson is chasing — both resolve to no deadline.
@@ -64,56 +64,24 @@ export function amberPaymentComplete(verification) {
 
 // Dispatch on what the class *requires*, not on its name, so a renamed or
 // reconfigured class needs no code change here.
-export function leadVerificationComplete(lead, customerStatus = lead?.customerStatus || '', { redCleared = false, config = null } = {}) {
-  const rule = classRule(config, customerStatus)
-  if (rule?.defaultAction === 'No Bid' && rule.verification?.requires !== 'jointApproval') return false
-  const v = rule?.verification
-  if (!v) return false
-  if (v.required === false) return true
-  if (v.requires === 'documents' && lead?.existingCustomerKyc === true) return true
-  switch (v.requires) {
-    case 'none': return true
-    case 'documents': return checklistFor(config, customerStatus)
-      .every(item => kycItemApproved(verificationItem(lead?.verification, item)))
-      && lead?.verification?.kycRequestStatus !== 'cancelled'
-    case 'fee': return amberPaymentComplete(lead?.verification)
-    // Red used to return false here unconditionally, with no way to pass the
-    // clearance in — so an approved Red lead could never be registered.
-    case 'jointApproval': return !!redCleared
-    default: return false
-  }
+// Evidence validation is deliberately separate from permission to register.
+export function kycVerificationComplete(lead, config = null) {
+  const items = checklistFor(config, lead?.customerStatus || 'Unclassified')
+  return items.length > 0 && lead?.verification?.kycRequestStatus !== 'cancelled'
+    && items.every(item => kycItemApproved(verificationItem(lead?.verification, item)))
 }
+export function leadVerificationComplete() { return true }
 
-export function leadVerificationBlockers(lead, customerStatus = lead?.customerStatus || '', { redCleared = false, config = null } = {}) {
-  const rule = classRule(config, customerStatus)
-  if (rule?.defaultAction === 'No Bid' && rule.verification?.requires !== 'jointApproval') return ['No Bid — customer policy does not allow quoting']
-  const v = rule?.verification
-  if (!v) return ['Customer classification is required']
-  if (v.required === false) return []
-  if (v.requires === 'documents' && lead?.existingCustomerKyc === true) return []
-  if (v.requires === 'documents') {
-    if (lead?.verification?.kycRequestStatus === 'cancelled') return ['KYC request was cancelled; verification is required before proceeding']
-    const template = v.itemBlockerText || '{item} verification is required'
-    return checklistFor(config, customerStatus)
-      .filter(item => !kycItemApproved(verificationItem(lead?.verification, item)))
-      .map(item => template.replace('{item}', item))
-  }
-  if (v.requires === 'fee') {
-    return amberPaymentComplete(lead?.verification) ? []
-      : [v.blockerText || 'Amber processing-fee payment confirmation is required']
-  }
-  if (v.requires === 'jointApproval') return redCleared ? [] : [v.blockerText || RED_BLOCKER]
-  return []
-}
+export function leadVerificationBlockers() { return [] }
 
 export function verificationSnapshot(lead, customerStatus = lead?.customerStatus || '', { approval = null, config = null } = {}) {
   if (lead?.existingCustomerKyc === true) return { status: 'Verified', type: 'KYC', customerStatus, items: {}, verifiedAt: lead?.kycCompletedAt || '' }
-  const v = classRule(config, customerStatus)?.verification
+  const v = classRule(config, customerStatus, lead)?.verification
   const snap = v?.snapshot
-  if (v?.requires === 'documents') {
+  if (v?.requires === 'documents' || ((!v || v.requires === 'none') && (Object.keys(lead?.verification?.kyc || {}).length > 0 || lead?.verification?.kycRequestStatus))) {
     return {
       status: lead?.verification?.kycRequestStatus === 'deferred' ? 'Deferred'
-        : leadVerificationComplete(lead, customerStatus, { config }) ? (snap?.status || 'Verified') : 'Pending',
+        : kycVerificationComplete(lead, config) ? (snap?.status || 'Verified') : 'Pending',
       type: snap?.type || 'KYC', customerStatus,
       items: Object.fromEntries(checklistFor(config, customerStatus)
         .map(item => [item, verificationItem(lead?.verification, item)])),
@@ -123,7 +91,7 @@ export function verificationSnapshot(lead, customerStatus = lead?.customerStatus
   }
   if (v?.requires === 'fee') {
     return {
-      status: snap?.status || 'Confirmed', type: snap?.type || 'Payment', customerStatus,
+      status: amberPaymentComplete(lead?.verification) ? (snap?.status || 'Confirmed') : 'Pending', type: snap?.type || 'Payment', customerStatus,
       payment: lead?.verification?.payment || {},
       confirmedAt: lead?.verification?.payment?.confirmedAt || '',
     }

@@ -23,12 +23,12 @@ test('disqualifying requires a written reason', () => {
   assert.match(inbox, /droppedReason: `\$\{category\} — \$\{note\}`/)
 })
 
-test('both lead panels use the same reason capture', () => {
-  const uses = inbox.match(/<ReasonBox/g) || []
-  assert.ok(uses.length >= 4, `expected disqualify + revert in both panels, found ${uses.length}`)
-  // And neither keeps its own private copy of the rule.
-  assert.doesNotMatch(inbox, /const \[dropReason, setDropReason\]/,
-    'panels must not hold their own reason state')
+test('simplified decisions require an explicit drop reason and preserve history on reopen', () => {
+  const simple = inbox.slice(inbox.indexOf('function SimpleLeadDecisions'), inbox.indexOf('export default function Inbox'))
+  assert.match(simple, /disabled=\{!dropReason\.trim\(\)\}/)
+  assert.match(simple, /droppedReason:dropReason\.trim\(\)/)
+  assert.match(simple, /reopenedAt:nowIST\(\)/)
+  assert.doesNotMatch(simple, /droppedReason:\s*''/)
 })
 
 // "By mistake I qualify — I should take it back to the lead list… then I can

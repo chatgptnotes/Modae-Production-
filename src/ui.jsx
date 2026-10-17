@@ -1,3 +1,4 @@
+import { normalizeCustomerClass } from './customerClasses.js'
 import { useFieldLists } from './useFieldLists.js'
 import React, { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
@@ -56,7 +57,7 @@ export function ConfChip({ conf, thresholds = { high: 90, med: 75 }, label = '' 
 }
 
 // Customer classification chip (Green / Blue / Amber / Red).
-export const ClassChip = ({ cls }) => <span className={`customer-class customer-class-${cls}`}>{cls}</span>
+export const ClassChip = ({ cls }) => { const value = normalizeCustomerClass(cls); return <span className={`customer-class customer-class-${value}`}>{value}</span> }
 
 export const Phase2Badge = () => (
   <span className="chip phase2" title="Phase 2 — direction preview, simulated only">Phase 2</span>

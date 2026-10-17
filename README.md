@@ -6,11 +6,82 @@ submission, and follow-up.
 
 ## What the application does
 
+- Admin → Workflow & governance → Access rules supports per-account page and
+  action permissions: Inherit, Allow or Deny. Accounts → Permissions opens that
+  person's settings. Admin and Management retain administrator access; Non-sales
+  stays limited to lead submission and personal settings. Changes require a reason
+  and a current policy revision.
+- Admin → Integrations manages Gemini, OpenAI, Anthropic, xAI, DeepSeek, Mistral
+  and OpenRouter connections in a connected workspace. Keys are encrypted on the
+  server. Choose text and document models from provider catalogues; activation
+  tests the connection and document transport. Local demos cannot save provider
+  keys. See [DEPLOYMENT.md](DEPLOYMENT.md) for server setup.
+- Admin → Backup & restore exports one ZIP containing a readable Excel workbook,
+  exact restoration data and original uploaded files. Passwords, provider keys and
+  authentication secrets are excluded. Keep the complete ZIP unchanged. Restore
+  requires review and an empty business workspace. Existing accounts, passwords
+  and lifecycle status stay authoritative; missing logins need separate provisioning.
+  Signed shared backups restore only to the same connected workspace; local
+  backups restore only locally. Shared restore is transactional; browser restore
+  keeps a recovery journal before replacing records and file bytes. Limits are
+  100 MB ZIP, 300 MB expanded, 10,000 entries and 10 MB per shared file. Missing
+  original file bytes block full export. SharePoint files require a signed-in
+  SharePoint connection during export.
+
+- Workspace data loads on demand. Dashboard opens with opportunity summaries and
+  calculated work signals; Opportunities loads the register when visited. Opening
+  an opportunity, its Details drawer, or its row-edit pencil loads that record's
+  proposal and related work data before enabling editing. Read requests share a
+  session-local 15-second cache; successful saves invalidate it. Returning to a
+  screen or the browser refreshes the visible view when the cache expires, and
+  manual Refresh bypasses the cache. Numbers are not continuously live. Other
+  workflow pages retain complete workspace reads for their cross-record actions.
+
+- New Lead uses a wide desktop form and a single-column phone layout. An optional
+  salesperson overrides routing; otherwise configured rules assign the lead, with
+  LJS as fallback. Non-sales accounts can submit leads and change personal settings
+  without browsing sales records.
+- The local directory contains the supplied Mod-AE names and email addresses for
+  Sales, Management and Non-sales access. Existing owner IDs remain stable, so
+  updating the directory does not change historical lead or opportunity ownership.
+- The local roster contains 12 unique Mod-AE team accounts: six Non-sales, four Sales
+  (including LJ Swaminathan), plus Ashwath Hegde and Lokesh Bhardwaj in Management.
+  LJ also has Management access. A one-time local cleanup retires old and duplicate
+  logins while retaining attribution tombstones; it never rewrites a connected
+  server roster. Subsequent account edits and deletions are not reseeded on reload.
+- A separate local WinTrack Admin account (`admin@modae.com`) brings the local
+  roster to 13. Only that account can use Preview as user, checked by stable
+  account identity and active Admin status. Management/admin permissions on other
+  accounts do not enable preview. The account is installed once; later password
+  changes, renames and deletions persist. It is not provisioned in connected Auth.
+  A one-time local repair activates an Admin left inactive by the original setup;
+  subsequent password and lifecycle changes remain intact.
+- Edit a linked owner's name in Users and roles → Accounts. Current workspace
+  labels and new exports use the account name. Accounts is the single name editor;
+  legacy unlinked owners retain their existing fallback labels.
+  Sent messages and stored document snapshots
+  retain their original content. Other sessions see roster changes on their next
+  workspace refresh.
+- Sales users review Lead Decisions, choose customer classification manually,
+  and qualify a lead before explicitly registering its opportunity. KYC remains
+  visible and optional throughout; verification labels still require evidence.
+  Dashboard and register amounts display actual INR, while stored historical
+  `valueK`/`cogsK` values retain their existing units.
+- Connected lead conversion requires
+  `supabase/migrations/20261016122935_stage_one_non_sales_access.sql` after the
+  atomic approval migration. Apply it before deploying this application version.
+  SharePoint and shared-mailbox integration are separate setup work.
+
 - Personal settings → Appearance lets each signed-in user choose Candara (default),
   Inter, Roboto, Open Sans, Merriweather, Lora or their device's system font. Account-backed choices follow the user across
   devices; local/demo choices remain per user on that browser. Open settings from
   the desktop sidebar, tablet utilities or phone account menu. Company proposals
   and printed documents keep Candara regardless of the interface choice.
+- Personal settings → Change password lets every active account change its own
+  password using its current password and matching new entries (8+ characters).
+  Local changes remain on that browser; connected changes use Supabase Auth and
+  never write credentials to workspace profiles or preferences. Additional
+  provider verification requirements direct the user to an administrator reset.
 - Candara regular, bold, italic and bold italic are bundled as WOFF2 files under
   `public/fonts/candara/`; devices do not need Candara installed. Both the interface
   default and company print documents use these files. Personal font choices remain

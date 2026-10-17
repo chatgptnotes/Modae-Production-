@@ -1,4 +1,9 @@
 import * as datastore from './datastore.js'
+import { supabase } from './supabase.js'
+import { isLocalDemoSession } from './authMode.js'
+import { replaceLocalUserRoster } from './localUserRoster.js'
+import { installLocalPreviewAdmin } from './localPreviewAdmin.js'
+import { isActiveUser, matchesAccount } from './userManagement.js'
 import {
   seedOpportunities, seedPriceLists, seedAdhocParts,
   seedCustomers, seedUsers, seedLeads, seedApprovals,
@@ -14,7 +19,7 @@ import { DEFAULT_CLAUSES } from './clauses.js'
 import { modaeStandardCommercialTerms } from './commercialTerms.js'
 import { isLegacyAutoSparesSupportRow } from './proposal/sparesBoq.js'
 import { proposalApprovalSnapshot } from './approvalMemory.js'
-import { upgradeCustomerRules } from './customerClasses.js'
+import { upgradeCustomerRules, migrateCustomerClassification } from './customerClasses.js'
 import { upgradeWorkbookConfig } from './workbookGovernance.js'
 import { opportunityOwnerFor } from './leadRules.js'
 import {
@@ -202,20 +207,19 @@ export function migrate(s) {
   // NOT gated: it is what the app needs to stay usable in either mode.
   if (s.demoData === undefined) s.demoData = true
   const demo = s.demoData !== false
-  if (!Array.isArray(s.users)) s.users = seedUsers
-  s.users = s.users.map(u => (datastore.dbEnabled() || u.pw || u.deletedAt || u.status === 'Deleted' ? u : { ...u, pw: 'Demo@1234' }))
-  // Backfill new seed accounts (TECH/CUST) by email; saved states may already
-  // hold self-registered users on the same U-nnn ids, so reassign on collision.
-  const nextUserId = () =>
-    'U-' + String(Math.max(0, ...s.users.map(u => parseInt(String(u.id).replace(/\D/g, ''), 10) || 0)) + 1).padStart(3, '0')
-  for (const su of seedUsers) {
-    if (!s.users.some(u => u.email.toLowerCase() === su.email.toLowerCase())) {
-      s.users.push(s.users.some(u => u.id === su.id) ? { ...su, id: nextUserId() } : su)
-    }
+  const localRoster = (!supabase && s.auth?.source !== 'supabase') || isLocalDemoSession(s)
+  if (!Array.isArray(s.users)) s.users = localRoster ? seedUsers : []
+  if (!s.oneTimeCleanups || typeof s.oneTimeCleanups !== 'object' || Array.isArray(s.oneTimeCleanups)) s.oneTimeCleanups = {}
+  if (localRoster && !s.oneTimeCleanups.modaeRosterOnly) {
+    s.users = replaceLocalUserRoster(s.users, s.auth?.user?.id)
+    s.oneTimeCleanups.modaeRosterOnly = true
   }
+  // Never seed credentials into shared profiles or recreate accounts after a
+  // local rename/deletion. Future directory changes need an explicit migration.
+  if (localRoster) s.users = s.users.map(u => (u.pw || u.deletedAt || u.status === 'Deleted' ? u : { ...u, pw: 'Demo@1234' }))
   // Repair states saved before the collision guard existed: duplicate ids get
   // fresh ones (first occurrence keeps its id — it may be referenced elsewhere).
-  {
+  if (localRoster) {
     let maxId = Math.max(0, ...s.users.map(u => parseInt(String(u.id).replace(/\D/g, ''), 10) || 0))
     const seen = new Set()
     s.users = s.users.map(u => {
@@ -227,6 +231,11 @@ export function migrate(s) {
     })
   }
   if (!ROLES[s.role]) s.role = 'SUPER'
+  if (localRoster) {
+    const installed = installLocalPreviewAdmin(s)
+    s.users = installed.users
+    s.oneTimeCleanups = installed.oneTimeCleanups
+  }
   // Hydration can combine a newer server slice with an older local snapshot.
   // Keep map-shaped slices usable before route components render.
   for (const key of ['files', 'proposals', 'communications']) {
@@ -258,6 +267,7 @@ export function migrate(s) {
   s.config.leadDeadlines = { ...seedConfig.leadDeadlines, ...(s.config.leadDeadlines || {}) }
   if (!Number.isFinite(Number(s.config.proposalValidityDays)) || Number(s.config.proposalValidityDays) < 1) s.config.proposalValidityDays = seedConfig.proposalValidityDays
   s.config.fastTrack = { ...seedConfig.fastTrack, ...(s.config.fastTrack || {}) }
+  s.config = upgradeCustomerRules(s.config)
   s.config.classRules = { ...seedConfig.classRules, ...(s.config.classRules || {}) }
   // Customer-class rules moved from hardcoded branches into config. Merge per
   // class (and per sub-object) so a state that has edited one class keeps that
@@ -315,7 +325,16 @@ export function migrate(s) {
   // so old local snapshots cannot keep a second source of truth alive.
   delete s.config.ownerRules
   if (!Array.isArray(s.config.kycItems)) s.config.kycItems = seedConfig.kycItems
+  const previousRoleNames = {
+    LJS: ['L. J. Swaminathan'],
+    RS: ['R. Sundaram', 'R. Satish'],
+    PP: ['P. Prakash'],
+    SS: ['S. Service Owner'],
+  }
   s.config.roleNames = { ...seedConfig.roleNames, ...(s.config.roleNames || {}) }
+  for (const [role, oldNames] of Object.entries(previousRoleNames)) {
+    if (oldNames.includes(s.config.roleNames[role])) s.config.roleNames[role] = seedConfig.roleNames[role]
+  }
   const canonicalOwner = value => ownerIdFor(value, s.config.roleNames)
   const normalizeLead = lead => ({
     ...lead,
@@ -434,6 +453,18 @@ export function migrate(s) {
   // durable multi-role assignment for every existing profile.
   if (Array.isArray(s.users)) {
     s.users = s.users.map(user => ({ ...user, roles: userRoles(user) }))
+  }
+  if (localRoster && s.auth?.user) {
+    const profile = s.users.find(user => matchesAccount(user, s.auth.user))
+    if (!isActiveUser(profile)) {
+      s.auth = { ...s.auth, user: null }
+      s.role = 'LJS'
+      s.roles = []
+    } else {
+      s.auth = { ...s.auth, user: { ...s.auth.user, name: profile.name, email: profile.email, role: profile.role, roles: userRoles(profile) } }
+      s.role = profile.role
+      s.roles = userRoles(profile)
+    }
   }
   if (!Array.isArray(s.roles)) s.roles = userRoles(s.auth?.user || { role: s.role })
   // Price lists added to the seed after a state was saved (e.g. Meggitt) land
@@ -634,6 +665,12 @@ export function migrate(s) {
       } : {}),
     }
   })
+  // Normalize only the in-memory projection. Sync still publishes explicit edits
+  // after an authoritative pull; this migration does not queue bulk writes.
+  s.leads = s.leads.map(row => migrateCustomerClassification(row))
+  s.leadArchive = (s.leadArchive || []).map(row => migrateCustomerClassification(row))
+  s.opportunities = s.opportunities.map(row => migrateCustomerClassification(row))
+  s.customers = (s.customers || []).map(row => migrateCustomerClassification(row, 'status'))
   s.config = upgradeCustomerRules(s.config)
   s.config = upgradeWorkbookConfig(s.config)
   return s
@@ -719,8 +756,8 @@ export function seedState() {
     deletedOpportunityIds: [],
     pendingOpportunitySyncIds: [],
     users: seedUsers,
-    role: 'SUPER',
-    roles: ['SUPER', 'ADMIN'],
+    role: 'LJS',
+    roles: userRoles(seedUsers[0]),
   })
 }
 

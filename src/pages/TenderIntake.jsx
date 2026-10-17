@@ -201,14 +201,14 @@ export default function TenderIntake({ fixedTarget = null, destinationPicker = n
       // customer instead of silently creating a Blue duplicate.
       const known = store.customers.find(c =>
         c.name.toLowerCase() === sellTo.toLowerCase() || sameCustomer(c.name, sellTo))
-      if (!known) store.addCustomer({ name: sellTo, category: draft.category, status: 'Blue', kyc: 'Pending', payment: '—' })
+      if (!known) store.addCustomer({ name: sellTo, category: draft.category, status: 'Unclassified', kyc: 'Pending', payment: '—' })
       opp = {
         sl: maxSl + 1, id,
         // Use the master's spelling so the tracker, folders and KYC all key off
         // one customer rather than two spellings of the same one.
         sellTo: known ? known.name : sellTo,
         category: draft.category, location: draft.location,
-        customerStatus: known ? known.status : 'Blue',
+        customerStatus: known ? known.status : 'Unclassified',
         eucName: draft.eucName, eucLocation: draft.eucLocation, oppName: draft.oppName,
         owner, oppType: draft.oppType, bu: draft.bu, segment: draft.segment, product: draft.product,
         prob: '', valueK: +draft.valueK || 0, cogsK: 0,

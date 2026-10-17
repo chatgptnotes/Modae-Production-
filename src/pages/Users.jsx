@@ -3,8 +3,8 @@ import { isActiveUser, isDeletedUser, matchesAccount, accountChangeError } from 
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
-import { ROLES, DEMO_PASSWORD, LEVEL3_ROLES, LEVEL3_ROLE_IDS } from '../seed.js'
-import { ddMmmYY, isAdminRole } from '../utils.js'
+import { DEMO_PASSWORD, LEVEL3_ROLES, LEVEL3_ROLE_IDS } from '../seed.js'
+import { ddMmmYY, isAdminRole, displayRole } from '../utils.js'
 import { applicationRoleFor, applicationRolePatch, newUserRole } from '../userApplicationRole.js'
 import './users.css'
 import { Icon } from '../icons.jsx'
@@ -12,6 +12,8 @@ import { ConfirmModal } from '../ui.jsx'
 import { supabase } from '../supabase.js'
 import { usePagedRows } from '../ui/Pagination.jsx'
 import { useViewportPageSize } from '../ui/useViewportPageSize.js'
+import AccountActionMenu from '../ui/AccountActionMenu.jsx'
+import { canPreviewAsUser } from '../localPreviewAdmin.js'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -55,13 +57,10 @@ export default function Users() {
     (statusFilter === 'All' || user.status === statusFilter) &&
     (roleFilter === 'All' || applicationRoleFor(user) === roleFilter))
   const canManage = isAdminRole(store.roles || store.role)
+  const canPreview = canPreviewAsUser(store, shared)
   const [editingUserId, setEditingUserId] = useState(null)
   const [userDraft, setUserDraft] = useState(null)
   const [userErr, setUserErr] = useState('')
-  const [roleNameDraft, setRoleNameDraft] = useState(() => ({ ...(store.config?.roleNames || {}) }))
-  const [roleNameError, setRoleNameError] = useState('')
-  const [roleNameSaved, setRoleNameSaved] = useState(false)
-  const [usersView, setUsersView] = useState('accounts')
   const [rejecting, setRejecting] = useState(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createDraft, setCreateDraft] = useState({ name: '', email: '', password: '', confirmPassword: '', applicationRole: 'STANDARD_USER' })
@@ -80,10 +79,14 @@ export default function Users() {
   const pending = roster.filter(u => u.status === 'Pending')
   const pendingRegionRef = useRef(null)
   const accountsRegionRef = useRef(null)
-  const pendingFit = useViewportPageSize(pending.length, { enabled: canManage && usersView === 'accounts' && pending.length > 0, rootRef: pendingRegionRef })
-  const accountsFit = useViewportPageSize(filteredUsers.length, { enabled: canManage && usersView === 'accounts' && !openActionId && !editingUserId && !resettingUserId, rootRef: accountsRegionRef })
+  const pendingFit = useViewportPageSize(pending.length, { enabled: canManage && pending.length > 0, rootRef: pendingRegionRef })
+  const accountsFit = useViewportPageSize(filteredUsers.length, { enabled: canManage && !openActionId && !editingUserId && !resettingUserId, rootRef: accountsRegionRef })
   const { pagedRows: pagePending, pagination: pendingPagination } = usePagedRows(pending, store.users.length, pendingFit.pageSize, pendingFit.pagerRef)
   const { pagedRows: pageUsers, pagination: usersPagination } = usePagedRows(filteredUsers, `${query}:${statusFilter}:${roleFilter}`, accountsFit.pageSize, accountsFit.pagerRef)
+
+  useEffect(() => {
+    if (openActionId && !pageUsers.some(user => user.id === openActionId)) setOpenActionId(null)
+  }, [openActionId, pageUsers])
 
   useEffect(() => {
     let active = true
@@ -169,20 +172,6 @@ export default function Users() {
     } finally {
       setUserBusy(false)
     }
-  }
-
-  const saveRoleNames = event => {
-    event.preventDefault()
-    const invalid = Object.entries(ROLES).find(([id]) => !String(roleNameDraft[id] || '').trim())
-    if (invalid) {
-      setRoleNameError(`${invalid[0]} needs a display name.`)
-      setRoleNameSaved(false)
-      return
-    }
-    store.updateRoleNames(Object.fromEntries(Object.keys(ROLES).map(id => [id, String(roleNameDraft[id]).trim()])))
-    setRoleNameError('')
-    setRoleNameSaved(true)
-    setTimeout(() => setRoleNameSaved(false), 2500)
   }
 
   const closeCreate = () => {
@@ -292,14 +281,6 @@ export default function Users() {
     } finally { setActionBusy(false) }
   }
 
-  const resetRoleNames = () => {
-    const defaults = Object.fromEntries(Object.entries(ROLES).map(([id, role]) => [id, role.name]))
-    setRoleNameDraft(defaults)
-    setRoleNameError('')
-    setRoleNameSaved(false)
-    store.updateRoleNames(defaults)
-  }
-
   const provisionAllAccounts = async () => {
     setProvisionBusy(true)
     try {
@@ -329,17 +310,7 @@ export default function Users() {
         <button type="button" className="primary" onClick={() => { setCreateOpen(true); setCreateErr('') }}>Create account</button>
       </div>
 
-      <nav className="users-tabs" role="tablist" aria-label="User management sections">
-        <button id="users-tab-accounts" type="button" role="tab" aria-selected={usersView === 'accounts'}
-          aria-controls="users-panel-accounts" className={usersView === 'accounts' ? 'active' : ''}
-          onClick={() => setUsersView('accounts')}>Accounts</button>
-        <button id="users-tab-role-names" type="button" role="tab" aria-selected={usersView === 'roleNames'}
-          aria-controls="users-panel-role-names" className={usersView === 'roleNames' ? 'active' : ''}
-          onClick={() => setUsersView('roleNames')}>Owner names</button>
-      </nav>
-
-      <section id="users-panel-accounts" className="users-tab-panel" role="tabpanel"
-        aria-labelledby="users-tab-accounts" hidden={usersView !== 'accounts'}>
+      <section id="users-panel-accounts" className="users-tab-panel" aria-label="Accounts">
       {createOpen && (
         <form className="users-create-panel" onSubmit={createAccount}>
           <div className="users-create-heading">
@@ -451,6 +422,7 @@ export default function Users() {
                         {!LEVEL3_ROLE_IDS.includes(userDraft.applicationRole) && <option value={userDraft.applicationRole} disabled>Legacy role — choose Standard or Management User</option>}
                         {LEVEL3_ROLE_IDS.map(r => <option key={r} value={r}>{LEVEL3_ROLES[r].name}</option>)}
                       </select>
+                      {userDraft.applicationRole === 'MANAGEMENT' && <small>Saving Management access also grants Admin permissions.</small>}
                     </td>
                     <td><select disabled={userBusy} value={userDraft.status} onChange={e => { setUserDraft(d => ({ ...d, status: e.target.value })); setUserErr('') }} aria-label={`Status for ${u.name}`} name="users-status">
                       {['Active', 'Pending', 'Suspended'].map(status => <option key={status} value={status}>{status}</option>)}
@@ -460,7 +432,7 @@ export default function Users() {
                   <>
                     <td><div className="user-name-display"><b>{u.name}</b>{matchesAccount(u, store.auth?.user) && <span className="pill you"> You</span>}</div></td>
                     <td>{u.email || 'No email assigned'}</td>
-                    <td>{LEVEL3_ROLES[applicationRoleFor(u)].name}<small className="users-owner">Owner: {store.config?.roleNames?.[u.role] || ROLES[u.role]?.name || u.role} ({u.role})</small></td>
+                    <td>{LEVEL3_ROLES[applicationRoleFor(u)].name}{canManage && applicationRoleFor(u) === 'MANAGEMENT' && !u.roles?.includes('ADMIN') && <button type="button" disabled={userBusy} onClick={() => startUserEdit(u)}>Enable management admin access</button>}<small className="users-owner">Owner: {displayRole(u.role, store.config)} ({u.role})</small></td>
                     <td><span className={`pill status-${u.status}`}>{u.deletionPendingAt ? 'Deletion pending' : u.accessPending ? 'Update pending' : u.status}</span></td>
                   </>
                 )}
@@ -488,19 +460,20 @@ export default function Users() {
                 )}
                 {canManage && (
                   <td className="users-account-actions">
-                    <details className="users-action-menu" onToggle={e => { const open = e.currentTarget.open; setOpenActionId(current => open ? u.id : current === u.id ? null : current) }} onKeyDown={e => { if (e.key === 'Escape') { e.currentTarget.open = false; e.currentTarget.querySelector('summary').focus() } }}>
-                      <summary aria-label={`Actions for ${u.name}`}>Actions ▾</summary>
-                      <div>
-                        <button disabled={actionBusy || editingUserId !== null || Boolean(u.deletionPendingAt)} onClick={() => startUserEdit(u)}>Edit</button>
-                        <button disabled={actionBusy || Boolean(u.deletionPendingAt)} onClick={() => startPasswordReset(u)}>Reset password</button>
-                        {!shared && isActiveUser(u) && <button disabled={actionBusy} onClick={() => { store.signInAs(u.id); nav('/opportunities') }}>Preview as user</button>}
-                        <button disabled={actionBusy || Boolean(accountChangeError(store.users, actor, u, { status: u.status === 'Active' ? 'Suspended' : 'Active' }))}
+                    <AccountActionMenu name={u.name} open={openActionId === u.id} onOpenChange={open => setOpenActionId(open ? u.id : null)}>
+                        <button type="button" role="menuitem" disabled={actionBusy || Boolean(u.deletionPendingAt)} onClick={() => nav(`/admin?permissionUser=${encodeURIComponent(u.id)}`)}>Permissions</button>
+                        <button type="button" role="menuitem" disabled={actionBusy || editingUserId !== null || Boolean(u.deletionPendingAt)} onClick={() => startUserEdit(u)}>Edit</button>
+                        <button type="button" role="menuitem" disabled={actionBusy || Boolean(u.deletionPendingAt)} onClick={() => startPasswordReset(u)}>Reset password</button>
+                        {canPreview && isActiveUser(u) && <button type="button" role="menuitem" disabled={actionBusy} onClick={() => {
+                          try { if (store.signInAs(u.id)) nav('/opportunities') }
+                          catch (error) { setActionError(error.message || 'Could not preview this account.') }
+                        }}>Preview as user</button>}
+                        <button type="button" role="menuitem" disabled={actionBusy || Boolean(accountChangeError(store.users, actor, u, { status: u.status === 'Active' ? 'Suspended' : 'Active' }))}
                           title={accountChangeError(store.users, actor, u, { status: u.status === 'Active' ? 'Suspended' : 'Active' })}
                           onClick={() => changeAccess(u, u.status === 'Active' ? 'Suspended' : 'Active')}>{u.status === 'Active' ? 'Suspend' : 'Reactivate'}</button>
-                        <button className="users-delete" disabled={actionBusy || Boolean(accountChangeError(store.users, actor, u, {}, true))}
+                        <button type="button" role="menuitem" className="users-delete" disabled={actionBusy || Boolean(accountChangeError(store.users, actor, u, {}, true))}
                           title={accountChangeError(store.users, actor, u, {}, true)} onClick={() => setDeleting(u)}>{u.deletionPendingAt ? 'Retry delete' : 'Delete'}</button>
-                      </div>
-                    </details>
+                    </AccountActionMenu>
                   </td>
                 )}
               </tr>
@@ -528,30 +501,6 @@ export default function Users() {
       </div>
       {usersPagination}
       </div>
-      </section>
-
-      <section id="users-panel-role-names" className="users-tab-panel" role="tabpanel"
-        aria-labelledby="users-tab-role-names" hidden={usersView !== 'roleNames'}>
-      <form className="users-role-names-panel" onSubmit={saveRoleNames}>
-        <div className="section-title">Owner names</div><p className="hint">Owner identities label business records. Access roles control permissions; changing an owner name does not change access.</p>
-        <p className="hint">Change owner display names used elsewhere in the workspace. Account roles are managed in the Accounts tab.</p>
-        <div className="users-role-name-list">
-          {Object.entries(ROLES).map(([id, roleDef]) => (
-            <label className="users-role-name-row" key={id}>
-              <span className="role-id">{id}</span>
-              <input type="text" value={roleNameDraft[id] ?? roleDef.name}
-                onChange={e => { setRoleNameDraft(d => ({ ...d, [id]: e.target.value })); setRoleNameError(''); setRoleNameSaved(false) }}
-                aria-label={`Display name for ${id}`} name="users-text" />
-            </label>
-          ))}
-        </div>
-        {roleNameError && <div className="err-text" role="alert">{roleNameError}</div>}
-        {roleNameSaved && <div className="hint" role="status">Role names saved.</div>}
-        <div className="forms-actions users-role-name-actions">
-          <button type="button" onClick={resetRoleNames}>Reset to defaults</button>
-          <button type="submit" className="primary">Save names</button>
-        </div>
-      </form>
       </section>
 
       {deleting && <ConfirmModal title="Delete user" tone="danger"

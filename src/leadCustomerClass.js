@@ -1,3 +1,4 @@
+import { normalizeCustomerClass } from './customerClasses.js'
 import { leadFieldValue as mappedLeadFieldValue } from './leadFieldMapping.js'
 
 // Best-effort customer match against the master. Prefer normalized lead-level
@@ -12,12 +13,6 @@ export function matchCustomer(customers, lead) {
   }) || null
 }
 
-export const customerStatusForLead = (lead, customers) => {
-  // The Customer Master is authoritative for a matched account. Older/AI-
-  // created leads can carry a default Blue status (or a stale override) before
-  // the exact customer match is resolved, so those values must not mask a
-  // known Red account such as Vedanta (Lanjigarh).
-  const masterStatus = matchCustomer(customers, lead)?.status
-  if (masterStatus) return masterStatus
-  return lead?.customerStatus || (lead?.redFlag ? 'Red' : 'Blue')
-}
+// Lead Decisions owns classification. Customer matching and extraction never
+// make a classification decision on behalf of the salesperson.
+export const customerStatusForLead = lead => normalizeCustomerClass(lead?.customerStatus)

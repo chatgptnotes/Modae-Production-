@@ -1,6 +1,6 @@
 import { applyApprovalEffects } from '../src/approvalEffects.js'
 import { canAccessPage, canPerform } from '../src/accessPolicy.js'
-import { isActiveUser, matchesAccount } from '../src/userManagement.js'
+import { isActiveUser, accountProfileFor } from '../src/userManagement.js'
 import { proposalApprovalSnapshot, approvalAffectedByProposal } from '../src/approvalMemory.js'
 
 const fail = (message, status = 409) => { throw Object.assign(new Error(message), { status, code: `PT${status}` }) }
@@ -19,8 +19,8 @@ export function approvalContextState(rows) {
 // The commit RPC validates every scope before using this trusted server plan.
 export function planApprovalDecision(context, authUser, command) {
   const state = approvalContextState(context.rows)
-  const profile = (state.users || []).find(user => matchesAccount(user, authUser) && isActiveUser(user))
-  if (!profile || !canAccessPage(profile, 'approvals', state.config) || !canPerform(profile, 'approvals.decide', state.config)) fail('You cannot decide approvals.', 403)
+  const profile = accountProfileFor(state.users || [], authUser)
+  if (!isActiveUser(profile) || !canAccessPage(profile, 'approvals', state.config) || !canPerform(profile, 'approvals.decide', state.config)) fail('You cannot decide approvals.', 403)
   const row = context.rows.find(r => r.entity === 'approvals' && r.id === command.requestId)
   if (!row) fail('Approval not found.', 404)
   const approval = row.data

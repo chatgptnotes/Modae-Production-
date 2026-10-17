@@ -11,11 +11,14 @@ export function useFieldLists(current = {}) {
     ...Object.fromEntries(Object.entries(FIELD_BINDINGS).map(([name, key]) => [name, fieldValues(store.config, key, records.flatMap(row => row?.[key] || [])).filter(value => {
       if (key !== 'owner' || records.some(row => row?.owner === value)) return true
       const accounts = (store.users || []).filter(user => user.role === value)
-      return !accounts.length || accounts.some(isActiveUser)
+      return accounts.some(isActiveUser)
     })])),
     labelFor: (key, value) => {
-      const label = fieldLabel(store.config, key, value)
-      return key === 'owner' && label === value ? displayRole(value) : label
+      // Owner labels are user-facing account names. Always resolve them from
+      // the current role/user directory so stale workbook field labels cannot
+      // bring back legacy abbreviations such as "R. Satish" or "P. J. Sales".
+      if (key === 'owner') return displayRole(value, store.config)
+      return fieldLabel(store.config, key, value)
     },
   }
 }

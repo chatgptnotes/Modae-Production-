@@ -22,7 +22,7 @@ import { aiAttachmentPayload } from '../aiAttachments.js'
 import { extractDocText } from '../docText.js'
 import { fmtSize } from '../filestore.js'
 import { hold, add as holdMore, remove as removeHeldFile } from '../leadFiles.js'
-import { listFiles } from '../leadBlobs.js'
+import { listFiles, getFile as getLeadFile } from '../leadBlobs.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import { inboxViewCounts, matchesInboxView } from './inboxViews.js'
 import InboxToolbar from './InboxToolbar.jsx'
@@ -95,7 +95,7 @@ function InboxLeadPreview({ lead }) {
       <section><h4>Extracted details</h4>
         {fields.map((field, index) => <div className="mailbox-preview-field" key={`${field.k}-${index}`}><span>{field.k}</span><b><PreviewFieldText value={field.v} /></b>{field.conf != null && <small>{field.conf}%</small>}</div>)}
         {!fields.length && <p className="hint">No structured fields are available yet.</p>}
-        <div className="mailbox-preview-field"><span>Owner</span><b>{lead.assignedOwner || lead.suggestedOwner || 'Unassigned'}</b></div>
+        <div className="mailbox-preview-field"><span>Owner</span><b>{displayRole(lead.assignedOwner || lead.suggestedOwner) || 'Unassigned'}</b></div>
         <div className="mailbox-preview-field"><span>Route</span><b>{lead.route || lead.parse?.oppType || 'Not assigned'}</b></div>
       </section>
     </> : <section><h4>Original email</h4><p className="inbox-original-email">{lead.body || 'Original message text is unavailable.'}</p></section>}
@@ -905,6 +905,12 @@ function attachmentMeta(files) {
 // before a re-run so a reload never turns a complete document into an excerpt.
 async function fullLeadAttachments(lead, attachments) {
   const stored = await listFiles(lead.id)
+  for (const attachment of attachments || []) {
+    if (attachment.dataUrl && !stored.some(file => file.name === attachment.name)) {
+      const blob = await (await fetch(attachment.dataUrl)).blob()
+      stored.push(new File([blob], attachment.name, { type: attachment.type || blob.type }))
+    }
+  }
   if (!stored.length) return attachments || []
   const byName = new Map(stored.map(file => [file.name, file]))
   const out = []
@@ -925,6 +931,13 @@ function PasteLeadModal({ onClose }) {
   const fieldId = React.useId()
   usePhoneDialogViewport('.lead-paste-modal')
   const fileInput = useRef(null)
+  const pendingLead = useRef(null)
+  const { OWNERS, labelFor } = useFieldLists()
+  const [company, setCompany] = useState('')
+  const [contact, setContact] = useState('')
+  const [phoneNumber, setPhoneNumber] = useState('')
+  const [customerLocation, setCustomerLocation] = useState('')
+  const [assignedOwner, setAssignedOwner] = useState('')
   const [from, setFrom] = useState('')
   const [subject, setSubject] = useState('')
   const [source, setSource] = useState('')
@@ -962,25 +975,34 @@ function PasteLeadModal({ onClose }) {
     // it the single source of truth — so L-04 is satisfied by construction here
     // rather than by pattern-matching the source string.
     mailbox: true,
-    from: from || 'unknown@sender', sender: from || 'Unknown sender',
+    from, sender: contact || from, sellTo: company, contactPerson: contact, contactEmail: from, contactPhone: phoneNumber, sellToCustomerLocation: customerLocation, location: customerLocation,
+    assignedOwner: assignedOwner || opportunityOwnerFor({location: customerLocation, config: store.config}),
+    originator: { id: store.auth?.user?.id || '', name: store.auth?.user?.name || '', email: store.auth?.user?.email || '' },
     subject: subject || '(no subject)', body, attachments: attachmentMeta(files),
     status: 'New',
   })
 
   const add = async () => {
     if (store.canPerform?.('leads.create') === false) return
-    if (!body.trim() && !files.length) { setErr('Paste the email body, or attach the enquiry document.'); return }
+    if (pendingLead.current) {
+      if (!await store.flushPersistence([{entity:'leads',id:pendingLead.current}])) {setErr('Lead has unsaved changes. Retry Generate Lead to save.');return}
+      onClose();nav('/inbox/' + pendingLead.current);return
+    }
+    if (!body.trim() && !files.length && !company.trim() && !subject.trim()) { setErr('Enter a company, subject, message or attachment.'); return }
     setBusy(true); setErr('')
-    const extracted = await extractLead({ from, subject, body, attachments: files, aiAttachments: await aiAttachmentPayload(files) }, store)
+    const extractionBody = [company && `Customer: ${company}`, contact && `Contact person: ${contact}`, phoneNumber && `Contact phone: ${phoneNumber}`, customerLocation && `Customer location: ${customerLocation}`, body].filter(Boolean).join('\n')
+    const extracted = await extractLead({ from, subject, body: extractionBody, attachments: files, aiAttachments: await aiAttachmentPayload(files) }, store)
     setBusy(false)
     if (!extracted) {
       setErr('Extraction is unavailable — check the AI configuration on the Admin page, or add the mail unextracted and structure it by hand.')
       return
     }
     const id = 'LD-' + Date.now()
-    store.addLead({ ...newLead(id), duplicateRisk: 'Low', ...extracted })
+    store.addLead({ ...extracted, ...newLead(id), sellTo: company || leadIdentity(extracted, extracted.ai?.fields).sellTo, contactPerson: contact || leadIdentity(extracted, extracted.ai?.fields).contactPerson, contactPhone: phoneNumber || leadIdentity(extracted, extracted.ai?.fields).contactPhone, assignedOwner: assignedOwner || opportunityOwnerFor({location: customerLocation || extracted.location || extracted.region || leadIdentity(extracted, extracted.ai?.fields).eucLocation, config:store.config}), duplicateRisk: 'Low' })
     store.recordAiAction(id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.extract', result: { completeness: extracted.completeness, missing: extracted.ai?.missing || [], route: extracted.route } })
     hold(id, files.map(f => f.file))
+    pendingLead.current = id
+    if (!await store.flushPersistence([{entity:'leads',id}])) {setErr('Lead has unsaved changes. Retry Generate Lead to save.');return}
     onClose()
     nav('/inbox/' + id)
   }
@@ -998,32 +1020,31 @@ function PasteLeadModal({ onClose }) {
   }
 
   return (
-    <Modal title={phone ? 'New enquiry' : 'New enquiry — paste the email'} onClose={onClose} className="lead-paste-modal">
+    <Modal title="New Lead" onClose={onClose} className="lead-paste-modal">
       <div className="drawer-form lead-paste-form">
         <div className="lead-paste-fields">
         {phone && <p className="lead-paste-intro">Paste the message or attach an enquiry document.</p>}
         {/* Section 1 of the lead workflow. Where the enquiry came from is a
             separate fact from the mailbox it arrived in, and it is the one that
             answers "which channels actually produce work". */}
-        <label htmlFor={`${fieldId}-source`}>Lead source</label>
-        <select id={`${fieldId}-source`} value={source} onChange={e => setSource(e.target.value)} style={{ width: '100%' }}>
-          <option value="">— select the source —</option>
-          {LEAD_SOURCES.map(s => <option key={s}>{s}</option>)}
-        </select>
-        {source === 'Internal / Non-sales Enquiry' && <>
-          <label htmlFor={`${fieldId}-department`} style={{ marginTop: 6 }}>Forwarding department</label>
-          <input id={`${fieldId}-department`} value={forwardingDepartment} onChange={e => setForwardingDepartment(e.target.value)} placeholder="e.g. Service, Projects, Finance" style={{ width: '100%' }} />
-          <label htmlFor={`${fieldId}-forwarder`} style={{ marginTop: 6 }}>Forwarded by</label>
-          <input id={`${fieldId}-forwarder`} value={forwardedBy} onChange={e => setForwardedBy(e.target.value)} placeholder="Name or email" style={{ width: '100%' }} />
-        </>}
-        <label htmlFor={`${fieldId}-from`} style={{ marginTop: 6 }}>{phone ? 'Sender email' : 'From'}</label>
-        <input id={`${fieldId}-from`} inputMode="email" autoCapitalize="none" value={from} onChange={e => setFrom(e.target.value)}
-          placeholder="name@customer.com" style={{ width: '100%' }} />
+        <div className="lead-paste-contact-grid">
+          <label htmlFor={`${fieldId}-company`}>Customer company<input id={`${fieldId}-company`} name="company" type="text" value={company} onChange={e => setCompany(e.target.value)} placeholder="Company name" /></label>
+          <label htmlFor={`${fieldId}-contact`}>Contact person<input id={`${fieldId}-contact`} name="contact" type="text" value={contact} onChange={e => setContact(e.target.value)} placeholder="Customer contact name" /></label>
+          <label htmlFor={`${fieldId}-from`}>Contact email<input id={`${fieldId}-from`} name="from" type="email" autoCapitalize="none" value={from} onChange={e => setFrom(e.target.value)} placeholder="name@customer.com" /></label>
+          <label htmlFor={`${fieldId}-phone`}>Contact phone<input id={`${fieldId}-phone`} name="phone" type="tel" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} placeholder="Phone number" /></label>
+          <label htmlFor={`${fieldId}-location`}>Customer location<input id={`${fieldId}-location`} name="location" type="text" value={customerLocation} onChange={e => setCustomerLocation(e.target.value)} placeholder="City or region" /></label>
+          <label htmlFor={`${fieldId}-owner`}>Assign salesperson (optional)<select id={`${fieldId}-owner`} name="owner" value={assignedOwner} onChange={e => setAssignedOwner(e.target.value)}><option value="">Assign using routing rules</option>{OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}</select></label>
+          <label htmlFor={`${fieldId}-source`}>Lead source<select id={`${fieldId}-source`} name="source" value={source} onChange={e => setSource(e.target.value)}><option value="">Select source</option>{LEAD_SOURCES.map(value => <option key={value}>{value}</option>)}</select></label>
+          {source === 'Internal / Non-sales Enquiry' && <>
+            <label htmlFor={`${fieldId}-department`}>Forwarding department<input id={`${fieldId}-department`} name="department" type="text" value={forwardingDepartment} onChange={e => setForwardingDepartment(e.target.value)} placeholder="Service, Projects, Finance…" /></label>
+            <label htmlFor={`${fieldId}-forwarder`}>Forwarded by<input id={`${fieldId}-forwarder`} name="forwarder" type="text" value={forwardedBy} onChange={e => setForwardedBy(e.target.value)} placeholder="Name or email" /></label>
+          </>}
+        </div>
         <label htmlFor={`${fieldId}-subject`} style={{ marginTop: 6 }}>Subject</label>
-        <input id={`${fieldId}-subject`} value={subject} onChange={e => setSubject(e.target.value)}
+        <input id={`${fieldId}-subject`} name="subject" type="text" value={subject} onChange={e => setSubject(e.target.value)}
           placeholder="Request for quotation — …" style={{ width: '100%' }} />
         <label htmlFor={`${fieldId}-body`} style={{ marginTop: 6 }}>{phone ? 'Enquiry message' : 'Body'}</label>
-        <textarea id={`${fieldId}-body`} rows={phone ? 6 : 12} value={body} onChange={e => setBody(e.target.value)}
+        <textarea id={`${fieldId}-body`} name="body" rows={phone ? 6 : 7} value={body} onChange={e => setBody(e.target.value)}
           placeholder="Paste the enquiry exactly as received." style={{ width: '100%' }} />
         <label htmlFor={`${fieldId}-files`} style={{ marginTop: 6 }}>Attachments</label>
         {phone && <button type="button" className="lead-paste-add-files" onClick={() => fileInput.current?.click()} disabled={reading || busy}><Icon name="upload" size={18} /> Add attachments</button>}
@@ -1032,7 +1053,7 @@ function PasteLeadModal({ onClose }) {
           onDragLeave={() => setDrag(false)}
           onDrop={onDrop}
           onClick={() => fileInput.current?.click()}>
-          <input id={`${fieldId}-files`} ref={fileInput} type="file" multiple style={{ display: 'none' }}
+          <input id={`${fieldId}-files`} name="files" ref={fileInput} type="file" multiple style={{ display: 'none' }}
             onChange={e => { addFiles(e.target.files); e.target.value = '' }} />
           <div className="tender-drop-icon"><Icon name="fileText" size={22} /></div>
           <b>Drop the RFQ, BOM or spec here</b>
@@ -1052,7 +1073,7 @@ function PasteLeadModal({ onClose }) {
             {f.err && <div className="hint" style={{ flexBasis: '100%' }}><Icon name="alert" size={11} /> {f.err}</div>}
           </div>
         ))}
-        {store.config?.aiModel?.provider === 'Built-in fallback'
+        {store.auth?.source !== 'supabase' && store.config?.aiModel?.provider === 'Built-in fallback'
           ? <WarnBox>Built-in fallback is selected — the email will be parsed locally and remain pending human review.</WarnBox>
           : !aiEnabled() && <WarnBox>AI proxy is not configured — extraction will use the built-in email fallback and remain pending human review.</WarnBox>}
         {err && <div role="alert"><ErrBox>{err}</ErrBox></div>}
@@ -1061,7 +1082,7 @@ function PasteLeadModal({ onClose }) {
           <button onClick={onClose}>Cancel</button>
           {err && <button disabled={store.canPerform?.('leads.create') === false} onClick={addRaw}>Add unextracted</button>}
           <button className="primary" onClick={add} disabled={busy || reading || store.canPerform?.('leads.create') === false}>
-            <Icon name="bot" size={13} /> {busy ? 'Extracting…' : 'Extract with AI'}
+            <Icon name="bot" size={13} /> {busy ? 'Extracting…' : 'Generate Lead'}
           </button>
         </div>
       </div>
@@ -1453,9 +1474,9 @@ function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) 
       action={lead.oppId ? { label: 'Open opportunity', onClick: () => nav('/opp/' + lead.oppId) } : undefined}
       onBack={() => nav('/inbox')} />
   }
-  const customer = identity.sellTo || value('sellTo', lead.sellTo || 'Eastern Hydro Systems Limited (Chennai, Tamil Nadu)')
-  const contact = identity.contactPerson || value('contactPerson', 'Arjun Menon')
-  const delivery = lead.deliveryAddress || leadFieldValue(fields, /delivery|address/i) || identity.eucLocation || value('eucLocation', lead.location || '45 Industrial Estate Road, Chennai, Tamil Nadu - 600058')
+  const customer = identity.sellTo || value('sellTo', lead.sellTo || '')
+  const contact = identity.contactPerson || value('contactPerson', '')
+  const delivery = lead.deliveryAddress || leadFieldValue(fields, /delivery|address/i) || identity.eucLocation || value('eucLocation', lead.location || '')
   const oppId = lead.oppId || '2609006LJS'
   const items = lead.ai?.lineItems?.length
     ? lead.ai.lineItems
@@ -2538,14 +2559,14 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
         <div className="ws-kv">
         <span className="ws-kv-k">System suggested owner</span>
         <span className="ws-kv-v">
-          {regionalOwner}
+          {displayRole(regionalOwner)}
           <span className="ws-kv-note">{ownerRuleLabel} · override needs LJS/AH + reason</span>
         </span>
         </div>
         <div className="ws-kv">
         <span className="ws-kv-k">Assigned owner</span>
         <span className="ws-kv-v">
-          {decisionDraft.owner}
+          {displayRole(decisionDraft.owner)}
           {decisionDraft.owner !== regionalOwner && <span className="ws-kv-note">Manual override</span>}
         </span>
         </div>
@@ -2927,14 +2948,14 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             <div className="ws-kv">
             <span className="ws-kv-k">System suggested owner</span>
             <span className="ws-kv-v">
-              {regionalOwner}
+              {displayRole(regionalOwner)}
               <span className="ws-kv-note">{ownerRuleLabel} · override needs LJS/AH + reason</span>
             </span>
             </div>
             <div className="ws-kv">
             <span className="ws-kv-k">Assigned owner</span>
             <span className="ws-kv-v">
-              {decisionDraft.owner}
+              {displayRole(decisionDraft.owner)}
               {decisionDraft.owner !== regionalOwner && <span className="ws-kv-note">Manual override</span>}
             </span>
             </div>
@@ -3475,6 +3496,62 @@ function LegacyLeadDetail({ lead, phoneLayout = false }) {
 // ---------------------------------------------------------------------------
 // Inbox — table list, or per-lead detail when /inbox/:leadId matches.
 // ---------------------------------------------------------------------------
+function SimpleLeadDecisions({ lead }) {
+  const store = useStore()
+  const nav = useNavigate()
+  const { OWNERS, OPP_TYPES, labelFor } = useFieldLists()
+  const identity = leadIdentity(lead, lead.ai?.fields || [])
+  const [draft, setDraft] = useState(() => ({ ...identity,
+    source: lead.source || '', contactEmail: lead.contactEmail || lead.from || '',
+    sellToCustomerLocation: lead.sellToCustomerLocation || lead.location || '',
+    assignedOwner: lead.assignedOwner || lead.suggestedOwner || opportunityOwnerFor({location: lead.location, config: store.config}),
+    oppType: lead.oppType || lead.route || '', notes: lead.notes || '', customerStatus: customerStatusForLead(lead, store.customers),
+  }))
+  const editor = useRef(null)
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [dropReason, setDropReason] = useState('')
+  const immutable = ['Converted', 'Dropped'].includes(lead.status)
+  const disabled = immutable || store.canPerform?.('leads.edit') === false
+  const set = key => event => setDraft(previous => ({...previous, [key]:event.target.value}))
+  const save = async qualify => {
+    setBusy(true); setError('')
+    try {
+      store.updateLead(lead.id, { ...draft, customerClassificationVersion: 2, ...(draft.customerStatus !== customerStatusForLead(lead, store.customers) ? {legacyCustomerClass: ''} : {}), ...(qualify ? {status:'Qualified'} : {}) }, qualify ? 'Lead qualified for registration' : 'Lead decisions saved')
+      releaseWorkspaceElementInputs(editor.current)
+      if (workspaceSyncState.enabled && !await store.flushPersistence([{entity:'leads',id:lead.id}])) throw new Error('Lead was not saved. Review conflicts or retry.')
+      if (qualify) nav('/register/' + lead.id)
+    } catch (error) { setError(error.message) } finally { setBusy(false) }
+  }
+  const transition = async (patch, detail) => {
+    setBusy(true);setError('')
+    try {store.updateLead(lead.id,patch,detail);releaseWorkspaceElementInputs(editor.current);if (workspaceSyncState.enabled && !await store.flushPersistence([{entity:'leads',id:lead.id}])) throw new Error('Change was not saved. Review conflicts or retry.')}
+    catch(error){setError(error.message)} finally {setBusy(false)}
+  }
+  return <div ref={editor} className="form-card" style={{margin:16}}>
+    <h2>Lead decisions</h2>
+    <p className="hint">Originator: {lead.originator?.name || lead.originator?.email || 'Not recorded'}</p>
+    <div className="registration-fields" style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))',gap:12}}>
+      {[['source','Source'],['sellTo','Company'],['contactPerson','Contact person'],['contactEmail','Email'],['contactPhone','Phone'],['sellToCustomerLocation','Customer location']].map(([key,label]) => <label className="afield" key={key}>{label}<input name={`lead-${key}`} value={draft[key] || ''} disabled={disabled} onChange={set(key)} /></label>)}
+      <label className="afield">Sales owner<select name="lead-assigned-owner" value={draft.assignedOwner} disabled={disabled} onChange={set('assignedOwner')}>{OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner',owner)}</option>)}</select></label>
+      <label className="afield">Opportunity type<select name="lead-opportunity-type" value={draft.oppType} disabled={disabled} onChange={set('oppType')}><option value="">Unspecified</option>{OPP_TYPES.map(type => <option key={type}>{type}</option>)}</select></label>
+      <label className="afield">Customer classification<select name="lead-customer-class" value={draft.customerStatus} disabled={disabled} onChange={set('customerStatus')}>{['Unclassified','Green','Yellow','Red'].map(status => <option key={status}>{status}</option>)}</select></label>
+      <label className="afield">Notes<textarea name="lead-notes" rows={3} value={draft.notes} disabled={disabled} onChange={set('notes')} /></label>
+    </div>
+    <h3>AI summary</h3><p>{lead.ai?.summary || 'No AI summary available.'}</p>
+    <details><summary>KYC — optional</summary><label className="afield">KYC documents (optional)<input name="lead-kyc-files" type="file" multiple disabled={disabled || busy} onChange={async event => { const selected = Array.from(event.target.files || []); if (!selected.length) return; setBusy(true); try { const records = await Promise.all(selected.map(readAttachment)); holdMore(lead.id, selected); store.updateLead(lead.id, {attachments:[...(lead.attachments || []), ...attachmentMeta(records)]}, 'Optional KYC documents attached'); } catch (error) {setError(error.message)} finally {setBusy(false)} }} /></label><p>KYC can be collected later. It does not prevent qualification or registration.</p><label className="afield">KYC notes<textarea name="lead-kyc-notes" disabled={disabled} value={draft.kycNotes ?? lead.kycNotes ?? ''} onChange={set('kycNotes')} /></label></details>
+    <details style={{marginTop:12}}><summary>Original enquiry and attachments</summary><h3>{lead.subject}</h3><p style={{whiteSpace:'pre-wrap'}}>{lead.body}</p>{(lead.attachments || []).map((file,index) => <div key={index}>{file.dataUrl ? <a href={file.dataUrl} download={file.name}>{file.name}</a> : <button type="button" onClick={async () => {const blob = await getLeadFile(lead.id,file.name); if (!blob) {setError('This attachment is unavailable on this device.');return} const url=URL.createObjectURL(blob);const anchor=document.createElement('a');anchor.href=url;anchor.download=file.name;anchor.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}}>{file.name}</button>}</div>)}</details>
+    {error && <ErrBox>{error}</ErrBox>}
+    <div className="toolbar" style={{marginTop:16}}>
+      <button onClick={() => nav('/inbox')}>Back to inbox</button>
+      {!disabled && <><button disabled={busy} onClick={() => save(false)}>Save decisions</button><button className="primary" disabled={busy || store.canPerform?.('opportunities.create') === false} onClick={() => save(true)}>Qualify lead</button></>}
+      {lead.oppId && <button className="primary" onClick={() => nav('/opp/' + lead.oppId)}>Open opportunity</button>}
+      {lead.status === 'Dropped' && store.canPerform?.('leads.edit') !== false && <button onClick={() => transition({status:'New',reopenedAt:nowIST()},'Lead reopened; prior drop reason retained')}>Reopen lead</button>}
+    </div>
+    {!disabled && <details><summary>Drop lead</summary><label>Reason<textarea name="lead-drop-reason" value={dropReason} onChange={e => setDropReason(e.target.value)} /></label><button disabled={!dropReason.trim()} onClick={() => transition({status:'Dropped',droppedReason:dropReason.trim(),droppedAt:nowIST()},dropReason.trim())}>Confirm drop</button></details>}
+  </div>
+}
+
 export default function Inbox() {
   const { OPP_TYPES, labelFor } = useFieldLists()
 
@@ -3669,8 +3746,8 @@ export default function Inbox() {
   const { pagedRows: pageRows, pagination } = usePagedRows(mailboxRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF, activeInboxView, showArchive]), phone ? 10 : pageSize, pagerRef)
   useWorkspaceWatch((sel ? [sel] : pageRows).map(r=>({entity:'leads',id:r.id})), sel ? [] : [{entity:'leads',page:0,pageSize:50}])
   if (sel) {
-    if (phone && sel.ai) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><StructuredLeadDetail key={sel.id} lead={sel} converted={sel.status === 'Converted'} phoneLayout /></WorkspaceRecordBoundary>
-    if (phone) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><LegacyLeadDetail key={sel.id} lead={sel} phoneLayout /></WorkspaceRecordBoundary>
+    if (phone && sel.ai) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><SimpleLeadDecisions key={sel.id} lead={sel} /></WorkspaceRecordBoundary>
+    if (phone) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><SimpleLeadDecisions key={sel.id} lead={sel} /></WorkspaceRecordBoundary>
     const age = ageDays(sel.ts)
     return (
     <div className="lead-workspace">
@@ -3691,9 +3768,9 @@ export default function Inbox() {
           <span className={`pill ${PILL[sel.status] || 'Blue'}`}>{sel.status}</span>
       </div>
         {sel.ai
-          ? <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><StructuredLeadDetail lead={sel} converted={sel.status === 'Converted'} /></WorkspaceRecordBoundary>
-          : <><LeadWorkflowBar lead={sel} /><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
-              <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><LegacyLeadDetail lead={sel} /></WorkspaceRecordBoundary>
+          ? <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><SimpleLeadDecisions key={sel.id} lead={sel} /></WorkspaceRecordBoundary>
+          : <><div className="ws-grid single"><section className="ws-col"><div className="ws-body">
+              <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><SimpleLeadDecisions key={sel.id} lead={sel} /></WorkspaceRecordBoundary>
             </div></section></div></>}
       </div>
     )

@@ -14,7 +14,7 @@ export const DEFAULT_DOC_CHECKLISTS = {
   leadKyc: ['GST certificate', 'PAN certificate', 'Cancelled cheque', 'EFT / bank mandate'],
 }
 
-export const DEFAULT_CUSTOMER_CLASSES = {
+export const LEGACY_CUSTOMER_CLASSES = {
   Green: {
     defaultAction: 'OK to Quote',
     order: 1,
@@ -73,14 +73,14 @@ export const DEFAULT_CUSTOMER_CLASSES = {
       requires: 'fee',
       deadlineDays: 7,
       deadlineType: 'amberFee',
-      blockerText: 'Amber processing-fee payment confirmation is required',
+      blockerText: 'Yellow processing-fee payment confirmation is required',
       snapshot: { type: 'Payment', status: 'Confirmed' },
     },
     gate: {
       key: 'amber-fee',
       milestone: 'Registration',
       severity: 'block',
-      text: 'Amber customer pre-quote fee must be received',
+      text: 'Yellow customer pre-quote fee must be received',
       approvers: ['AH'],
       anyOf: false,
       approvalType: '',
@@ -91,13 +91,13 @@ export const DEFAULT_CUSTOMER_CLASSES = {
       readiness: {
         key: 'amber-fee',
         severity: 'block',
-        text: 'Amber pre-quote processing fee not received',
+        text: 'Yellow pre-quote processing fee not received',
       },
     },
     advisory: {
       key: 'amber',
       severity: 'info',
-      text: 'Amber customer — credit terms are subject to AH approval.',
+      text: 'Yellow customer — credit terms are subject to AH approval.',
       approvalType: 'Amber credit terms',
       approvers: ['AH'],
     },
@@ -152,15 +152,50 @@ export const DEFAULT_CUSTOMER_CLASSES = {
   },
 }
 
-// Falling back to the defaults (never to `{}`) is what keeps this refactor
-// behaviour-neutral for every caller that passes a bare state/config object.
-export const classRule = (config, cls) =>
-  config?.customerClasses?.[cls] || DEFAULT_CUSTOMER_CLASSES[cls] || null
-
-export const classOrder = config =>
-  Object.entries({ ...DEFAULT_CUSTOMER_CLASSES, ...(config?.customerClasses || {}) })
-    .sort((a, b) => (a[1]?.order || 99) - (b[1]?.order || 99))
-    .map(([cls]) => cls)
+// Classification labels and historical business controls are separate. A former
+// Blue account must never acquire the former Red no-bid rule through renaming.
+export const CUSTOMER_CLASS_VERSION = 2
+export const CUSTOMER_CLASSIFICATIONS = ['Unclassified', 'Green', 'Yellow', 'Red']
+export const normalizeCustomerClass = value => ({ Blue: 'Red', Amber: 'Yellow' }[value]
+  || (CUSTOMER_CLASSIFICATIONS.includes(value) ? value : 'Unclassified'))
+const optionalRule = { defaultAction: 'Pending validation', order: 4,
+  verification: { required: false, requires: 'none', deadlineDays: 0 },
+  gate: null, advisory: null, paymentTerms: '', probabilityBias: '' }
+export const DEFAULT_CUSTOMER_CLASSES = {
+  Unclassified: { ...optionalRule },
+  Green: { ...LEGACY_CUSTOMER_CLASSES.Green },
+  Yellow: { ...LEGACY_CUSTOMER_CLASSES.Amber, order: 2 },
+  Red: { ...optionalRule, order: 3 },
+}
+function optionalKyc(rule) {
+  if (!rule) return null
+  const documentGate = rule.gate?.evidence === 'customerKycChecklist' || rule.gate?.key === 'kyc'
+  return { ...rule,
+    verification: rule.verification?.requires === 'documents'
+      ? { ...rule.verification, required: false, deadlineDays: 0 } : rule.verification,
+    gate: documentGate ? null : rule.gate,
+    advisory: documentGate ? null : rule.advisory }
+}
+export function classRule(config, cls, record = null) {
+  const legacy = record?.legacyCustomerClass || (['Blue', 'Amber'].includes(cls) ? cls : '')
+    || (cls === 'Red' && record && record.customerClassificationVersion !== CUSTOMER_CLASS_VERSION ? 'Red' : '')
+  if (legacy) return optionalKyc(config?.legacyCustomerClasses?.[legacy]
+    || (config?.customerPolicyVersion !== CUSTOMER_CLASS_VERSION ? config?.customerClasses?.[legacy] : null)
+    || LEGACY_CUSTOMER_CLASSES[legacy])
+  const normalized = normalizeCustomerClass(cls)
+  // Pre-migration Red configuration describes the old no-bid category only.
+  if (normalized === 'Red' && config?.customerPolicyVersion !== CUSTOMER_CLASS_VERSION)
+    return DEFAULT_CUSTOMER_CLASSES.Red
+  return optionalKyc(config?.customerClasses?.[normalized] || DEFAULT_CUSTOMER_CLASSES[normalized])
+}
+export const classOrder = () => ['Green', 'Yellow', 'Red', 'Unclassified']
+export function migrateCustomerClassification(record, field = 'customerStatus') {
+  if (!record || record.customerClassificationVersion === CUSTOMER_CLASS_VERSION) return record
+  const old = record[field]
+  return { ...record, [field]: normalizeCustomerClass(old),
+    ...(['Blue', 'Amber', 'Red'].includes(old) && !record.legacyCustomerClass ? { legacyCustomerClass: old } : {}),
+    customerClassificationVersion: CUSTOMER_CLASS_VERSION }
+}
 
 // The legacy fallback chain lives here and nowhere else. Admin used to edit
 // amberFee.days while the gates read leadDeadlines.amberFeeDays, so a value the
@@ -173,17 +208,17 @@ export function classDeadlineDays(config, cls) {
   if (cls === 'Blue' && config?.leadDeadlines?.kycDays != null) {
     return Number(config.leadDeadlines.kycDays)
   }
-  if (cls === 'Amber') {
+  if (cls === 'Amber' || cls === 'Yellow') {
     if (config?.amberFee?.days != null) return Number(config.amberFee.days)
     if (config?.leadDeadlines?.amberFeeDays != null) return Number(config.leadDeadlines.amberFeeDays)
   }
-  return Number(DEFAULT_CUSTOMER_CLASSES[cls]?.verification?.deadlineDays ?? 0)
+  return Number(classRule(config, cls)?.verification?.deadlineDays ?? 0)
 }
 
 // One place authors document lists. 'kycItems' aliases the existing master key
 // so the 6-item checklist is never duplicated.
 export function checklistFor(config, cls) {
-  const name = classRule(config, cls)?.verification?.checklist
+  const name = classRule(config, cls)?.verification?.checklist || 'leadKyc'
   if (!name) return []
   if (name === 'kycItems') return config?.kycItems || []
   return config?.documentChecklists?.[name] || DEFAULT_DOC_CHECKLISTS[name] || []
@@ -192,7 +227,8 @@ export function checklistFor(config, cls) {
 // Approval gates and the release gate are never waivable by a milestone
 // exception; a class gate joins them when it declares exceptionWaivable: false.
 export const noExceptionKeys = (config = null) => [
-  'tech-approval', 'comm-approval', 'release',
+  'tech-approval', 'comm-approval', 'release', 'red-clearance',
+  ...Object.values(config?.legacyCustomerClasses || {}).filter(rule => rule?.gate?.exceptionWaivable === false).map(rule => rule.gate.key),
   ...classOrder(config)
     .map(cls => classRule(config, cls)?.gate)
     .filter(gate => gate?.key && gate.exceptionWaivable === false)
@@ -200,18 +236,22 @@ export const noExceptionKeys = (config = null) => [
 ]
 
 // Upgrade only old shipped defaults. Customer-specific terms and custom rules survive.
-export function upgradeCustomerRules(config) {
-  if (config.customerPolicyVersion === 1) return config
-  const legacy = { Green: '30 days credit from invoice', Blue: '50% advance, balance on delivery', Amber: '100% advance before dispatch', Red: '100% prepayment only' }
-  const customerClasses = { ...(config.customerClasses || {}) }
-  const classRules = { ...(config.classRules || {}) }
-  for (const [cls, old] of Object.entries(legacy)) {
-    const previous = customerClasses[cls] || {}
-    customerClasses[cls] = { ...DEFAULT_CUSTOMER_CLASSES[cls], ...previous, defaultAction: previous.defaultAction ?? DEFAULT_CUSTOMER_CLASSES[cls].defaultAction,
-      paymentTerms: previous.paymentTerms === old || previous.paymentTerms == null ? DEFAULT_CUSTOMER_CLASSES[cls].paymentTerms : previous.paymentTerms }
-    if (classRules[cls] === old || classRules[cls] == null) classRules[cls] = DEFAULT_CUSTOMER_CLASSES[cls].paymentTerms
-  }
-  return { ...config, customerClasses, classRules, customerPolicyVersion: 1 }
+export function upgradeCustomerRules(config = {}) {
+  if (config.customerPolicyVersion === CUSTOMER_CLASS_VERSION) return config
+  const previous = config.customerClasses || {}
+  const yellow = previous.Yellow || previous.Amber || DEFAULT_CUSTOMER_CLASSES.Yellow
+  const mergedYellow = { ...DEFAULT_CUSTOMER_CLASSES.Yellow, ...yellow, verification: { ...DEFAULT_CUSTOMER_CLASSES.Yellow.verification, ...yellow.verification, deadlineDays: (previous.Yellow || previous.Amber)?.verification?.deadlineDays ?? config.amberFee?.days ?? config.leadDeadlines?.amberFeeDays ?? 7 }, paymentTerms: (previous.Yellow || previous.Amber)?.paymentTerms ?? config.classRules?.Amber ?? DEFAULT_CUSTOMER_CLASSES.Yellow.paymentTerms }
+  const legacyCustomerClasses = { ...LEGACY_CUSTOMER_CLASSES, ...previous, ...(config.legacyCustomerClasses || {}) }
+  return { ...config, legacyCustomerClasses,
+    customerClasses: {
+      Unclassified: { ...DEFAULT_CUSTOMER_CLASSES.Unclassified },
+      Green: optionalKyc({ ...DEFAULT_CUSTOMER_CLASSES.Green, ...previous.Green, paymentTerms: previous.Green?.paymentTerms ?? config.classRules?.Green ?? DEFAULT_CUSTOMER_CLASSES.Green.paymentTerms }),
+      Yellow: optionalKyc(mergedYellow),
+      Red: { ...DEFAULT_CUSTOMER_CLASSES.Red },
+    },
+    classRules: { Unclassified: '', Green: config.classRules?.Green ?? DEFAULT_CUSTOMER_CLASSES.Green.paymentTerms,
+      Yellow: config.classRules?.Yellow ?? config.classRules?.Amber ?? DEFAULT_CUSTOMER_CLASSES.Yellow.paymentTerms, Red: '' },
+    customerPolicyVersion: CUSTOMER_CLASS_VERSION }
 }
 
 export const CUSTOMER_CRITERIA = [

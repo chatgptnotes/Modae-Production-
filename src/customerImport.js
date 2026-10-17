@@ -28,7 +28,7 @@ export function fieldForHeader(header) {
 }
 
 const STATUS_WORDS = {
-  green: 'Green', amber: 'Amber', yellow: 'Amber', red: 'Red', blue: 'Blue', new: 'Blue',
+  green: 'Green', amber: 'Yellow', yellow: 'Yellow', red: 'Red', blue: 'Red',
 }
 
 export function normalizeStatus(value) {
@@ -37,7 +37,7 @@ export function normalizeStatus(value) {
     if (c === word || c.startsWith(word + ' ') || c.endsWith(' ' + word)) return status
   }
   // Missing or unrecognised classes require review; never assume verified Green.
-  return 'Blue'
+  return 'Unclassified'
 }
 
 // One raw sheet row (keyed by original headers) → a customer-master record,
@@ -56,6 +56,7 @@ export function normalizeCustomerRow(raw) {
     name: record.name,
     category: record.category || '—',
     status,
+    ...(/\bblue\b/i.test(record.status || '') ? { legacyCustomerClass: 'Blue' } : {}),
     kyc: record.kyc || 'Pending',
     payment: record.payment || '—',
     ...(record.location ? { location: record.location } : {}),

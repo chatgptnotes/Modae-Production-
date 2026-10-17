@@ -5,16 +5,15 @@ export const REGISTRATION_FIELDS = [
   ['contactPerson', 'Contact Person'], ['contactPhone', 'Contact Phone'],
 ]
 export const DEFAULT_HEALTH_SCORE = {
-  classBase: { Green: 82, Blue: 60, Amber: 48, Red: 22 },
+  classBase: { Green: 82, Yellow: 48, Unclassified: 60, Red: 22 },
   kycValid: 6, kycRenewal: -6, kycMissing: -12,
   paymentOverdue: -22, paymentOnTime: 8, payment90: -10, payment60: -4,
   closedWeight: 20, idlePenalty: -8, healthyAt: 70, watchAt: 45,
 }
-export const registrationFields = config => REGISTRATION_FIELDS.filter(([key]) =>
-  key === 'sellTo' || !Array.isArray(config?.registrationRequiredFields) || config.registrationRequiredFields.includes(key))
+export const registrationFields = () => REGISTRATION_FIELDS.filter(([key]) => key === 'sellTo')
 export const healthScoreRules = config => ({
   ...DEFAULT_HEALTH_SCORE, ...config?.healthScore,
-  classBase: { ...DEFAULT_HEALTH_SCORE.classBase, ...config?.healthScore?.classBase },
+  classBase: Object.fromEntries(Object.entries({ ...DEFAULT_HEALTH_SCORE.classBase, ...config?.healthScore?.classBase }).filter(([key]) => !['Blue', 'Amber'].includes(key))),
 })
 export function validateBusinessRules(config = {}) {
   const errors = []

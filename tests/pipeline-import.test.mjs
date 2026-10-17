@@ -58,3 +58,17 @@ test('Excel date cells keep their calendar day in UTC and India time, including 
     else process.env.TZ = previousTZ
   }
 })
+
+
+test('explicit INR workbook amounts convert to existing K storage without changing legacy imports', () => {
+  for (const [label, amount] of [['Value (INR)*', 125000], ['Value (K₹)*', 125]]) {
+    const workbook = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+      ['Opp ID', 'Sell To Customer', label, 'COGS (INR)*'], ['amount-test', 'Customer', amount, 75000],
+    ]), 'Current Opps')
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([['New Opp ID']]), 'Old Closed Opps')
+    const parsed = parseBetserWorkbook(XLSX.write(workbook, { type: 'array', bookType: 'xlsx' }))
+    assert.equal(parsed.opportunities[0].valueK, 125)
+    assert.equal(parsed.opportunities[0].cogsK, 75)
+  }
+})

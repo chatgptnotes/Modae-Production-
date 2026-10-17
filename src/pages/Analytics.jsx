@@ -3,7 +3,7 @@ import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 
-import { fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, isSalesOwner, sameCustomer, productList, displayRoleLabel, displayRole } from '../utils.js'
+import { fmtRupeesFromK as fmtLakh, ageDays, canViewCommercial, isAdminRole, isApprover, isSalesOwner, sameCustomer, productList, displayRoleLabel, displayRole } from '../utils.js'
 import { PROB_WEIGHT, winLossAnalysis, FUNNEL_STAGES } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import { Funnel } from './myDashboard/WorkspaceDashboard.jsx'

@@ -16,12 +16,12 @@ const render = (overrides = {}) => renderToStaticMarkup(React.createElement(Tool
   onView: noop, archive: false, onArchive: noop, archiveCount:2, onRefresh:noop, onNew:noop, actions:[], selectionCount:0, ...overrides,
 }))
 test('new enquiry action is disabled when lead creation is revoked', () => {
-  assert.match(render({ canCreate: false }), /aria-label="New enquiry" aria-haspopup="dialog" disabled=""/)
-  assert.doesNotMatch(render({ canCreate: true }), /aria-label="New enquiry" aria-haspopup="dialog" disabled/)
+  assert.match(render({ canCreate: false }), /aria-label="New Lead" aria-haspopup="dialog" disabled=""/)
+  assert.doesNotMatch(render({ canCreate: true }), /aria-label="New Lead" aria-haspopup="dialog" disabled/)
 })
 test('desktop toolbar shows only everyday actions and hides advanced menus initially', () => {
   const html = render()
-  for (const label of ['Search mail', 'Filter leads', 'Inbox view', 'Refresh inbox', 'More inbox actions', 'New enquiry']) assert.ok(html.includes(`aria-label="${label}"`))
+  for (const label of ['Search mail', 'Filter leads', 'Inbox view', 'Refresh inbox', 'More inbox actions', 'New Lead']) assert.ok(html.includes(`aria-label="${label}"`))
   assert.doesNotMatch(html, /role="menu"|role="menuitem"|<select/)
   assert.match(html, /All leads/)
   assert.doesNotMatch(html, /Needs review|All statuses|All routes|Archive \(2\)/)

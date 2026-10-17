@@ -1,3 +1,5 @@
+import { normalizeCustomerClass } from '../customerClasses.js'
+import { fmtRupeesFromK, rupeesToK } from '../utils.js'
 import { useWorkspaceWatch, markWorkspaceEditing } from '../ui/WorkspaceSync.jsx'
 import EditableOpportunityCell, { OpportunityCellEditingProvider, EditableOpportunityRow, OpportunityRowEditButton, OpportunityRowEditOnly } from '../ui/EditableOpportunityCell.jsx'
 import { validateOpportunityEdit } from '../opportunityEdits.js'
@@ -47,7 +49,7 @@ const DEFAULT_DATE_FILTER = DEFAULT_OPPORTUNITY_DATE_FILTER
 // available width; `wAll` gives full-view identity/date columns a bigger slice.
 export const COLS = PIPELINE_COLUMNS.map(col => col.key === 'owner'
   ? { ...col, label: 'Opportunity Owner' }
-  : col)
+  : ['valueK', 'cogsK', 'gmK'].includes(col.key) ? { ...col, label: col.label.replace('K₹', 'INR') } : col)
 
 // The columns a sales owner actually works from, in Biji's words on 13 Aug:
 // "Opportunity ID, Customer, Opportunity Name, Stage, Probability… I need
@@ -223,7 +225,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
 
   const defaultOwnerFilter = initialOwnerFilter || 'All'
   const [ownerFilter, setOwnerFilter] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:ownerFilter`, defaultOwnerFilter)
-  const [savedFilters, setSavedFilters] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:filters`, {})           // col key -> Set of allowed display values
+  const [savedFilters, setSavedFilters] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:filters-inr-v2`, {})           // col key -> Set of allowed display values
   const filters = normalizeOpportunityFilters(savedFilters, ownerFilter)
   const setFilters = next => {
     setSavedFilters(current => typeof next === 'function' ? next(normalizeOpportunityFilters(current, ownerFilter)) : next)
@@ -232,7 +234,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
   const [sort, setSort] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:sort`, null)               // { key, dir: 1 | -1 }
   const columnMenuTrigger = useRef(null)
   const [openFilter, setOpenFilter] = useState(null)   // { key, x, y } of the open dropdown
-  const [conditions, setConditions] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:conditions`, {})
+  const [conditions, setConditions] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:conditions-inr-v2`, {})
   const [filterSearch, setFilterSearch] = useState({})
   const [searchTerm, setSearchTerm] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:opportunities:searchTerm`, '')
   const aiIdentity = `${store.auth?.user?.id || store.role}:${store.role}:${scope}`
@@ -304,16 +306,16 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
 
   const gmK = o => financials(o).gmK
   const gmPct = o => (o.valueK ? Math.round(financials(o).gmPct * 100) + '%' : null)
-  const customerStatusFor = o => store.customers.find(c => sameCustomer(c.name, o.sellTo))?.status || o.customerStatus || 'Blue'
+  const customerStatusFor = o => normalizeCustomerClass(o.customerStatus || store.customers.find(c => sameCustomer(c.name, o.sellTo))?.status)
 
   // Display value used for filtering & sorting (what the user sees in the cell).
   const cellVal = (o, key) => {
     switch (key) {
       case 'customerStatus': return customerStatusFor(o)
-      case 'gmK': return gmK(o)
+      case 'gmK': return gmK(o) * 1000
       case 'gmPct': return gmPct(o) || '—'
-      case 'valueK': return o.valueK ?? ''
-      case 'cogsK': return o.cogsK ?? ''
+      case 'valueK': return o.valueK == null ? '' : o.valueK * 1000
+      case 'cogsK': return o.cogsK == null ? '' : o.cogsK * 1000
       case 'createDate': return ddMMyyyy(o[key])
       case 'proposalDate': case 'orderDate': case 'invoiceDate': return o[key] ? ddMMyyyy(o[key]) : ''
       case 'lastUpdated': return ddMmmYY(o[key])
@@ -442,7 +444,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
     try { validateOpportunityEdit(field, value) } catch (error) { window.alert(error.message); return }
     // Numeric columns must store numbers so margin calculations and proposal
     // write-back comparisons remain stable.
-    if (field === 'valueK' || field === 'cogsK') value = e.target.value === '' ? null : Number(e.target.value)
+    if (field === 'valueK' || field === 'cogsK') value = e.target.value === '' ? null : rupeesToK(e.target.value)
     const patch = { [field]: value }
     // Reopening clears the closure fields; a Won/Lost stage must not survive.
     if (field === 'status' && value === 'Open') Object.assign(patch, { closedReason: '', closedReasonNote: '', stage: 'Firm Bid' })
@@ -504,7 +506,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
   }
   const isSel = (o, col) => fb.sel.ref === `${col.letter}${inspectionRows.get(o.id)}`
 
-  const exportCols = PIPELINE_COLUMNS
+  const exportCols = COLS
   // A real .xlsx rather than CSV: CSV carries no formatting, so long text
   // (opportunity names, remarks) landed unwrapped in one endless row.
   const exportRows = async () => downloadTableXlsx(
@@ -513,11 +515,12 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
     ['Sl.', ...exportCols.map(col => col.label)],
     rows.map((o, index) => [index + 1, ...exportCols.map(col => {
       switch (col.key) {
+        case 'owner': return displayRole(o.owner)
         case 'customerStatus': return customerStatusFor(o)
       case 'product': return Array.isArray(o.product) ? o.product.join(', ') : o.product || ''
-        case 'valueK': return o.valueK ?? ''
-        case 'cogsK': return o.cogsK ?? ''
-        case 'gmK': return gmK(o)
+        case 'valueK': return o.valueK == null ? '' : o.valueK * 1000
+        case 'cogsK': return o.cogsK == null ? '' : o.cogsK * 1000
+        case 'gmK': return gmK(o) * 1000
         case 'gmPct': return financials(o).gmPct == null ? '' : `${financials(o).gmPct * 100}%`
         case 'fqFy': return fiscalQuarter(o.orderDate)
         case 'forecast': return o.forecast ? 'Y' : 'N'
@@ -739,9 +742,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
           </thead>
           <tbody ref={pageListRef}>
             {pageRows.map((o, index) => (
-              <EditableOpportunityRow key={o.id}>
+              <EditableOpportunityRow key={o.id} prepareEdit={() => store.loadOpportunityDetails?.(o.id) ?? true}>
                 <td className="rowhead">{firstRow + index}</td>
-                <td onClick={selectCell(o, COLS[0])} className={`oppid ${customerStatusFor(o)} ${stageClass(o) === 'open' ? '' : stageClass(o)} ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
+                <td onClick={selectCell(o, COLS[0])} className={`oppid ${isSel(o, COLS[0]) ? 'cell-sel' : ''}`}>
                   <span className="tracker-oppid-actions" title={`Customer class: ${customerStatusFor(o)}`}>
                     <Link to={`/opp/${o.id}`} title="Open opportunity workspace">{displayOpportunityId(o.id)}</Link>
                     <OpportunityRowEditButton disabled={!canEditRow(o)} label={displayOpportunityId(o.id)} />
@@ -762,7 +765,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
                 <td onClick={selectCell(o, COLS[6])} className={isSel(o, COLS[6]) ? 'cell-sel' : ''} title={o.eucLocation}>{canEditRow(o) ? <EditableOpportunityCell type="text" value={o.eucLocation} label={COLS.find(c => c.key === 'eucLocation')?.label} onChange={upd(o.id, 'eucLocation')} disabled={!canEditRow(o)} /> : <div className="ro" title="Read only for your role or ownership scope">{o.eucLocation || '—'}</div>}</td>
                 <td onClick={selectCell(o, COLS[7])} className={`tracker-free-text ${isSel(o, COLS[7]) ? 'cell-sel' : ''}`} title={o.oppName}><span className="tracker-cell-label">{COLS[7].label}</span>{canEditRow(o) ? <EditableOpportunityCell as={WrapInput} disabled={!canEditRow(o)} value={o.oppName} onChange={upd(o.id, 'oppName')} title={o.oppName} label={COLS[7].label} /> : <div className="ro" title="Read only for your role or ownership scope">{o.oppName || '—'}</div>}</td>
                 <td onClick={selectCell(o, COLS[8])} className={isSel(o, COLS[8]) ? 'cell-sel' : ''}>
-                  {canEditRow(o) ? <EditableOpportunityCell as="select" value={o.owner} label={COLS.find(c => c.key === 'owner')?.label} onChange={upd(o.id, 'owner')} disabled={!canEditRow(o) || !canTransfer}>{OWNERS.map(c => <option key={c} value={c}>{labelFor('owner', c)}</option>)}</EditableOpportunityCell> : <div className="ro" title="Read only for your role or ownership scope">{o.owner || '—'}</div>}
+                  {canEditRow(o) ? <EditableOpportunityCell as="select" value={o.owner} label={COLS.find(c => c.key === 'owner')?.label} onChange={upd(o.id, 'owner')} disabled={!canEditRow(o) || !canTransfer}>{OWNERS.map(c => <option key={c} value={c}>{labelFor('owner', c)}</option>)}</EditableOpportunityCell> : <div className="ro" title="Read only for your role or ownership scope">{displayRole(o.owner) || '—'}</div>}
                 </td>
                 <td onClick={selectCell(o, COLS[9])} className={isSel(o, COLS[9]) ? 'cell-sel' : ''}>
                   <span className="tracker-cell-label">{COLS[9].label}</span>
@@ -805,9 +808,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
                 </td>
                 {/* Value and COGS are open tracker inputs for every role. GM and
                     GM% remain derived from them and are therefore read only. */}
-                <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><span className="tracker-cell-label">{COLS[14].label}</span><EditableOpportunityCell type="number" min="0" step="any" value={o.valueK ?? ''} label={COLS.find(c => c.key === 'valueK')?.label} onChange={upd(o.id, 'valueK')} disabled={!canEditRow(o)} aria-label={COLS[14].label} placeholder="-" /></td>
-                <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><EditableOpportunityCell type="number" min="0" step="any" value={o.cogsK ?? ''} label={COLS.find(c => c.key === 'cogsK')?.label} onChange={upd(o.id, 'cogsK')} disabled={!canEditRow(o)} placeholder="-" /></td>
-                <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{fmt(gmK(o), 3)}</td>
+                <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><span className="tracker-cell-label">{COLS[14].label}</span><EditableOpportunityCell type="number" min="0" step="any" value={o.valueK == null ? '' : o.valueK * 1000} label={COLS.find(c => c.key === 'valueK')?.label} onChange={upd(o.id, 'valueK')} disabled={!canEditRow(o)} aria-label={COLS[14].label} placeholder="-" /></td>
+                <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><EditableOpportunityCell type="number" min="0" step="any" value={o.cogsK == null ? '' : o.cogsK * 1000} label={COLS.find(c => c.key === 'cogsK')?.label} onChange={upd(o.id, 'cogsK')} disabled={!canEditRow(o)} placeholder="-" /></td>
+                <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{fmt(gmK(o) * 1000, 2)}</td>
                 {gmPct(o)
                   ? <td onClick={selectCell(o, COLS[17])} className={`num ${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>{gmPct(o)}</td>
                   : <td onClick={selectCell(o, COLS[17])} className={`${isSel(o, COLS[17]) ? 'cell-sel' : ''}`}>—</td>}
@@ -896,9 +899,9 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
             <tr>
               <td className="rowhead"></td>
               <td colSpan={14}>Totals {rows.length < base.length && <span className="hint">({rows.length} matching rows — filters active)</span>}</td>
-              <td className="num">{fmt(totals.v)} K₹</td>
-              <td className="num">{fmt(totals.c)} K₹</td>
-              <td className="num">{fmt(totals.v - totals.c)} K₹</td>
+              <td className="num">{fmtRupeesFromK(totals.v)}</td>
+              <td className="num">{fmtRupeesFromK(totals.c)}</td>
+              <td className="num">{fmtRupeesFromK(totals.v - totals.c)}</td>
               <td className="num" style={{ color: 'var(--amber-text)' }}>{totals.v ? Math.round(((totals.v - totals.c) / totals.v) * 100) + '%' : ''}</td>
               <td colSpan={13}></td>
             </tr>

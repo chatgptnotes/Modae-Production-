@@ -1,5 +1,5 @@
 import { getAdminSupabaseClient } from './_supabase-client.js'
-import { isActiveUser, matchesAccount } from '../src/userManagement.js'
+import { isActiveUser, accountProfileFor } from '../src/userManagement.js'
 import { canAccessPage, canPerform } from '../src/accessPolicy.js'
 
 export function createOpportunityNumberHandler({ getClient = getAdminSupabaseClient } = {}) {
@@ -14,7 +14,7 @@ export function createOpportunityNumberHandler({ getClient = getAdminSupabaseCli
       if (authError || !auth?.user) return res.status(401).json({ error: 'Your session is no longer valid.' })
       const { data: roster, error: rosterError } = await client.from('records').select('data').eq('entity', 'state').eq('id', 'users').is('deleted_at', null).maybeSingle()
       if (rosterError) throw rosterError
-      const profile = (Array.isArray(roster?.data) ? roster.data : []).find(p => matchesAccount(p, auth.user))
+      const profile = accountProfileFor(Array.isArray(roster?.data) ? roster.data : [], auth.user)
       if (!isActiveUser(profile)) return res.status(403).json({ error: 'This workspace account is not active.' })
       const { data: settings, error: settingsError } = await client.from('settings').select('data').eq('id', 'config').is('deleted_at', null).maybeSingle()
       if (settingsError) throw settingsError

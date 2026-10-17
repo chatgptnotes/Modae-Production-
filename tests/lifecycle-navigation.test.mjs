@@ -38,8 +38,10 @@ test('milestone changes open their lifecycle workspace', () => {
   assert.match(workbench, /'--progress-step-count': steps\.length/)
 })
 
-test('Workbench refreshes on entry and leaves focus refresh to the shared store', () => {
-  assert.match(workbench, /const refreshSharedData = \(\) => \{[\s\S]*store\.refreshSharedData\(\)/)
+test('Workbench loads through the shared view boundary without a duplicate entry refresh', () => {
+  const boundary = fs.readFileSync('src/ui/WorkspaceDataBoundary.jsx', 'utf8')
+  assert.match(boundary, /ensureWorkspaceView\(view/)
+  assert.doesNotMatch(workbench, /const refreshSharedData = \(\) =>/)
   assert.doesNotMatch(workbench, /addEventListener\('focus'|addEventListener\('visibilitychange'/)
   const store = fs.readFileSync('src/store.jsx', 'utf8')
   assert.match(store, /window\.addEventListener\('focus', onFocus\)/)

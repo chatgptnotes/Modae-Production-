@@ -25,3 +25,12 @@ test('first signature freezes the request snapshot and all requested pricing',()
 test('generic audit writes cannot forge an idempotency receipt',()=>{
   assert.throws(()=>assertNoApprovalCommandWrite('audit',null,{id:'APPROVAL-COMMAND:forged'}),e=>e.status===403)
 })
+
+
+test('generic audit writes cannot forge or replace lead conversion receipts', () => {
+  for (const [before,after,id] of [
+    [null,{id:'LEAD-CONVERSION:L-1'},'LEAD-CONVERSION:L-1'],
+    [null,{id:'LEAD-CONVERSION:L-1'},'ordinary'],
+    [{id:'LEAD-CONVERSION:L-1'},{id:'ordinary'},'ordinary'],
+  ]) assert.throws(() => assertNoApprovalCommandWrite('audit',before,after,id), {status:403})
+})

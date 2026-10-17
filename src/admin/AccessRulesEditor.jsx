@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ACCESS_ACTIONS, ACCESS_PAGES, defaultAccessPolicy, validateAccessPolicy } from '../accessPolicy.js'
+import { ACCESS_ACTIONS, ACCESS_PAGES, defaultAccessPolicy, effectiveAccess, validateAccessPolicy } from '../accessPolicy.js'
+import { isActiveUser } from '../userManagement.js'
 import { DEFAULT_OPPORTUNITY_NUMBERING, previewOpportunityNumber, validateOpportunityNumbering } from '../opportunityNumbering.js'
 import './AccessRulesEditor.css'
 
@@ -22,6 +23,10 @@ export default function AccessRulesEditor({ store, canEdit }) {
   const [errors, setErrors] = useState([])
   const [status, setStatus] = useState('')
   const [stale, setStale] = useState(false)
+  const [selectedUser, setSelectedUser] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('permissionUser') || '')
+  const accounts = (store.users || []).filter(isActiveUser)
+  const account = accounts.find(user => user.id === selectedUser)
+  const protectedAccount = account && (effectiveAccess(account).isAdmin || effectiveAccess(account).roles.includes('NON_SALES'))
 
   async function load() {
     if (!canEdit) return
@@ -47,10 +52,22 @@ export default function AccessRulesEditor({ store, canEdit }) {
     const values = policy.roles[role][collection]
     edit({ accessPolicy: { ...policy, roles: { ...policy.roles, [role]: { ...policy.roles[role], [collection]: enabled ? [...values, id] : values.filter(value => value !== id) } } } })
   }
+  const setOverride = (kind, permission, choice) => {
+    if (!account || protectedAccount) return
+    const policy = structuredClone(draft.accessPolicy)
+    policy.users ||= {}
+    const overrides = policy.users[account.id] ||= {}
+    overrides[kind] ||= {}
+    if (choice === 'inherit') delete overrides[kind][permission]
+    else overrides[kind][permission] = choice
+    for (const key of ['pages', 'actions']) if (!Object.keys(overrides[key] || {}).length) delete overrides[key]
+    if (!Object.keys(overrides).length) delete policy.users[account.id]
+    edit({ accessPolicy: policy })
+  }
   async function save() {
     if (!canEdit || !ready || busy || stale) return
     const failures = []
-    try { failures.push(...validateAccessPolicy(draft.accessPolicy).errors) } catch (error) { failures.push(error.message) }
+    try { failures.push(...validateAccessPolicy(draft.accessPolicy, store.users).errors) } catch (error) { failures.push(error.message) }
     try { validateOpportunityNumbering(draft.opportunityNumbering) } catch (error) { failures.push(error.message) }
     if (!reason.trim()) failures.push('Enter a reason for this change.')
     setErrors(failures)
@@ -85,6 +102,16 @@ export default function AccessRulesEditor({ store, canEdit }) {
           <tbody>{entries.map(({ id, label }) => <tr key={id}><th scope="row">{label}</th>{ROLES.map(([role, roleLabel]) => <td key={role}><input type="checkbox" aria-label={`${roleLabel}: ${label}`} checked={draft.accessPolicy.roles[role][collection].includes(id)} onChange={event => toggle(role, collection, id, event.target.checked)} name="access-rules-editor-checkbox" /></td>)}</tr>)}</tbody>
         </table>)}
       </div>
+    </fieldset>
+    <fieldset disabled={disabled} className="access-rules-fields">
+      <legend>Individual user permissions</legend>
+      <p className="hint">Choose Inherit to follow role permissions. Allow adds access; Deny removes it. Ownership and workflow approvals still apply.</p>
+      <label className="access-rules-account">Account<select value={selectedUser} onChange={event => setSelectedUser(event.target.value)} name="access-rules-account"><option value="">Choose an account</option>{accounts.map(user => <option key={user.id} value={user.id}>{user.name} — {user.email}</option>)}</select></label>
+      {protectedAccount && <p role="status">{effectiveAccess(account).isAdmin ? 'Administrator access is always protected; individual overrides do not restrict this account.' : 'Non-sales accounts can only submit leads and use personal settings; individual overrides cannot broaden access.'}</p>}
+      {account && !protectedAccount && <div className="access-rules-matrices">{[['pages', 'Page access', ACCESS_PAGES], ['actions', 'Allowed actions', ACCESS_ACTIONS]].map(([kind, title, entries]) => <table className="access-rules-matrix" key={kind}><caption>{title}</caption><thead><tr><th scope="col">Permission</th><th scope="col">Individual choice</th></tr></thead><tbody>{entries.map(({ id, label }) => {
+        const inherited = effectiveAccess(account, { ...store.config, accessPolicy: { ...draft.accessPolicy, users: {} } })[kind].includes(id)
+        return <tr key={id}><th scope="row">{label}<small className="access-rules-inherited">Role default: {inherited ? 'Allowed' : 'Denied'}</small></th><td><select name={`permission-${kind}-${id}`} value={draft.accessPolicy.users?.[account.id]?.[kind]?.[id] || 'inherit'} aria-label={`${account.name}: ${label}`} onChange={event => setOverride(kind, id, event.target.value)}><option value="inherit">Inherit</option><option value="allow">Allow</option><option value="deny">Deny</option></select></td></tr>
+      })}</tbody></table>)}</div>}
     </fieldset>
     <fieldset disabled={disabled} className="access-rules-fields">
       <legend>Opportunity ID format</legend>

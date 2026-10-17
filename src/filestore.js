@@ -3,6 +3,7 @@
 import { supabase } from './supabase.js'
 import { replaceUserFile, listUserFiles, getUserFile, deleteUserFile, deleteUserFiles } from './userFiles.js'
 import * as sp from './sharepoint.js'
+import { putLocalDocumentFile, getLocalDocumentFile, deleteLocalDocumentFile } from './localDocumentFiles.js'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -32,12 +33,21 @@ export async function uploadOppFile(opp, subfolder, file) {
       // there so listFiles (which prefers the real location) sees the file.
       const status = await sp.ensureOppFolder(opp)
       const item = await sp.uploadFile(opp.id, status || sp.statusFolderFor(opp), subfolder, file)
+      // An explicit replacement supersedes a restored database copy only after
+      // SharePoint has accepted the new bytes. Otherwise reopening prefers old data.
+      if (supabase) {
+        const restored = await listUserFiles({ recordType: 'opportunity', recordId: opp.id, folder: subfolder })
+        if (restored.some(row => row.name === (item.name || file.name))) {
+          await deleteUserFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, fileName: item.name || file.name })
+        }
+      }
       return { name: item.name, date: today(), size: fmtSize(file.size), webUrl: item.webUrl, itemId: item.itemId }
     }
     if (backend === 'supabase') {
       const rec = await replaceUserFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, file })
       return { ...rec, name: file.name, date: today(), size: fmtSize(file.size) }
     }
+    await putLocalDocumentFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, name: file.name, type: file.type || '', blob: file })
     return { name: file.name, date: today(), size: fmtSize(file.size) }
   } catch (e) {
     throw new Error('Upload of ' + file.name + ' failed: ' + ((e && e.message) || e))
@@ -56,15 +66,25 @@ export async function listOppFiles(opp) {
     }, {})
   }
   if (activeBackend() !== 'sharepoint') return null
+  // A full restore stages SharePoint originals in the transactional database
+  // backend. Prefer these durable copies until SharePoint is reconnected.
+  let recovered = []
+  if (supabase) recovered = await listUserFiles({ recordType: 'opportunity', recordId: opp.id, folder: null })
   try {
-    return await sp.listFiles(opp)
+    const folders = await sp.listFiles(opp)
+    for (const row of recovered) {
+      const folder = row.folder || 'Customer Specs'
+      folders[folder] = [...(folders[folder] || []).filter(file => file.name !== row.name), { ...row, backend: 'supabase', size: fmtSize(row.size) }]
+    }
+    return folders
   } catch (e) {
+    if (recovered.length) return recovered.reduce((out, row) => { (out[row.folder || 'Customer Specs'] ||= []).push({ ...row, backend: 'supabase', size: fmtSize(row.size) }); return out }, {})
     throw new Error('Could not list SharePoint files: ' + ((e && e.message) || e))
   }
 }
 
 export async function getOppFile(opp, subfolder, name) {
-  if (activeBackend() !== 'supabase') return null
+  if (activeBackend() === 'mock') return getLocalDocumentFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, name })
   return getUserFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, fileName: name })
 }
 
@@ -72,9 +92,12 @@ export async function deleteOppFile(opp, subfolder, fileRec) {
   const backend = activeBackend()
   try {
     if (backend === 'sharepoint') {
-      if (fileRec && fileRec.itemId) await sp.deleteItem(fileRec.itemId)
+      if (fileRec?.backend === 'supabase') await deleteUserFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, fileName: fileRec.name })
+      else if (fileRec && fileRec.itemId) await sp.deleteItem(fileRec.itemId)
     } else if (backend === 'supabase') {
       await deleteUserFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, fileName: fileRec.name })
+    } else {
+      await deleteLocalDocumentFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, name: fileRec.name })
     }
     // mock → nothing to do
   } catch (e) {

@@ -69,16 +69,51 @@ export function stageClass(o) {
   return o.stage === 'Won' ? 'won' : o.stage === 'Lost' ? 'lost' : 'open'
 }
 
-import { ROLES, PERMS, LEVEL3_ROLES, userRoles } from './seed.js'
+import { ROLES, PERMS, LEVEL3_ROLES, userRoles, seedUsers } from './seed.js'
 import { canAccessPage, canPerform as policyCanPerform, effectiveAccess } from './accessPolicy.js'
 
 // The provider refreshes this reference whenever persisted config changes. The
 // optional config argument keeps the resolver useful in pure/test contexts.
 let activeRoleNames = {}
-export const setRoleNameConfig = config => { activeRoleNames = config?.roleNames || {} }
+let activeAccountNames = Object.create(null)
+export const ownerAccountFor = (users, role) => {
+  if (!ROLES[role] || ['ADMIN', 'NON_SALES', 'CUST'].includes(role)) return null
+  const accounts = users.filter(user => user.role === role && user.name)
+  const retained = accounts.filter(user => !user.deletedAt && user.status !== 'Deleted')
+  const candidates = retained.length ? retained : accounts
+  if (candidates.length === 1) return candidates[0]
+  // Old local directories may contain an added seed copy after an email edit.
+  // The original account ID retains that legacy owner's identity.
+  const originalId = seedUsers.find(user => user.role === role)?.id
+  return candidates.find(user => user.id === originalId) || null
+}
+export const setRoleNameConfig = (config, users = []) => {
+  activeRoleNames = config?.roleNames || {}
+  activeAccountNames = Object.create(null)
+  const owners = new Set()
+  for (const user of users) {
+    if (!user.name) continue
+    activeAccountNames[user.id] = user.name
+    if (user.authId) activeAccountNames[user.authId] = user.name
+    // Generic access roles can belong to many people; they are not identities.
+    if (!ROLES[user.role] || ['ADMIN', 'NON_SALES', 'CUST'].includes(user.role)) continue
+    owners.add(user.role)
+  }
+  for (const role of owners) {
+    const account = ownerAccountFor(users, role)
+    if (account) activeAccountNames[role] = account.name
+  }
+}
 let permissionContext = null
 export const setPermissionContext = (profile, config) => { permissionContext = profile ? { profile, config } : null }
-const permissionSubject = role => permissionContext && role === permissionContext.profile.role ? permissionContext.profile : role
+const permissionSubject = role => {
+  if (!permissionContext) return role
+  const profile = permissionContext.profile
+  if (role === profile.role) return profile
+  if (Array.isArray(role) && Array.isArray(profile.roles)
+    && role.length === profile.roles.length && role.every(id => profile.roles.includes(id))) return profile
+  return role
+}
 const actionGrant = (role, action, config) => config || permissionContext
   ? policyCanPerform(permissionSubject(role), action, config || permissionContext.config) : null
 
@@ -123,7 +158,7 @@ export const solutionLabel = v => solutionList(v).join(', ')
 export const isApprover = (role, config) => actionGrant(role, 'approvals.decide', config) ?? (roleList(role).some(id => id === 'LJS' || id === 'AH' || id === 'TEAM_LEAD' || id === 'MANAGEMENT') || isAdminRole(role))
 export const displayRole = (role, config) => {
   if (!role) return ''
-  return config?.roleNames?.[role] || activeRoleNames[role] || ROLES[role]?.name || role
+  return activeAccountNames[role] || config?.roleNames?.[role] || activeRoleNames[role] || ROLES[role]?.name || role
 }
 export const displayRoleLabel = (role, config) => {
   if (!role) return ''

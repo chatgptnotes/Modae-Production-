@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { changeRemotePassword } from './passwordChange.js'
 
 // Null when the env vars are absent OR malformed — the Folders page then falls
 // back to the original mock (prompt-a-filename) behavior, so the prototype
@@ -58,6 +59,14 @@ function makeClient() {
 export const supabase = makeClient()
 
 export const supabaseAuth = supabase?.auth || null
+
+export async function changeSupabasePassword(accountId, currentPassword, password, confirmation, isCurrent) {
+  if (!supabase) throw new Error('The login provider is not configured.')
+  const { data, error } = await supabase.auth.getSession()
+  if (error) throw new Error('Your session expired. Sign in again.')
+  return changeRemotePassword({ authUrl: `${url}/auth/v1`, apiKey: anonKey, session: data?.session,
+    accountId, currentPassword, password, confirmation, isCurrent })
+}
 
 export const SUPABASE_AUTH_TIMEOUT_MS = 15000
 

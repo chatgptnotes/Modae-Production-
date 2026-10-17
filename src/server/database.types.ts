@@ -7,24 +7,26 @@ type JsonTable = {
   Relationships: []
 }
 
+type RevisionTable = JsonTable & { Row: JsonTable['Row'] & { rev: number } }
+
 // Kept alongside the server so Supabase clients use the active workspace schema.
 // Regenerate this from Supabase when the database schema changes.
 export type Database = {
   public: {
     Tables: {
       ai_secrets: JsonTable
-      approvals: JsonTable
-      leads: JsonTable
-      opportunities: JsonTable
+      approvals: RevisionTable
+      leads: RevisionTable
+      opportunities: RevisionTable
       records: JsonTable & { Row: JsonTable['Row'] & { entity: string; rev: number; updated_by: string | null } }
       user_files: JsonTable
-      proposals: JsonTable
-      spares_lines: JsonTable
-      clarifications: JsonTable
-      audit: JsonTable
-      settings: JsonTable
-      price_lists: JsonTable
-      price_list_versions: JsonTable
+      proposals: RevisionTable
+      spares_lines: RevisionTable
+      clarifications: RevisionTable
+      audit: RevisionTable
+      settings: RevisionTable
+      price_lists: RevisionTable
+      price_list_versions: RevisionTable
     }
     Views: Record<string, never>
     Functions: { purge_workspace_data: { Args: Record<string, never>; Returns: Json } }

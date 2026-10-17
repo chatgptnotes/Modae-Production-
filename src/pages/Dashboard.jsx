@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { displayOpportunityId } from '../seed.js'
-import { fmt, fmtLakh, monthKey, monthLabel, exportCSV, canViewForecast, forecastOwnerScope, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
+import { fmt, fmtRupeesFromK as fmtLakh, monthKey, monthLabel, exportCSV, canViewForecast, forecastOwnerScope, displayRole, isHiddenDashboardOpportunity } from '../utils.js'
 
 // The "Pivot" sheet, shaped like the real one: rows = customers, columns =
 // Expected Order Date months, values = Sum of Value (₹), with an Expected Order Date quarter
@@ -122,8 +122,8 @@ export default function Dashboard({ embedded = false }) {
             {customers.map(c => (
               <tr key={c}>
                 <td>{c}</td>
-                {months.map(k => <td key={k} className="num">{matrix[c][k] ? `₹ ${fmt(matrix[c][k])}` : ''}</td>)}
-                <td className="num"><b>₹ {fmt(rowTotal(c))}</b></td>
+                {months.map(k => <td key={k} className="num">{matrix[c][k] ? fmtLakh(matrix[c][k]) : ''}</td>)}
+                <td className="num"><b>{fmtLakh(rowTotal(c))}</b></td>
               </tr>
             ))}
             {!customers.length && (
@@ -136,8 +136,8 @@ export default function Dashboard({ embedded = false }) {
             <tfoot>
               <tr>
                 <td>Grand Total</td>
-                {months.map(k => <td key={k} className="num">₹ {fmt(colTotal(k))}</td>)}
-                <td className="num">₹ {fmt(grandTotal)}</td>
+                {months.map(k => <td key={k} className="num">{fmtLakh(colTotal(k))}</td>)}
+                <td className="num">{fmtLakh(grandTotal)}</td>
               </tr>
             </tfoot>
           )}
@@ -154,7 +154,7 @@ export default function Dashboard({ embedded = false }) {
                 <td className="oppid">{displayOpportunityId(o.id)}</td><td>{o.sellTo}</td><td>{o.oppName}</td>
                 <td>{displayRole(o.owner)}</td><td>{o.stage}</td><td>{o.prob || ''}</td>
                 <td>{monthLabel(monthKey(o.orderDate))}</td>
-                <td className="num">{fmt(o.valueK)}</td>
+                <td className="num">{fmtLakh(o.valueK)}</td>
               </tr>
             ))}
           </tbody>

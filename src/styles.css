@@ -994,7 +994,7 @@ button:disabled, .btn:disabled { opacity: .55; cursor: not-allowed; filter: none
 button:focus-visible, .btn:focus-visible {
   outline: 2px solid var(--primary-accent); outline-offset: 1px;
 }
-select, input[type=text], input[type=number], input[type=date], input[type=tel], textarea {
+select, input[type=text], input[type=number], input[type=date], input[type=tel], textarea, .lead-paste-modal input[type=email] {
   border: 1px solid var(--border-color); border-radius: 2px; padding: 3px 6px; font-size: 12.5px; font-family: inherit; background: var(--palette-4843938);
 }
 
@@ -3967,7 +3967,7 @@ input.needs-input, select.needs-input { background: var(--palette-c9fb3389); bor
      carry were silently beaten by the later base blocks, which sit further down
      the file at equal specificity. `.tablet-mode` still sets the larger box. */
   button, .btn { font-size: 14px; }
-  select, input[type=text], input[type=number], input[type=date], input[type=tel], textarea {
+  select, input[type=text], input[type=number], input[type=date], input[type=tel], textarea, .lead-paste-modal input[type=email] {
     min-height: 42px; font-size: 16px; /* 16px stops iOS focus-zoom */
   }
   /* Grid cells stay compact — tap a row and edit in the drawer instead */
@@ -7816,7 +7816,7 @@ button:active, .btn:active { transform: translateY(1px) scale(.985); }
 
 button.ghost, .btn.ghost { box-shadow: none; }
 
-select, input[type=text], input[type=number], input[type=date], input[type=tel], textarea {
+select, input[type=text], input[type=number], input[type=date], input[type=tel], textarea, .lead-paste-modal input[type=email] {
   min-height: 32px;
   border-radius: 6px;
   border-color: var(--border-color);
@@ -11795,7 +11795,7 @@ table.sheet td.oppid.Blue,
 table.sheet td.oppid.won,
 table.sheet td.oppid.lost {
   color: #1E293B;
-  background: transparent !important;
+  background: #FFFFFF !important;
 }
 
 table.sheet td.oppid a:hover {
@@ -19110,12 +19110,19 @@ html[data-workspace-theme="dark"], html[data-workspace-theme="dark"] body {
   .shell[data-theme="dark"] > .sidenav > .brand::after {
     background: var(--color-primary);
   }
-  /* Classification colours and identifier geometry stay identical across themes. */
-  .shell .tracker-page table.sheet td.oppid.Green { background: var(--register-id-green-bg) !important; color: var(--register-id-green) !important; }
-  .shell .tracker-page table.sheet td.oppid.Blue { background: var(--register-id-blue-bg) !important; color: var(--register-id-blue) !important; }
-  .shell .tracker-page table.sheet td.oppid.Amber { background: var(--register-id-amber-bg) !important; color: var(--register-id-amber) !important; }
-  .shell .tracker-page table.sheet td.oppid.Red { background: var(--register-id-red-bg) !important; color: var(--register-id-red) !important; }
-  .shell .tracker-page table.sheet td.oppid a { color: inherit !important; }
+  /* Opportunity IDs stay neutral and readable in every theme. Classification
+     colours belong to the customer/status column, not the identifier. */
+  .shell .tracker-page table.sheet td.oppid,
+  .shell .tracker-page table.sheet td.oppid.Green,
+  .shell .tracker-page table.sheet td.oppid.Blue,
+  .shell .tracker-page table.sheet td.oppid.Amber,
+  .shell .tracker-page table.sheet td.oppid.Red,
+  .shell .tracker-page table.sheet td.oppid.won,
+  .shell .tracker-page table.sheet td.oppid.lost {
+    background: #fff !important;
+    color: #1e293b !important;
+  }
+  .shell .tracker-page table.sheet td.oppid a { color: #1e293b !important; }
   .shell[data-theme="dark"] .tracker-page table.sheet td.need input[type="date"]:not([aria-invalid="true"]) {
     outline: none;
     border-color: var(--border-default) !important;
@@ -19435,4 +19442,47 @@ html[data-workspace-theme="dark"], html[data-workspace-theme="dark"] body {
   .documents-page .documents-heading h1 { font-size: 22px; }
   .documents-folders, .documents-preserved { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .documents-content--grid .document-folder { padding: 12px; }
+}
+
+/* Stage 1 classification and full INR values. */
+.customer-class-Yellow, .pill.Yellow, .status-pill--yellow, table.sheet td.cstat.Yellow {
+  background: var(--status-warning-soft); color: var(--status-warning);
+}
+.customer-class-Unclassified, .pill.Unclassified, .status-pill--unclassified, table.sheet td.cstat.Unclassified {
+  background: var(--surface-soft, #f1f2f3); color: var(--text-muted, #666);
+}
+.reference-kpi > div { min-width: 0; }
+.reference-kpi strong { font-size: clamp(1.1rem, 2vw, 2rem); overflow-wrap: anywhere; }
+.normal-funnel-value { font-variant-numeric: tabular-nums; }
+
+/* Wide New Lead form: paired contact fields, full-width enquiry and files. */
+.modal.lead-paste-modal { width: min(980px, calc(100vw - 48px)); max-width: none; max-height: 90dvh; }
+.lead-paste-contact-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; margin-bottom: 20px; }
+.lead-paste-contact-grid > label { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.lead-paste-modal input, .lead-paste-modal select, .lead-paste-modal textarea { width: 100%; min-width: 0; box-sizing: border-box; }
+.lead-paste-modal .lead-paste-fields > label { display: block; margin-bottom: 8px; }
+.lead-paste-modal .lead-paste-actions { position: sticky; bottom: 0; padding-top: 16px; background: var(--surface, #fff); }
+@media (max-width: 640px) {
+  .modal.lead-paste-modal { width: calc(100vw - 24px); max-height: 92dvh; }
+  .lead-paste-contact-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+}
+
+/* Registration keeps editable identity and enquiry fields readable at every width. */
+.lead-registration-page .afield { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lead-registration-page .registration-fields { margin-top: 12px; }
+.lead-registration-page .registration-fields > label { min-width: 0; }
+.lead-registration-page .afield input,
+.lead-registration-page .afield select,
+.lead-registration-page .afield textarea {
+  width: 100%; min-width: 0; box-sizing: border-box; padding: 9px 11px;
+  border: 1px solid var(--line, #d7dce4); border-radius: 7px;
+  background: var(--surface, #fff); color: var(--text, #20252c); font: inherit;
+}
+.lead-registration-page .afield textarea { resize: vertical; min-height: 72px; }
+.lead-registration-page .form-card { min-width: 0; max-width: 100%; }
+@media (max-width: 600px) {
+  .lead-registration-page .registration-fields { grid-template-columns: minmax(0, 1fr) !important; }
+  .lead-registration-page .afield input,
+  .lead-registration-page .afield select,
+  .lead-registration-page .afield textarea { font-size: 16px; }
 }

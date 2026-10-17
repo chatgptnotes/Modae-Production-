@@ -1,3 +1,63 @@
+## 2026-10-17 — Compact Admin integrations
+
+- Replace provider tiles with one dropdown showing connection status. Group API
+  key and model controls into a compact layout that stacks on phones. Keep
+  credential storage, provider switching and connection actions unchanged.
+
+## 2026-10-17 — Repair local Admin login setup
+
+- Repair legacy local Admin setup that reused an inactive/deleted account and
+  blocked login. Apply recovery once with a versioned receipt; retain other users,
+  business records, active-account passwords and subsequent lifecycle changes.
+- Connected account lifecycle and credentials are unchanged.
+
+## 2026-10-17 — Admin permissions, integrations and complete backups
+
+- Add account-specific Inherit/Allow/Deny controls with revision checks and audit.
+  Keep administrator and submit-only boundaries. Resolve exact authenticated
+  identities before email fallbacks and reject ambiguous roster matches.
+- Add encrypted server-managed AI connections, provider model catalogues, text and
+  document selection, capability probes and explicit connection disable controls.
+- Add ZIP backups with readable Excel, exact restoration data and uploaded bytes.
+  Exclude credentials; sign shared archives and restore only into an empty workspace.
+  Preserve current accounts, audit evidence and opportunity numbering reservations.
+- Restore connected records and bytes in one revision-checked SQL transaction.
+  Journal browser restorations and recover before hydration after interruption.
+  Persist original local document bytes and complete local business snapshots.
+- Add service-only permissions, backup and AI integration migrations, which must be
+  applied explicitly before enabling connected features. No shared database changes
+  or deployment are performed by this implementation.
+
+## 2026-10-16 — Load workspace data when opened
+
+- Fetch account identity separately from business data. Dashboard reads compact
+  opportunity summaries and server-calculated blocker/action signals; register
+  and opportunity detail views load when opened, including row editing/drawers.
+- Coalesce repeated view requests and reuse a session-local 15-second cache.
+  Refresh bypasses caching; writes invalidate it. No idle polling is added.
+- Carry actual row revisions with permission-projected view responses. Keep
+  summaries out of writable state, merge partial detail collections by opportunity,
+  retain draft baselines, and use revision-aware saves for partially loaded data.
+- Defer price lists until a workflow page needs them and remove the duplicate
+  whole-workspace refresh on opportunity entry. No database migration is required.
+
+## 2026-10-16 — Lead intake and opportunity registration
+
+- Add submit-only Non-sales access with an authenticated intake endpoint and
+  restricted workspace projection; keep customer details optional and preserve
+  submitter attribution. Selected salesperson takes priority over routing rules.
+- Widen New Lead on desktop, simplify Lead Decisions, and carry qualified lead
+  details and attachments into explicit opportunity registration.
+- Persist connected conversion atomically with revision/generation checks and
+  retry deduplication. Add the service-only conversion migration; it has not been
+  applied to staging or production as part of these local changes.
+- Use manual Red/Yellow/Green classification, with Unclassified for new records.
+  Preserve legacy Blue/Amber provenance and unrelated commercial controls.
+  KYC is visible and optional; verified status still requires evidence.
+- Display and edit actual INR in dashboard/register/targets without changing
+  internal K-unit storage; remove classification colours from opportunity IDs
+  and exclude FX placeholder choices.
+
 ## 2026-10-14 — Phone header controls
 
 ## 2026-10-14 — Bundled Candara family
@@ -772,3 +832,35 @@
   owner scope, advanced column conditions, and independent search/sorting.
 - Keep filters when using stage shortcuts, expose active fields as removable
   chips, and simplify More to export, admin import, and phone table access.
+## 2026-10-17 — Mod-AE user directory
+
+- Add the separate local WinTrack Admin account through a one-time bootstrap.
+  Restrict Preview as user to its stable identity in both UI and the store;
+  reject other administrators, pending/inactive targets and connected mode.
+  Preserve subsequent credential edits and deletion without reseeding.
+- Add self-service Change password below Appearance for every account category.
+  Verify the current password, require matching 8+ character new entries, keep
+  local changes scoped to the signed-in account, and use isolated verification
+  plus the captured app session for connected Auth updates. Keep passwords out
+  of shared profiles, preferences and audit details; preserve unsaved workspace data.
+- Limit new local workspaces to the twelve requested Mod-AE accounts, with LJ
+  retaining Sales and Management access. Retire existing legacy/duplicate local
+  accounts once, preserve historical attribution and passwords for retained
+  profiles, sign out retired sessions, and stop recreating users after edits.
+- Restrict new owner selections to owners with an active account; retain current
+  historical owners when editing their existing records. Shared rosters remain
+  server-owned and are not modified by browser migration.
+- Show account Actions in a floating dropdown instead of stretching table rows.
+  Preserve permission checks, add keyboard navigation and outside dismissal,
+  and keep the menu within the viewport on small screens and bottom rows.
+- Resolve linked owner labels from the current account roster across workspace
+  screens and new exports; account edits override stale configuration labels.
+  Remove the separate Owner names editor; Accounts is the single name editor.
+  Retain historical snapshots and existing fallback labels for unlinked owners.
+- Refresh the signed-in account email together with its authoritative name.
+- Update local directory names and emails to the supplied Mod-AE accounts while
+  preserving stable owner IDs and historical record ownership.
+- Add the six Non-sales submit-only users and Lokesh Bhardwaj with Management
+  access; LJ Swaminathan retains both Sales and Management access.
+- Keep role codes internal for routing and permissions while showing full names
+  in the user-facing owner and approver displays.
