@@ -18913,6 +18913,26 @@ html[data-workspace-theme="dark"], html[data-workspace-theme="dark"] body {
   background: var(--surface-canvas);
   color: var(--text-primary);
 }
+
+/* The lead review workspace has its own palette tokens. Keep them aligned
+   with the application theme so its nested panels do not retain white paper
+   surfaces when the surrounding shell switches to dark mode. */
+:is(.shell[data-theme="dark"], html[data-workspace-theme="dark"]) .lead-workspace {
+  --ws-bg: var(--surface-canvas);
+  --ws-surface: var(--surface-default);
+  --ws-surface-2: var(--surface-raised);
+  --ws-border: var(--border-default);
+  --ws-border-strong: var(--border-control);
+  --ws-text: var(--text-primary);
+  --ws-text-2: var(--text-secondary);
+  --ws-text-3: var(--text-tertiary);
+  --ws-blue: #79A8FF;
+  --ws-blue-soft: #202C3A;
+  --ws-blue-line: #385271;
+  --ws-violet: #B8A6FF;
+  --ws-violet-soft: #302A42;
+  --ws-violet-line: #51466F;
+}
 :is(.shell[data-theme="dark"], html[data-workspace-theme="dark"] [data-modae-portal-root]) :is(.app-bg, .main-col, .main-scroll, .page, .forms-bg, .workspace-page,
   .dashboard-page, .tracker-page, .mailbox-page, .admin-page, .users-page,
   .customers-page, .folders-page, .price-lists-page, .approvals-page,
@@ -19462,7 +19482,7 @@ html[data-workspace-theme="dark"], html[data-workspace-theme="dark"] body {
 .lead-paste-contact-grid > label { display: flex; flex-direction: column; gap: 8px; margin: 0; }
 .lead-paste-modal input, .lead-paste-modal select, .lead-paste-modal textarea { width: 100%; min-width: 0; box-sizing: border-box; }
 .lead-paste-modal .lead-paste-fields > label { display: block; margin-bottom: 8px; }
-.lead-paste-modal .lead-paste-actions { position: sticky; bottom: 0; padding-top: 16px; background: var(--surface, #fff); }
+.lead-paste-modal .lead-paste-actions { position: sticky; bottom: 0; padding-top: 16px; border-top: 0; background: transparent; }
 @media (max-width: 640px) {
   .modal.lead-paste-modal { width: calc(100vw - 24px); max-height: 92dvh; }
   .lead-paste-contact-grid { grid-template-columns: minmax(0, 1fr); gap: 14px; }

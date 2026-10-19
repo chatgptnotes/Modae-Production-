@@ -24,7 +24,7 @@
   .lead-paste-modal .attach-meta { font-size:12px; white-space:normal; }
   .lead-paste-modal .attach-row button { flex-shrink:0; width:44px; min-height:44px; }
   .lead-paste-modal :is(.warnbox,.errbox) { margin-top:16px; font-size:13px; line-height:1.5; overflow-wrap:anywhere; }
-  .lead-paste-modal .lead-paste-actions { position:static; flex-shrink:0; display:flex; flex-wrap:wrap; gap:8px; margin:0; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); border-top:1px solid var(--border-default); background:var(--surface-default); }
+  .lead-paste-modal .lead-paste-actions { position:static; flex-shrink:0; display:flex; flex-wrap:wrap; gap:8px; margin:0; padding:12px 16px calc(12px + env(safe-area-inset-bottom)); border-top:0; background:transparent; }
   .lead-paste-actions > button { min-height:44px; padding:10px 14px; font-size:15px; }
   .lead-paste-actions > .primary { order:-1; width:100%; justify-content:center; background:var(--action-primary); color:var(--text-on-accent); }
   .lead-paste-modal :is(button,input,select,textarea):focus-visible { outline:2px solid var(--focus-ring); outline-offset:2px; }
