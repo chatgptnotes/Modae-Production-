@@ -1,4 +1,4 @@
-import { fmtRupeesFromK, displayRole } from '../../utils.js'
+import { fmtCroreFromK, fmtRupeesFromK, displayRole } from '../../utils.js'
 import NormalFunnel, { FunnelViewSwitch, useFunnelView } from './FunnelView.jsx'
 import QuarterPeriodControl from './QuarterPeriodControl.jsx'
  import React, { useMemo, useState } from 'react'
@@ -24,7 +24,7 @@ import { DashboardDrilldownProvider, PipelineCounts } from './DashboardDrilldown
 import { drillClick, useDashboardDrilldown } from './drillInteraction.js'
 export { TargetManagerDialog }
 
-const money = value => fmtRupeesFromK(Number(value) || 0)
+const money = value => fmtCroreFromK(Number(value) || 0)
 const scopeLabel = scope => scope === 'my' ? 'My' : 'Global'
 
 function Card({ label, value, hint, icon, tone, explanation, selection }) {
@@ -115,12 +115,12 @@ function ActionQueue({ model, nav, scope }) {
   </tbody></table></div></Section>
 }
 
-export function Funnel({ model, showMoney, scope, title, onStageClick }) {
+export function Funnel({ model, showMoney, scope, title, onStageClick, formatMoney = fmtRupeesFromK }) {
   const open = useDashboardDrilldown()
   const [view, setView] = useFunnelView()
   return <Section title={title || `${scopeLabel(scope)} Sales Pipeline Funnel`} accent="blue" className="reference-funnel"
     explanation={view === 'normal' ? 'Each opportunity appears at its current saved stage. Funnel widths represent stage order, not counts. Probability splits and totals reflect saved opportunities.' : "Each opportunity appears at its current saved stage. Curved stage widths vary with opportunity count within a 30%–80% display range for readability; they are not directly proportional to counts. Probability splits and totals reflect the current saved opportunities. Empty stages show zero counts and values."}
-    action={<><FunnelViewSwitch view={view} onChange={setView} /><span className="reference-funnel-metric">Opportunities{showMoney ? ' (and Value INR)' : ''}</span><span className="reference-legend"><b className="high" />High <b className="medium" />Medium <b className="low" />Low</span></>}><p className="reference-analysis-subtitle">{view === 'normal' ? 'Current stage · Widths show stage order, not counts · Splits show probability · Grey = empty' : 'Current stage · Widths adjusted for readability · Splits show probability · Grey = empty'}</p><NormalFunnel view={view} rows={model.funnel} animate showMoney={showMoney} formatMoney={money} onStageClick={onStageClick || (open && (row => open({ kind: 'funnel', stageKey: row.key })))} onSegmentClick={open && ((row, probability) => open({ kind: 'funnel', stageKey: row.key, probability }))} /></Section>
+    action={<><FunnelViewSwitch view={view} onChange={setView} /><span className="reference-funnel-metric">Opportunities{showMoney ? ' (and Value INR)' : ''}</span><span className="reference-legend"><b className="high" />High <b className="medium" />Medium <b className="low" />Low</span></>}><p className="reference-analysis-subtitle">{view === 'normal' ? 'Current stage · Widths show stage order, not counts · Splits show probability · Grey = empty' : 'Current stage · Widths adjusted for readability · Splits show probability · Grey = empty'}</p><NormalFunnel view={view} rows={model.funnel} animate showMoney={showMoney} formatMoney={formatMoney} onStageClick={onStageClick || (open && (row => open({ kind: 'funnel', stageKey: row.key })))} onSegmentClick={open && ((row, probability) => open({ kind: 'funnel', stageKey: row.key, probability }))} /></Section>
 }
 
 function WinLoss({ model, scope, nav, showMoney }) {
@@ -157,7 +157,7 @@ export default function WorkspaceDashboard({ store, nav }) {
     <Performance model={model} showMoney={showMoney} scope={scope} nav={nav} period={period} setPeriod={setPeriod} store={store} />
     <TopOpportunities model={model} nav={nav} showMoney={showMoney} scope={scope} topPeriod={topPeriod} setTopPeriod={setTopPeriod} fy={fy} />
     <ActionQueue model={model} nav={nav} scope={scope} />
-    <Funnel model={model} showMoney={showMoney} scope={scope} />
+    <Funnel model={model} showMoney={showMoney} scope={scope} formatMoney={money} />
     <WinLoss model={model} scope={scope} nav={nav} showMoney={showMoney} />
   </main>)
 }

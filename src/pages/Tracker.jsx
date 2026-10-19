@@ -811,7 +811,7 @@ export default function Tracker({ initialOwnerFilter, onCreateOpportunity, after
                 </td>
                 {/* Value and COGS are open tracker inputs for every role. GM and
                     GM% remain derived from them and are therefore read only. */}
-                <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><span className="tracker-cell-label">{COLS[14].label}</span><EditableOpportunityCell type="number" min="0" step="any" value={o.valueK == null ? '' : o.valueK * 1000} label={COLS.find(c => c.key === 'valueK')?.label} onChange={upd(o.id, 'valueK')} disabled={!canEditRow(o)} aria-label={COLS[14].label} placeholder="-" /></td>
+                <td onClick={selectCell(o, COLS[14])} className={`num ${isSel(o, COLS[14]) ? 'cell-sel' : ''}`}><span className="tracker-cell-label">{COLS[14].label}</span><EditableOpportunityCell type="number" min="0" step="any" value={o.valueK == null ? '' : o.valueK * 1000} displayValue={o.valueK == null ? '' : fmt(o.valueK * 1000)} label={COLS.find(c => c.key === 'valueK')?.label} onChange={upd(o.id, 'valueK')} disabled={!canEditRow(o)} aria-label={COLS[14].label} placeholder="-" /></td>
                 <td onClick={selectCell(o, COLS[15])} className={`num ${isSel(o, COLS[15]) ? 'cell-sel' : ''}`}><EditableOpportunityCell type="number" min="0" step="any" value={o.cogsK == null ? '' : o.cogsK * 1000} label={COLS.find(c => c.key === 'cogsK')?.label} onChange={upd(o.id, 'cogsK')} disabled={!canEditRow(o)} placeholder="-" /></td>
                 <td onClick={selectCell(o, COLS[16])} className={`num ${isSel(o, COLS[16]) ? 'cell-sel' : ''}`}>{fmt(gmK(o) * 1000, 2)}</td>
                 {gmPct(o)

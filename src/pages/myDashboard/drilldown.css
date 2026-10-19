@@ -23,6 +23,28 @@ html[data-workspace-theme] [data-modae-portal-root] .dashboard-drilldown button.
 .dashboard-drilldown-table th, .dashboard-drilldown-table td { text-align: left; padding: 12px 10px; border-bottom: 1px solid var(--border-subtle); vertical-align: top; }
 .dashboard-drilldown-table th { color: var(--text-secondary); font-weight: 600; }
 .dashboard-drilldown-table td { overflow-wrap: anywhere; }
+.dashboard-drilldown-records { width: 100%; min-width: 0; table-layout: fixed; }
+.dashboard-drilldown-records :is(th, td) { min-width: 0; word-break: normal; }
+.dashboard-drilldown-records.has-value :is(th, td):nth-child(1) { width: 12%; }
+.dashboard-drilldown-records.has-value :is(th, td):nth-child(2) { width: 19%; }
+.dashboard-drilldown-records.has-value :is(th, td):nth-child(3) { width: 12%; }
+.dashboard-drilldown-records.has-value :is(th, td):nth-child(4) { width: 9%; }
+.dashboard-drilldown-records.has-value :is(th, td):nth-child(5) { width: 11%; }
+.dashboard-drilldown-records.has-value :is(th, td):nth-child(6) { width: 25%; }
+.dashboard-drilldown-records.has-value :is(th, td):nth-child(7) { width: 12%; }
+.dashboard-drilldown-records:not(.has-value) :is(th, td):nth-child(1) { width: 12%; }
+.dashboard-drilldown-records:not(.has-value) :is(th, td):nth-child(2) { width: 20%; }
+.dashboard-drilldown-records:not(.has-value) :is(th, td):nth-child(3) { width: 13%; }
+.dashboard-drilldown-records:not(.has-value) :is(th, td):nth-child(4) { width: 10%; }
+.dashboard-drilldown-records:not(.has-value) :is(th, td):nth-child(5) { width: 33%; }
+.dashboard-drilldown-records:not(.has-value) :is(th, td):nth-child(6) { width: 12%; }
+.dashboard-drilldown-records th { overflow-wrap: normal; white-space: nowrap; }
+.dashboard-drilldown-records td:nth-last-child(2) { overflow-wrap: anywhere; }
+.dashboard-drilldown-records td:last-child { overflow-wrap: normal; }
+.dashboard-drilldown-records td:first-child,
+.dashboard-drilldown-records td:nth-child(3),
+.dashboard-drilldown-records td[data-label="Value"],
+.dashboard-drilldown-records td[data-label="Contribution"] { overflow-wrap: normal; }
 .dashboard-drilldown-table small { display: block; color: var(--text-secondary); margin-top: 4px; }
 .dashboard-drilldown-empty { color: var(--text-secondary); padding: 24px 0; }
 .winloss-counts .winloss-outcome-item { min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }

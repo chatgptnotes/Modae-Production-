@@ -345,6 +345,12 @@ export function fmtRupeesFromK(valueK) {
   return `₹${fmt(Number(valueK) * 1000)}`
 }
 
+// Dashboard amounts use crore units for a consistent, compact readout.
+export function fmtCroreFromK(valueK) {
+  if (valueK === '' || valueK == null || !Number.isFinite(Number(valueK))) return ''
+  return `₹${(Number(valueK) / 10000).toFixed(2)} Cr`
+}
+
 export function rupeesToK(value) {
   if (value === '' || value == null || isNaN(value)) return 0
   return Number(value) / 1000

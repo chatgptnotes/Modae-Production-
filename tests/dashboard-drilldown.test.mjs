@@ -106,7 +106,7 @@ test('gap explains estimates, missing confirmation, and the exact calculation', 
   const model = dashboardModel(store(), { now })
   model.perf = { ...model.perf, targetConfigured: true, targetNeedsConfirmation: false, annual: 100 }
   model.wonPerformance = { valueK: 40, estimatedCount: 0 }
-  assert.match(detail(model, { kind: 'gap' }).description, /₹1,00,000 − Actual ₹40,000 = ₹60,000/)
+  assert.match(detail(model, { kind: 'gap' }).description, /₹0\.01 Cr − Actual ₹0\.00 Cr = ₹0\.01 Cr/)
   model.wonPerformance.estimatedCount = 1
   assert.match(detail(model, { kind: 'gap' }).description, /verification/)
   model.perf.targetConfigured = false

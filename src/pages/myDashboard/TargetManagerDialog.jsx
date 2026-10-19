@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { fieldValues } from '../../workbookGovernance.js'
-import { displayRole } from '../../utils.js'
+import { displayRole, fmtCroreFromK } from '../../utils.js'
 import { targetPlan } from '../../orderBookings.js'
 
 import { targetRupees as toRupees, targetThousands as toK, targetTotal, targetAmountsEqual, allocateTarget as allocate } from './targetAllocation.js'
@@ -120,8 +120,8 @@ function TargetManagerDialog({ store, onClose }) {
       </header>
       <div className="target-manager-summary" aria-live="polite">
         <div className="target-manager-company-edit"><label htmlFor="company-target-draft">Company target · INR</label><div><input id="company-target-draft" type="number" min="0" step="0.01" value={companyTargetDraft} onChange={event => { setCompanyTargetDraft(event.target.value); setGlobalError('') }} /><button type="button" onClick={applyCompanyTarget} disabled={!owners.length}>Apply</button></div></div>
-        <div><span>Confirmed company target</span><strong>₹{toRupees(confirmedPlan.annual).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></div>
-        <div><span>Draft total</span><strong>₹{toRupees(draftAnnual).toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></div>
+        <div><span>Confirmed company target</span><strong>{fmtCroreFromK(confirmedPlan.annual)}</strong></div>
+        <div><span>Draft total</span><strong>{fmtCroreFromK(draftAnnual)}</strong></div>
         <div><span>Targets confirmed</span><strong>{confirmedOwners} of {owners.length} owners</strong></div>
       </div>
       {globalError && <p className="target-manager-global-message" role="status">{globalError}</p>}

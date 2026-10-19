@@ -1,3 +1,10 @@
+## 2026-10-19 — Compact dashboard amounts
+
+- Show My and Dashboard amounts in crore units with two decimal places across
+  desktop, phone, funnels, and drilldowns.
+- Keep full INR values in the Opportunities table and add Indian comma grouping
+  to the read-only value display.
+
 ## 2026-10-17 — Ignore missing subjects in duplicate detection
 
 - Prevent unrelated leads with “(no subject)” from producing duplicate warnings,

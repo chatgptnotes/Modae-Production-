@@ -8,7 +8,7 @@ import { useStore } from '../store.jsx'
 import { ROLES, displayOpportunityId } from '../seed.js'
 
 import { readiness, isBlocked, nextActionWith } from '../gates.js'
-import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtRupeesFromK as fmtLakh, ddMmmYY, ddMMyyyy, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
+import { ageDays, isApprover, isAdminRole, isSalesOwner, canViewCommercial, canPriceProposal, fmtCroreFromK as fmtLakh, ddMmmYY, ddMMyyyy, displayRole, displayRoleLabel, isHiddenDashboardOpportunity } from '../utils.js'
 import { analyticsSnapshot, counts, salesPerformance, winLossAnalysis, FY_QUARTERS, FY_MONTHS, funnelRows } from '../kpi.js'
 import { Icon } from '../icons.jsx'
 import ForecastDashboard from './Dashboard.jsx'
