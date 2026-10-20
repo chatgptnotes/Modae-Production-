@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { leadFieldValue, leadIdentity, splitBuSegment, normalizeLeadLabel, inferEucFromText, labeledEucLocationFromText } from '../src/leadFieldMapping.js'
+import { leadFieldValue, leadIdentity, splitBuSegment, normalizeLeadLabel, inferEucFromText, labeledEucLocationFromText, mergeLocationDecisionDraft } from '../src/leadFieldMapping.js'
 import { extractLeadIdentityFacts, mergeLeadResults } from '../src/leadExtraction.js'
 import { mergeDeterministicIntoAi } from '../src/docScan.js'
 import { hardenLeadExtraction } from '../src/leadRules.js'
@@ -14,12 +14,43 @@ const fields = [
   { k: 'BU / Segment', v: 'Aero / Thermal', state: 'accepted' },
 ]
 
+test('a re-scan fills blank customer and EUC locations without replacing draft edits', () => {
+  const current = { sellToCustomerLocation: '', eucLocation: '' }
+  const baseline = { ...current }
+  assert.deepEqual(mergeLocationDecisionDraft(current, baseline, {
+    sellToCustomerLocation: 'Kochi, Kerala, India',
+    eucLocation: 'Kochi, Kerala, India',
+  }, new Set()), {
+    sellToCustomerLocation: 'Kochi, Kerala, India',
+    eucLocation: 'Kochi, Kerala, India',
+  })
+  assert.deepEqual(mergeLocationDecisionDraft({ ...current, sellToCustomerLocation: 'Manual address' }, baseline, {
+    sellToCustomerLocation: 'Kochi, Kerala, India', eucLocation: 'Kochi, Kerala, India',
+  }, new Set()), {
+    sellToCustomerLocation: 'Manual address', eucLocation: 'Kochi, Kerala, India',
+  })
+  assert.deepEqual(mergeLocationDecisionDraft(current, baseline, {
+    sellToCustomerLocation: 'Kochi, Kerala, India', eucLocation: 'Kochi, Kerala, India',
+  }, new Set(['eucLocation'])), {
+    sellToCustomerLocation: 'Kochi, Kerala, India', eucLocation: '',
+  })
+})
+
 test('lead aliases map customer, site and contact values to the right fields', () => {
   assert.equal(leadFieldValue(fields, 'sellTo'), 'KSB Limited')
   assert.equal(leadFieldValue(fields, 'eucName'), 'KSB Pune Plant')
   assert.equal(leadFieldValue(fields, 'eucLocation'), 'Pune, Maharashtra')
   assert.equal(leadFieldValue(fields, 'contactPerson'), 'Neha Kulkarni')
   assert.equal(leadFieldValue(fields, 'contactPhone'), '+91 90000 12345')
+})
+
+test('lead review aliases expose extracted customer address and contact email', () => {
+  const facts = [
+    { k: 'Sell-to customer location', v: 'Kochi, Kerala, India' },
+    { k: 'Contact email', v: 'meera.iyer@example.com' },
+  ]
+  assert.equal(leadFieldValue(facts, 'customerLocation'), 'Kochi, Kerala, India')
+  assert.equal(leadFieldValue(facts, 'contactEmail'), 'meera.iyer@example.com')
 })
 
 test('combined BU and Segment extraction is split into separate values', () => {
@@ -63,6 +94,14 @@ test('prose installation details fill EUC name and location when labels are abse
   })
   assert.equal(identity.eucName, 'Demo Thermal Plant')
   assert.equal(identity.eucLocation, 'Korba, Chhattisgarh')
+})
+
+test('PDF header address and buyer email become structured customer facts', () => {
+  const text = `BLUE COAST FOODS PVT. LTD. | Kochi, Kerala, India RFQ | 1 / 2\nBuyer / Requestor\nMeera Iyer | Procurement Manager\nmeera.iyer@example.com | +91 98450 12367\nBlue Coast Foods is upgrading the liquid transfer system at our Kochi processing facility.`
+  const facts = extractLeadIdentityFacts(text)
+  assert.ok(facts.fields.some(field => field.k === 'Sell-to customer location' && field.v === 'Kochi, Kerala, India'))
+  assert.ok(facts.fields.some(field => field.k === 'Contact email' && field.v === 'meera.iyer@example.com'))
+  assert.ok(facts.fields.some(field => field.k === 'EUC Location' && field.v === 'Kochi, Kerala, India'))
 })
 
 test('explicit Site Location text fills EUC Location when AI fields omit it', () => {

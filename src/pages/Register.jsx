@@ -223,7 +223,7 @@ export default function Register() {
     const opp = {
       id, ...leadRegistrationContext(lead),
       source: details.source, notes: details.notes,
-      sl: Math.max(0, ...store.opportunities.map(o => o.sl || 0)) + 1,
+      sl: Math.max(0, ...(store.workspaceNavigation?.opportunities || store.opportunities).map(o => o.sl || 0)) + 1,
       sellTo, category, location, sellToCustomerLocation,
       customerStatus: leadCustomerStatus,
       leadVerification,

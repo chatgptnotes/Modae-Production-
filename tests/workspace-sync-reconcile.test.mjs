@@ -1,21 +1,27 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
+import { reconcileWorkspaceCollection } from '../src/workspaceViews.js'
 import { DraftRegistry, SYNC_ENTITIES } from '../src/workspaceDrafts.js'
 import { recordFrom, replaceRecord, reviewedRecord } from '../src/workspaceReconcile.js'
 const source=fs.readFileSync('src/store.jsx','utf8')
-test('actual lifecycle applyServer preserves dirty row while installing clean records',()=>{
-  const drafts=new DraftRegistry(),state={leads:[{id:'L',subject:'my text'},{id:'C',subject:'old'}],config:{}}
+for (const enabled of [true, false]) test(`actual lifecycle applyServer preserves dirty row and baseline while installing clean records (sync=${enabled})`,()=>{
+  const drafts=new DraftRegistry(),state={leads:[{id:'L',subject:'my text'},{id:'C',subject:'old'}],approvals:[{id:'APP',status:'Pending',note:'my edit'}],config:{}}
   drafts.edit('leads','L',{data:{id:'L',subject:'base'},rev:1},true)
-  const stateRef={current:state},lastSavedRef={current:{leads:[{id:'L',subject:'base'},{id:'C',subject:'old'}]}}
+  const stateRef={current:state},lastSavedRef={current:{leads:[{id:'L',subject:'base'},{id:'C',subject:'old'}],approvals:[{id:'APP',status:'Pending',note:'old'}]}}
   let installed
-  const dependencies={authInvalidRef:{current:false},registerDirtyRecords:()=>{},setSyncDiagnostics:()=>{},stateRef,lastSavedRef,bootRef:{current:{}},syncedOf:v=>v,workspaceSyncState:{enabled:true},SYNC_ENTITIES,workspaceDrafts:drafts,recordFrom,replaceRecord,approvalViewRevisionsRef:{current:{}},reconcileApprovedSubmissions:v=>v,migrate:v=>v,applyAuthoritativeProfile:v=>v,setState:v=>{installed=v}}
+  const dependencies={reconcileWorkspaceCollection,authInvalidRef:{current:false},registerDirtyRecords:()=>{},setSyncDiagnostics:()=>{},stateRef,lastSavedRef,bootRef:{current:{}},syncedOf:v=>v,workspaceSyncState:{enabled},SYNC_ENTITIES,workspaceDrafts:drafts,recordFrom,replaceRecord,approvalViewRevisionsRef:{current:{APP:7}},reconcileApprovedSubmissions:v=>v,migrate:v=>v,applyAuthoritativeProfile:v=>v,setState:v=>{installed=v}}
   const body=source.slice(source.indexOf('  const applyServer ='),source.indexOf('  const loadApprovedPriceLists ='))
   const apply=new Function(...Object.keys(dependencies),`${body};return applyServer`)(...Object.values(dependencies))
-  apply({leads:[{id:'L',subject:'remote'},{id:'C',subject:'new'}]})
+  apply({leads:[{id:'L',subject:'remote'},{id:'C',subject:'new'}],approvals:[{id:'APP',status:'Approved',note:'remote'}],_approvalRevisions:{APP:9}})
   assert.equal(installed.leads.find(r=>r.id==='L').subject,'my text')
   assert.equal(installed.leads.find(r=>r.id==='C').subject,'new')
   assert.equal(drafts.get('leads','L').base.rev,1)
+  assert.equal(lastSavedRef.current.leads.find(row=>row.id==='L').subject,'base')
+  assert.equal(lastSavedRef.current.leads.find(row=>row.id==='C').subject,'new')
+  assert.equal(dependencies.approvalViewRevisionsRef.current.APP,7)
+  assert.equal(installed.approvals[0].note,'my edit')
+  assert.equal(lastSavedRef.current.approvals[0].note,'old')
 })
 test('review only applies explicitly selected local differences to latest record',()=>{
   const merged=reviewedRecord({subject:'base',status:'New'},{subject:'mine',status:'New'},{subject:'remote',status:'Qualified'},{subject:'mine'})

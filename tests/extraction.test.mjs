@@ -4,7 +4,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-import { parseTender } from '../src/tenderParse.js'
+import { parseTender, extractLeadTableLineItems } from '../src/tenderParse.js'
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const read = file => fs.readFileSync(path.join(root, file), 'utf8')
@@ -37,7 +37,8 @@ test('the extracted sender becomes the proposal recipient', () => {
 // that was not a PDF, so the salesperson retyped every field by hand.
 test('saved emails are accepted alongside tender PDFs', () => {
   assert.match(intake, /name\.endsWith\('\.eml'\)/)
-  assert.match(intake, /accept="\.pdf,application\/pdf,\.eml,\.msg,message\/rfc822,\.png,\.jpg,\.jpeg,\.webp,image\/\*"/)
+  assert.match(intake, /accept="\.pdf,application\/pdf,\.eml,message\/rfc822,\.png,\.jpg,\.jpeg,\.webp,\.heic,\.heif,image\/\*"/)
+  assert.doesNotMatch(intake, /name\.endsWith\('\.msg'\)/, 'unsupported Outlook .msg files must not be mistaken for plain text email')
   assert.match(intake, /isEmail\s*\n?\s*\? \{ fullText: await file\.text\(\), struct: \[\] \}/,
     'an email is already text — it must not go through pdfjs')
   assert.doesNotMatch(intake, /setAiError\('Please upload a PDF document'\)/)
@@ -73,6 +74,21 @@ test('the regex parser still reads a reference, a date and a buyer', () => {
   const parsed = parseTender(sample, [])
   assert.ok(parsed.header.sectionRef, 'reference must be read')
   assert.ok(!parsed.missing.includes('RFQ number'))
+})
+
+test('a flattened enquiry schedule returns the actual products and quantities', () => {
+  const text = [
+    'ITEM / DESCRIPTION QTY UNIT APPLICATION / NOTES',
+    '01 Stainless steel centrifugal pump 8 ea Food-grade liquid transfer',
+    '02 Vibration monitoring sensor 6 ea For industrial pump assets',
+    '03 Mechanical seal, compatible set 8 set For quoted pump model',
+  ].join('\n')
+  assert.deepEqual(extractLeadTableLineItems(text).map(({ description, qty, uom }) => ({ description, qty, uom })), [
+    { description: 'Stainless steel centrifugal pump for Food-grade liquid transfer', qty: 8, uom: 'ea' },
+    { description: 'Vibration monitoring sensor for industrial pump assets', qty: 6, uom: 'ea' },
+    { description: 'Mechanical seal, compatible set for quoted pump model', qty: 8, uom: 'set' },
+  ])
+  assert.deepEqual(extractLeadTableLineItems('The pump will be delivered on 15 December 2026.'), [])
 })
 
 test('a document with no reference reports it as missing', () => {

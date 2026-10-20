@@ -7,6 +7,7 @@ import adminBackupsHandler from '../../api/admin-backups.js'
 import restoredFilesHandler from '../../api/restored-files.js'
 import userPreferencesHandler from '../../api/user-preferences.js'
 import opportunityNumberHandler from '../../api/opportunity-number.js'
+import { convertOfficeToPdf } from '../../api/_office-convert.js'
 import { controller } from './controllers/legacy.js'
 import cors from 'cors'
 import express, { type ErrorRequestHandler } from 'express'
@@ -34,6 +35,13 @@ type AppOptions = {
 
 const isLocalOrigin = (origin: string) => /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(origin)
 const configuredOrigins = () => new Set(String(process.env.CORS_ORIGINS || '').split(',').map(origin => origin.trim()).filter(Boolean))
+const isLoopbackHttp = (value: string, origin = false) => {
+  try {
+    const url = new URL(origin ? value : `http://${value}`)
+    return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname.toLowerCase())
+      && url.pathname === '/' && !url.search && !url.hash && !url.username && !url.password
+  } catch { return false }
+}
 
 function corsOptions(req: express.Request, callback: (error: Error | null, options?: cors.CorsOptions) => void) {
   const origin = req.get('origin')
@@ -72,6 +80,8 @@ export function createApp({
   app.use('/api/lead-intake', express.json({ limit: '9mb' }))
   app.use('/api/workspace/data', express.json({ limit: '32mb' }))
   app.use('/api/send-proposal-email', express.json({ limit: '32mb' }))
+  app.use('/api/ai', express.json({ limit: '4mb' }))
+  app.use('/api/document-preview', express.raw({ type: 'application/octet-stream', limit: '10mb' }))
   app.use(express.json({ limit: '2mb' }))
   app.use(['/api/workspace/save','/api/workspace/import'], (req,res,next) => {
     const deployment=process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || 'local'
@@ -141,6 +151,36 @@ export function createApp({
   })
   app.post('/api/opportunity-number', controller(opportunityNumberHandler))
   app.post('/api/ai', ai)
+  app.post('/api/document-preview', async (req, res) => {
+    const localDemo = process.env.NODE_ENV !== 'production'
+      && String(req.get('x-wintrack-local-preview') || '').toLowerCase() === 'true'
+      && isLoopbackHttp(req.get('host') || '')
+      && isLoopbackHttp(req.get('origin') || '', true)
+    const token = authorizationToken(req)
+    if (!token && !localDemo) return res.status(401).json({ ok: false, error: 'A signed-in application session is required.' })
+    if (token) {
+      if (!gateway.authenticate) return res.status(503).json({ ok: false, error: 'Document preview authentication is not configured.' })
+      try {
+        const user = await gateway.authenticate(token)
+        if (!user?.profile) return res.status(401).json({ ok: false, error: 'The application session is invalid or expired.' })
+      } catch (error) {
+        console.error('Document preview session verification failed:', error)
+        return res.status(502).json({ ok: false, error: 'The application session could not be verified.' })
+      }
+    }
+    if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({ ok: false, error: 'A document file is required.' })
+    if (req.body.length > 10 * 1024 * 1024) return res.status(413).json({ ok: false, error: 'This file is larger than the 10 MB preview limit.' })
+    const filename = String(req.get('x-file-name') || 'attachment').replace(/[\\/\r\n\0]/g, '_').slice(0, 180)
+    try {
+      const converted = await convertOfficeToPdf(req.body, filename, { maxInputBytes: 10 * 1024 * 1024, maxPdfBytes: 10 * 1024 * 1024 })
+      res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'inline; filename="document-preview.pdf"', 'Cache-Control': 'no-store' })
+      return res.status(200).send(converted.bytes)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'This document could not be converted for preview.'
+      const status = (error as any)?.code === 'OFFICE_CONVERSION_UNAVAILABLE' ? 503 : 422
+      return res.status(status).json({ ok: false, error: message })
+    }
+  })
   app.post('/api/admin-users', async (req, res, next) => {
     try { await adminUsers(req, res, next) } finally { workspaceCache.invalidate() }
   })
@@ -237,7 +277,10 @@ export function createApp({
 
   const errors: ErrorRequestHandler = (error, _req, res, _next) => {
     if (error instanceof SyntaxError && 'body' in error) return res.status(400).json({ ok: false, error: 'Malformed JSON request body' })
-    if ([400, 401, 403, 409, 503].includes(error.status)) return res.status(error.status).json({ ok: false, error: error.message })
+    if ([400, 401, 403, 409, 413, 503].includes(error.status)) {
+      const message = error.status === 413 ? 'This file is larger than the 10 MB preview limit.' : error.message
+      return res.status(error.status).json({ ok: false, error: message })
+    }
     console.error('Unhandled server error:', error)
     return res.status(500).json({ ok: false, error: 'Internal server error' })
   }

@@ -16,7 +16,7 @@ test('the shared workspace loads once per session and saves only explicit edits'
   assert.doesNotMatch(store, /startLiveEvents|stopLiveEvents/,
     'idle browsers must not connect/reconnect an automatic data stream')
   assert.match(store, /document\.addEventListener\('visibilitychange'/)
-  assert.match(store, /window\.addEventListener\('online'/)
+  assert.match(read('src/ui/WorkspaceDataBoundary.jsx'), /window\.addEventListener\('online'/)
   assert.match(store, /if \(!invalidateSupabaseAuth\(error\)\) setLiveSyncStatus\('error'\)/)
   assert.match(store, /const initialHydrationRef = useRef\(null\)/)
   assert.match(store, /const userId = state\.auth\?\.user\?\.id \|\| ''/)
@@ -160,9 +160,10 @@ test('lifecycle events refresh the shared workspace without overlapping pulls', 
   const store = read('src/store.jsx')
   assert.match(store, /const sharedPullInFlightRef = useRef\(null\)/)
   assert.match(store, /const pullSharedData = \(\{ force = false \} = \{\}\)/)
-  assert.match(store, /window\.addEventListener\('focus', onFocus\)/)
-  assert.match(store, /document\.addEventListener\('visibilitychange', onVisibility\)/)
-  assert.match(store, /window\.addEventListener\('online', onOnline\)/)
+  const boundary = read('src/ui/WorkspaceDataBoundary.jsx')
+  assert.match(boundary, /window\.addEventListener\('focus', refresh\)/)
+  assert.match(boundary, /document\.addEventListener\('visibilitychange', refresh\)/)
+  assert.match(boundary, /window\.addEventListener\('online', refresh\)/)
 })
 
 test('live-event authentication failures stop reconnecting and recover the session', () => {
@@ -175,7 +176,7 @@ test('live-event authentication failures stop reconnecting and recover the sessi
 test('manual refresh forces only the visible view instead of a full workspace pull', () => {
   const store = read('src/store.jsx')
   assert.match(store, /async refreshSharedData\(\)/)
-  assert.match(store, /ensureWorkspaceView\(workspaceViewForPath\(window\.location\.pathname\), \{ force: true \}\)/)
+  assert.match(store, /ensureWorkspaceView\(view, \{ force: true \}\)/)
   assert.doesNotMatch(store, /datastore\.loadAll\(/)
 })
 
@@ -192,8 +193,8 @@ test('the Approvals page refreshes on entry without periodic or duplicate lifecy
   assert.match(store, /async refreshApprovals\(\)/)
   assert.match(store, /readLiveData\(\['approvals', 'opportunities'\]\)/)
   assert.doesNotMatch(approvals, /APPROVAL_REFRESH_MS|setInterval\(|addEventListener\('visibilitychange'/)
-  assert.match(approvals, /document\.visibilityState === 'visible'/)
-  assert.match(approvals, /store\.refreshApprovals\(\)/)
+  assert.doesNotMatch(approvals, /store\.refreshApprovals\(\)/)
+  assert.match(read('src/ui/WorkspaceDataBoundary.jsx'), /ensureWorkspaceView\(view/)
 })
 
 test('live-data reads reuse an identical in-flight request', () => {
@@ -293,7 +294,7 @@ test('refresh safety keeps quota recovery but accepts empty server responses', (
   assert.match(store, /Local cache was not updated; keeping the last known-good browser snapshot/)
   assert.doesNotMatch(store, /localStorage\.removeItem\(KEY\)\n\s*localStorage\.setItem\(KEY/)
   assert.doesNotMatch(store, /unexpectedEmptyBusinessSlice/)
-  assert.match(store, /const serverSlices = syncedOf\(slices\)/)
+  assert.match(store, /const serverSlices = baselineSlices/)
   assert.match(store, /deletedOpportunityIds: \[\]/)
 })
 

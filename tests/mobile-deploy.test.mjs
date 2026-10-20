@@ -249,12 +249,13 @@ test('all visible product branding is ModAE', () => {
   assert.match(read('src/sharepoint.js'), /wintrack-sharepoint-v1/, 'backend config key must remain stable')
 })
 
-test('compact sidebar keeps the official logo and expand control visible', () => {
+test('compact sidebar keeps the official logo usable as the expand control', () => {
   const css = read('src/styles.css')
   assert.match(css, /\.sidebar-compact \.brand {[^}]*min-height: 64px/)
   assert.match(css, /\.sidebar-compact \.brand \.modae-logo {[^}]*width: 36px/)
-  assert.match(css, /\.sidebar-compact \.sidebar-toggle {[^}]*position: absolute/)
-  assert.match(css, /\.shell\.sidebar-compact:not\(\.tablet-mode\) > \.sidenav \.sidebar-toggle \{[\s\S]*right: -1\.45rem/)
+  assert.match(css, /\.shell > \.sidenav \.brand-collapse \{[^}]*width: 100%;[^}]*min-height: 44px;/)
+  const app = read('src/App.jsx')
+  assert.match(app, /<button type="button" className="brand-collapse" onClick=\{toggleSidebar\}[\s\S]*?aria-expanded=\{!sidebarCompact\}[\s\S]*?<ModaeLogo size=\{28\} \/>/)
 })
 
 // Scenario 6 opened on "no PO received" and needed a Simulate click first.

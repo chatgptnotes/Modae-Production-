@@ -4,6 +4,7 @@ import { createUserPreferencesHandler } from '../api/user-preferences.js'
 import { createWorkspaceDataHandler } from '../api/workspace-data.js'
 
 const response = () => ({ statusCode: 200, headers: {}, setHeader(key, value) { this.headers[key] = value }, status(code) { this.statusCode = code; return this }, json(body) { this.body = body; return this } })
+const defaultLayout = { sidebarCompact: false, leadDetailsCollapsed: false }
 function fixture() {
   const id = '18a1eae5-442c-437e-8934-9874442abe67'
   const profile = { id: 'legacy-sales', authId: id, email: 'sales@example.com', status: 'Active', roles: ['STANDARD_USER'] }
@@ -40,15 +41,15 @@ function fixture() {
 test('active standard users read defaults and save only their authenticated UUID', async () => {
   const f = fixture()
   const initial = await f.run()
-  assert.deepEqual(initial.body, { font: 'candara', rev: 0 })
+  assert.deepEqual(initial.body, { font: 'candara', ...defaultLayout, rev: 0 })
   assert.equal(initial.headers['Cache-Control'], 'private, no-store')
   for (const [rev, font] of ['inter', 'system', 'candara', 'roboto', 'open-sans', 'merriweather', 'lora'].entries()) {
     const saved = await f.run('PUT', { font, rev })
     assert.equal(saved.statusCode, 200)
-    assert.deepEqual(saved.body, { font, rev: rev + 1 })
+    assert.deepEqual(saved.body, { font, ...defaultLayout, rev: rev + 1 })
     assert.deepEqual((await f.run()).body, saved.body)
   }
-  assert.deepEqual(f.calls[0], { name: 'save_rows', args: { p_entity: 'user_preferences', p_rows: [{ id: f.id, rev: 0, data: { font: 'inter' }, by: f.id }] } })
+  assert.deepEqual(f.calls[0], { name: 'save_rows', args: { p_entity: 'user_preferences', p_rows: [{ id: f.id, rev: 0, data: { font: 'inter', ...defaultLayout }, by: f.id }] } })
   assert.equal(f.records.find(row => row.id === 'other-user').rev, 9)
 })
 
@@ -82,7 +83,7 @@ test('stale drafts and racing writes return conflicts without overwriting the wi
   assert.equal(f.calls.length, 0)
   await f.run('PUT', { font: 'inter', rev: 0 })
   assert.equal((await f.run('PUT', { font: 'system', rev: 0 })).statusCode, 409)
-  assert.deepEqual((await f.run()).body, { font: 'inter', rev: 1 })
+  assert.deepEqual((await f.run()).body, { font: 'inter', ...defaultLayout, rev: 1 })
   f.client.race = true
   assert.equal((await f.run('PUT', { font: 'candara', rev: 1 })).statusCode, 409)
 })
@@ -93,6 +94,27 @@ test('database failures are reported without leaking server details', async () =
   const result = await f.run('PUT', { font: 'inter', rev: 0 })
   assert.equal(result.statusCode, 503)
   assert.doesNotMatch(JSON.stringify(result.body), /secret/)
+})
+
+test('sidebar preferences save independently and font-only clients preserve both choices', async () => {
+  const f = fixture()
+  assert.equal((await f.run('PUT', { sidebarCompact: true, rev: 0 })).statusCode, 200)
+  assert.equal((await f.run('PUT', { leadDetailsCollapsed: true, rev: 1 })).statusCode, 200)
+  await f.run('PUT', { font: 'inter', rev: 2 })
+  assert.deepEqual((await f.run()).body, { font: 'inter', sidebarCompact: true, leadDetailsCollapsed: true, rev: 3 })
+  await f.run('PUT', { sidebarCompact: false, rev: 3 })
+  assert.deepEqual((await f.run()).body, { font: 'inter', sidebarCompact: false, leadDetailsCollapsed: true, rev: 4 })
+  assert.equal(f.records.find(row => row.id === 'other-user').rev, 9)
+})
+
+test('sidebar writes reject non-booleans and stale revisions', async () => {
+  const f = fixture()
+  for (const body of [{ sidebarCompact: 'true', rev: 0 }, { leadDetailsCollapsed: 1, rev: 0 }, { rev: 0 }]) {
+    assert.equal((await f.run('PUT', body)).statusCode, 400)
+  }
+  await f.run('PUT', { leadDetailsCollapsed: true, rev: 0 })
+  assert.equal((await f.run('PUT', { sidebarCompact: true, rev: 0 })).statusCode, 409)
+  assert.equal((await f.run()).body.leadDetailsCollapsed, true)
 })
 
 test('generic workspace reads and writes cannot expose or alter personal preferences, including for admins', async () => {

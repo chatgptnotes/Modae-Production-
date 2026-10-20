@@ -52,3 +52,46 @@ test('storage denial does not block in-memory preferences',async()=>{
  const cache={getItem(){throw Error('denied')},setItem(){throw Error('denied')}}
  const session=createFontPreferenceSession({key:'a',storage:cache});await session.save('system');assert.equal(session.getSnapshot().font,'system')
 })
+
+test('sidebar choices restore independently per account and survive a font change', async () => {
+ const cache = storage()
+ const session = createFontPreferenceSession({ key: 'local:a', storage: cache })
+ await session.saveLayout({ sidebarCompact: true })
+ await session.saveLayout({ leadDetailsCollapsed: true })
+ await session.save('inter')
+ await session.saveLayout({ sidebarCompact: false })
+ const restored = createFontPreferenceSession({ key: 'local:a', storage: cache }).getSnapshot()
+ assert.equal(restored.sidebarCompact, false)
+ assert.equal(restored.leadDetailsCollapsed, true)
+ assert.equal(restored.font, 'inter')
+ const other = createFontPreferenceSession({ key: 'local:b', storage: cache }).getSnapshot()
+ assert.equal(other.sidebarCompact, false)
+ assert.equal(other.leadDetailsCollapsed, false)
+})
+
+test('sidebar save is optimistic and rolls back on failure without changing font', async () => {
+ const pending = deferred()
+ const session = createFontPreferenceSession({ key: 'a', remote: true, request: async method => method === 'GET'
+  ? { font: 'inter', sidebarCompact: false, leadDetailsCollapsed: true, rev: 3 } : pending.promise })
+ await session.refresh()
+ const saving = session.saveLayout({ sidebarCompact: true })
+ assert.equal(session.getSnapshot().sidebarCompact, true)
+ pending.reject(new Error('Offline. Try again.'))
+ await assert.rejects(saving, /Offline/)
+ assert.equal(session.getSnapshot().sidebarCompact, false)
+ assert.equal(session.getSnapshot().leadDetailsCollapsed, true)
+ assert.equal(session.getSnapshot().font, 'inter')
+ assert.match(session.getSnapshot().error, /Offline/)
+})
+
+test('late sidebar saves cannot write to a disposed account cache', async () => {
+ const cache = storage(), pending = deferred()
+ const session = createFontPreferenceSession({ key: 'a', remote: true, storage: cache, request: async method => method === 'GET'
+  ? { font: 'candara', sidebarCompact: false, leadDetailsCollapsed: false, rev: 1 } : pending.promise })
+ await session.refresh()
+ const saving = session.saveLayout({ leadDetailsCollapsed: true })
+ session.dispose()
+ pending.resolve({ font: 'candara', sidebarCompact: false, leadDetailsCollapsed: true, rev: 2 })
+ await saving
+ assert.equal(JSON.parse(cache.getItem(fontPreferenceKey('a'))).leadDetailsCollapsed, false)
+})

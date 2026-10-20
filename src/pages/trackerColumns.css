@@ -186,7 +186,34 @@
   min-width: 1200px;
 }
 .shell .opportunities-page .tracker-oppid-actions { flex-wrap: nowrap; justify-content: space-between; }
-.shell .opportunities-page .tracker-oppid-actions > a { flex: 1 1 auto; }
+.shell .opportunities-page .tracker-oppid-actions > a { flex: 1 1 auto; font-size: 16px; }
+
+/* Totals and classification badges share the workspace's theme palette. */
+.shell .opportunities-page .tracker-page table.sheet tfoot td {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+.shell .opportunities-page .tracker-page .cstat .status-pill--green {
+  background: var(--status-success-soft);
+  color: var(--status-success-text, var(--status-success));
+}
+.shell .opportunities-page .tracker-page .cstat :is(.status-pill--yellow, .status-pill--amber) {
+  background: var(--status-warning-soft);
+  color: var(--status-warning-text, var(--status-warning));
+}
+.shell .opportunities-page .tracker-page .cstat .status-pill--red {
+  background: var(--status-danger-soft);
+  color: var(--status-danger-text, var(--status-danger));
+}
+.shell .opportunities-page .tracker-page .cstat .status-pill--blue {
+  background: var(--status-info-soft);
+  color: var(--status-info-text, var(--status-info));
+}
+.shell .opportunities-page .tracker-page .cstat :is(.status-pill--unclassified, .status-pill--neutral) {
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+}
 .shell .opportunities-page .tracker-page .tracker-grid-shell > .sheet-wrap.fill table.sheet tr[data-editing] > td { background-color: var(--surface-sunken); }
 
 /* Stage and its optional workflow action occupy separate, predictable lines. */

@@ -15,7 +15,7 @@ import { WorkspaceViewProvider, useWorkspaceView } from './ui/WorkspaceViewConte
 import WorkspaceViewToggle from './ui/WorkspaceViewToggle.jsx'
 import { ThemeProvider, useWorkspaceTheme, WorkspaceThemeButton } from './ui/WorkspaceThemeContext.jsx'
 import HoverExplanationLayer from './ui/HoverExplanationLayer.jsx'
-import { WorkspaceFontProvider } from './ui/WorkspaceFontContext.jsx'
+import { WorkspaceFontProvider, useWorkspaceFont } from './ui/WorkspaceFontContext.jsx'
 import PersonalSettings from './pages/PersonalSettings.jsx'
 import { RequireAuth } from './pages/Login.jsx'
 import { topbarTitleFor } from './ui/workspaceTitles.js'
@@ -176,8 +176,8 @@ function WorkspaceTopbar({ store, role, location, nav }) {
     return () => window.clearInterval(timer)
   }, [])
   useEffect(() => {
-    if (store.liveSyncStatus === 'live') setLastSync(new Date())
-  }, [store.liveSyncStatus])
+    if (store.workspaceCheckedAt) setLastSync(new Date(store.workspaceCheckedAt))
+  }, [store.workspaceCheckedAt])
 
   const pageItem = NAV.filter(item => location.pathname.startsWith(item.to)).sort((a, b) => b.to.length - a.to.length)[0]
   const isDashboardRoute = pageItem?.page === 'mydashboard'
@@ -191,17 +191,17 @@ function WorkspaceTopbar({ store, role, location, nav }) {
   const canSearchLeads = canSeePage(store.roles || role, 'inbox')
   const canSearchOpps = canSeePage(store.roles || role, 'tracker')
   const canSearchCustomers = canSeePage(store.roles || role, 'customers')
-  const myCustomerNames = new Set((store.opportunities || []).filter(item => item.owner === role).map(item => item.sellTo).filter(Boolean))
-  const leadRows = canSearchLeads ? (store.leads || []).filter(item => workspaceView.scope === 'my'
+  const myCustomerNames = new Set((store.workspaceNavigation?.opportunities || store.opportunities || []).filter(item => item.owner === role).map(item => item.sellTo).filter(Boolean))
+  const leadRows = canSearchLeads ? (store.workspaceNavigation?.leads || store.leads || []).filter(item => workspaceView.scope === 'my'
     ? item.assignedOwner === role || item.suggestedOwner === role
     : true) : []
   const searchResults = term ? [
     ...leadRows.filter(item => `${item.subject} ${item.sender || ''} ${item.from || ''} ${item.ref || ''}`.toLowerCase().includes(term))
       .map(item => ({ type: 'Lead', title: item.subject || 'Untitled enquiry', detail: `${item.id} · ${item.sender || item.from || 'Sender not recorded'}`, path: `/inbox/${item.id}` })),
-    ...(canSearchOpps ? (store.opportunities || []).filter(item => workspaceView.scope !== 'my' || item.owner === role)
+    ...(canSearchOpps ? (store.workspaceNavigation?.opportunities || store.opportunities || []).filter(item => workspaceView.scope !== 'my' || item.owner === role)
       .filter(item => `${item.id} ${item.oppName || ''} ${item.sellTo || ''}`.toLowerCase().includes(term))
       .map(item => ({ type: 'Opportunity', title: item.oppName || 'Untitled opportunity', detail: `${displayOpportunityId(item.id)} · ${item.sellTo || 'Customer not recorded'}`, path: `/opp/${item.id}` })) : []),
-    ...(canSearchCustomers ? (store.customers || []).filter(item => (workspaceView.scope !== 'my' || myCustomerNames.has(item.name || item.customerName))
+    ...(canSearchCustomers ? (store.workspaceNavigation?.customers || store.customers || []).filter(item => (workspaceView.scope !== 'my' || myCustomerNames.has(item.name || item.customerName))
       && `${item.name || item.customerName || ''} ${item.id || ''}`.toLowerCase().includes(term))
       .map(item => ({ type: 'Customer', title: item.name || item.customerName || 'Customer', detail: item.id || 'Customer master', path: '/customers' })) : []),
   ].flat().slice(0, 7) : []
@@ -259,16 +259,15 @@ function WorkspaceTopbar({ store, role, location, nav }) {
 }
 
 function AppShell() {
-  return <WorkspaceDataBoundary><LoadedAppShell /></WorkspaceDataBoundary>
+  return <LoadedAppShell />
 }
 function LoadedAppShell() {
   const store = useStore()
   const nav = useNavigate()
   const loc = useLocation()
   const mainRef = useRef(null)
-  const [sidebarCompact, setSidebarCompact] = useState(() => {
-    try { return window.localStorage.getItem('modae_sidebar_compact') === '1' } catch { return false }
-  })
+  const preferences = useWorkspaceFont()
+  const sidebarCompact = preferences.sidebarCompact
   const { theme } = useWorkspaceTheme()
   const tablet = store.viewMode === 'tablet'
   const custAccount = store.auth?.user?.role === 'CUST'
@@ -285,7 +284,6 @@ function LoadedAppShell() {
     .filter(t => canSeePage(store.roles || role, t.page) && (typeof t.show !== 'function' || t.show(role)))
     .map(t => t.to === '/order' && isSalesOwner(role) ? { ...t, label: 'My Purchase Orders' } : t)
   const withConnectivity = content => content
-
   useEffect(() => startAutoTitle(mainRef.current), [])
 
   // Follow the viewport until the user picks a mode themselves — a tablet turned
@@ -317,11 +315,7 @@ function LoadedAppShell() {
 
   // Customer accounts/persona only ever see the portal. Route-level, not a
   // post-render effect — internal pages must never mount for a customer.
-  const toggleSidebar = () => setSidebarCompact(value => {
-    const next = !value
-    try { window.localStorage.setItem('modae_sidebar_compact', next ? '1' : '0') } catch { /* storage is optional */ }
-    return next
-  })
+  const toggleSidebar = () => { void preferences.saveLayout({ sidebarCompact: !sidebarCompact }).catch(() => {}) }
 
   const routes = (role === 'CUST' || custAccount) ? (
     <Routes>
@@ -367,17 +361,17 @@ function LoadedAppShell() {
 
   // Workspace navigation stays focused on destinations; role selection belongs
   // to authentication and the demo launcher.
-  const c = counts(store, role)
+  const c = counts({ ...store, ...store.workspaceNavigation }, role)
   const shell = (
     <div className={`shell ${sidebarCompact ? 'sidebar-compact' : ''}${hasTopbarPageTitle ? ' has-topbar-page-title' : ''}`} data-theme={theme}>
       <BrandWatermark variant="shell" />
       <a className="skip-link" href="#main-content">Skip to workspace</a>
-      <aside className="sidenav">
-        <div className="brand" onClick={() => nav('/opportunities')}>
-          <ModaeLogo size={28} />
-          <button className="sidebar-toggle" onClick={e => { e.stopPropagation(); toggleSidebar() }}
-            title={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'} aria-label={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'}>
-            <Icon name={sidebarCompact ? 'chevronRight' : 'chevronLeft'} size={15} />
+      <aside className="sidenav" id="workspace-sidebar">
+        <div className="brand">
+          <button type="button" className="brand-collapse" onClick={toggleSidebar}
+            aria-expanded={!sidebarCompact} aria-controls="workspace-sidebar" disabled={!preferences.loaded || preferences.saving}
+            title={sidebarCompact ? 'Click logo to expand sidebar' : 'Click logo to collapse sidebar'} aria-label={sidebarCompact ? 'Expand sidebar' : 'Collapse sidebar'}>
+            <ModaeLogo size={28} />
           </button>
         </div>
         <nav className="side-nav" aria-label="Workspace navigation">
@@ -427,7 +421,7 @@ function LoadedAppShell() {
             region — pages that want their own internal scroller (the pipeline
             sheet, the mailbox list) size themselves to 100% of it. */}
         <main id="main-content" className="main-scroll" ref={mainRef}>
-          <Suspense fallback={<LoadingScreen />}>{routes}</Suspense>
+          <WorkspaceDataBoundary><Suspense fallback={<LoadingScreen />}>{routes}</Suspense></WorkspaceDataBoundary>
         </main>
       </div>
       <DrawerHost />

@@ -10,7 +10,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8')
 test('the authenticated workspace keeps navigation in the sidebar and adds workspace tools in the top bar', () => {
   const app = read('src/App.jsx')
 
-  assert.match(app, /<aside className="sidenav">/)
+  assert.match(app, /<aside className="sidenav"[^>]*>/)
   assert.match(app, /WorkspaceTopbar/)
   assert.match(app, /<WorkspaceViewToggle \/>/)
   assert.match(app, /workspace-topbar/)

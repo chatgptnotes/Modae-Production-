@@ -1,3 +1,4 @@
+import { WorkspaceCatalogueBoundary } from '../ui/WorkspaceDataBoundary.jsx'
 import { WorkspaceRecordBoundary, useWorkspaceWatch } from '../ui/WorkspaceSync.jsx'
 import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
@@ -445,7 +446,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
   const sourceLead = [...(store.leads || []), ...(store.leadArchive || [])].find(lead => lead.id === opp.sourceLeadId || lead.oppId === opp.id)
   const sourceText = [sourceLead?.subject, sourceLead?.body, opp.remarks, opp.oppName].filter(Boolean).join(' ')
   useEffect(() => {
-    if (opp.route !== 'Spares') return undefined
+    if (opp.route !== 'Spares' || !['sourcing', 'proposal'].includes(viewTab) || store.priceListsLoaded === false) return undefined
     const lines = (store.sparesLines || []).filter(line =>
       line.oppId === opp.id && !isPlaceholderSparesLine(line) && !line.removedFromSourcing)
     void prefetchSparesMatches({
@@ -485,7 +486,7 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
       })
     })
     return undefined
-  }, [opp.id, opp.route, store.sparesLines, store.priceLists, store.config?.aiModel?.model, store.config?.aiModel?.provider])
+  }, [viewTab, store.priceListsLoaded, opp.id, opp.route, store.sparesLines, store.priceLists, store.config?.aiModel?.model, store.config?.aiModel?.provider])
   const moveToMilestone = async (milestone, reason = '', tabOverride = '') => {
     const moved = store.setMilestone(opp.id, milestone, reason, { alreadyGated: true })
     if (!moved) return false
@@ -840,12 +841,12 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
         {viewTab === 'requirement-validation' && <SparesRequirementTab opp={opp} sourceText={sourceText} onContinueToSourcing={() => advanceStep('sourcing')} />}
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
         {viewTab === 'registration' && <RegistrationTab opp={opp} goTab={goTab} />}
-        {viewTab === 'clarifications' && <ClarificationsTab opp={opp} sourceText={sourceText} />}
-        {viewTab === 'sourcing' && <SourcingTab opp={opp} goTab={goTab} readOnly={workflowReadOnly} onConfirmScope={() => advanceStep('service-rate')} onContinueToProposal={() => {
+        {viewTab === 'clarifications' && <WorkspaceCatalogueBoundary><ClarificationsTab opp={opp} sourceText={sourceText} /></WorkspaceCatalogueBoundary>}
+        {viewTab === 'sourcing' && <WorkspaceCatalogueBoundary><SourcingTab opp={opp} goTab={goTab} readOnly={workflowReadOnly} onConfirmScope={() => advanceStep('service-rate')} onContinueToProposal={() => {
           const proposalStep = workflowSteps.find(step => step.milestone === 'Proposal')
           if (proposalStep) advanceStep(proposalStep.slug)
-        }} />}
-        {viewTab === 'proposal' && <ProposalTab opp={opp} goTab={goTab} onConfirmSent={() => advanceStep('service-acceptance')} />}
+        }} /></WorkspaceCatalogueBoundary>}
+        {viewTab === 'proposal' && <WorkspaceCatalogueBoundary><ProposalTab opp={opp} goTab={goTab} onConfirmSent={() => advanceStep('service-acceptance')} /></WorkspaceCatalogueBoundary>}
         {viewTab === 'approval' && <ApprovalsTab opp={opp} />}
         {viewTab === 'followup' && <FollowUpTab opp={opp} goTab={goTab} />}
         {viewTab === 'service-decision' && <ServiceDecisionPanel opp={opp} onContinue={() => advanceStep('service-delivery')} onChangesRequested={() => advanceStep('service-rate')} />}

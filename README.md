@@ -28,14 +28,21 @@ submission, and follow-up.
   original file bytes block full export. SharePoint files require a signed-in
   SharePoint connection during export.
 
-- Workspace data loads on demand. Dashboard opens with opportunity summaries and
-  calculated work signals; Opportunities loads the register when visited. Opening
-  an opportunity, its Details drawer, or its row-edit pencil loads that record's
-  proposal and related work data before enabling editing. Read requests share a
-  session-local 15-second cache; successful saves invalidate it. Returning to a
-  screen or the browser refreshes the visible view when the cache expires, and
-  manual Refresh bypasses the cache. Numbers are not continuously live. Other
-  workflow pages retain complete workspace reads for their cross-record actions.
+- Workspace data loads by page: Dashboard, Inbox, Opportunities, Approvals,
+  Proposal Sent and Purchase Orders request their own dependencies. Navigation
+  stays mounted while content loads. Opening a lead, an opportunity, its Details
+  drawer, row editing or booking review loads complete editable records first.
+  Catalogue data loads only on pricing screens. The session-memory cache retains
+  up to 20 views, fresh for **three minutes**. A fresh revisit makes no workspace
+  request; an expired revisit shows the last loaded view while updating it.
+  Failed updates retain that view with Retry. Focus/reconnect events coalesce;
+  an idle, hidden or offline page does not poll. Manual Sync/Refresh bypasses
+  caches, and browser reload starts a new cache. Your own saved changes update
+  cached lists immediately. Account/access changes clear older view data; shared
+  generation changes pause saving until reload. Unsaved edits retain their
+  original baselines. Other pages retain full reads for cross-record workflows.
+  Responses expose database duration and query count through `Server-Timing`
+  without logging business payloads.
 
 - New Lead uses a wide desktop form and a single-column phone layout. An optional
   salesperson overrides routing; otherwise configured rules assign the lead, with
@@ -73,6 +80,12 @@ submission, and follow-up.
   visible and optional throughout; verification labels still require evidence.
   Dashboard and register amounts display actual INR, while stored historical
   `valueK`/`cogsK` values retain their existing units.
+- Lead Decisions fields are optional: incomplete customer/enquiry details and
+  unconfirmed AI suggestions do not prevent saving or opening Opportunity Creation
+  after qualification. Opportunity Creation retains its own required-field checks.
+  Opportunity Scope uses a compact, vertically resizable text box.
+  Assigned owner stays in Customer and contact; optional opportunity classification
+  and RFQ details sit in Additional information, collapsed until expanded.
 - Connected lead conversion requires
   `supabase/migrations/20261016122935_stage_one_non_sales_access.sql` after the
   atomic approval migration. Apply it before deploying this application version.
@@ -83,6 +96,10 @@ submission, and follow-up.
   devices; local/demo choices remain per user on that browser. Open settings from
   the desktop sidebar, tablet utilities or phone account menu. Company proposals
   and printed documents keep Candara regardless of the interface choice.
+- Click the ModAE logo to collapse or expand the left navigation, or collapse Lead inbox's right-hand
+  Lead details panel to widen the list. Each setting is remembered independently
+  per account across devices in connected workspaces, or per user on this browser
+  in local sessions. Both panels default to expanded.
 - Personal settings → Change password lets every active account change its own
   password using its current password and matching new entries (8+ characters).
   Local changes remain on that browser; connected changes use Supabase Auth and
@@ -235,6 +252,19 @@ submission, and follow-up.
   qualification, registration, and converted opportunity actions keep their
   existing checks. Less-used actions are in More; desktop/tablet are unchanged.
 - Extracts enquiry details using AI when configured, with deterministic fallbacks.
+  Lead scanning reads PDF, Word, Excel (including `.xls`), PowerPoint, text and
+  common image files. Word, Excel, PowerPoint, OpenDocument, and RTF attachments
+  are temporarily converted to PDF on the server so the AI can inspect page
+  layout and embedded visuals; Railway installs LibreOffice for this. Local
+  server development needs `soffice` on PATH or `LIBREOFFICE_BIN` set to its location.
+  The attachment popup previews those document formats through the same temporary
+  conversion flow, while keeping the original available to download. PDFs, images,
+  spreadsheets and readable text use their native popup previews. Conversion is
+  limited to 10 MB; unsupported, damaged or protected files show a clear fallback.
+  Damaged, password-protected and oversized files show a readable error; scanned
+  PDFs and images are sent to the AI for visual reading. At most eight visual
+  files are sent in one scan; files over the provider size limits are identified
+  in the scan status so they can be reduced or scanned separately.
 - EUC suggestions prioritize explicit end-user details over site and general
   address fields. A buyer alone does not establish the EUC; missing end-user
   names stay blank for review. AI suggestions remain pending human acceptance.

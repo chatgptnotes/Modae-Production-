@@ -104,6 +104,41 @@ export async function extractDocxText(buffer) {
   return docxXmlToText(xml)
 }
 
+async function extractWorkbookText(buffer, extension) {
+  const signature = new Uint8Array(buffer, 0, Math.min(buffer.byteLength, 4))
+  const isZip = signature[0] === 0x50 && signature[1] === 0x4b
+  const isCompound = signature[0] === 0xd0 && signature[1] === 0xcf && signature[2] === 0x11 && signature[3] === 0xe0
+  if ((extension === 'xlsx' && !isZip) || (extension === 'xls' && !isCompound)) {
+    throw new Error('the file signature does not match an Excel workbook')
+  }
+  const { default: XLSX } = await import('xlsx-js-style')
+  const workbook = XLSX.read(buffer, { type: 'array', cellText: true, cellDates: true })
+  const sections = workbook.SheetNames.map(name => {
+    const rows = XLSX.utils.sheet_to_json(workbook.Sheets[name], { header: 1, raw: false, blankrows: false })
+      .map(row => row.map(cell => String(cell ?? '').trim()).join(' | ').trim())
+      .filter(Boolean)
+    return rows.length ? `Sheet: ${name}\n${rows.join('\n')}` : ''
+  }).filter(Boolean)
+  return sections.join('\n\n')
+}
+
+async function extractPptxText(buffer) {
+  const { default: JSZip } = await import('jszip')
+  const zip = await JSZip.loadAsync(buffer)
+  const slides = Object.keys(zip.files)
+    .map(name => ({ name, match: name.match(/^ppt\/slides\/slide(\d+)\.xml$/i) }))
+    .filter(row => row.match && !zip.files[row.name].dir)
+    .sort((a, b) => Number(a.match[1]) - Number(b.match[1]))
+  const sections = []
+  for (const slide of slides) {
+    const xml = await zip.files[slide.name].async('string')
+    const text = decodeEntities([...xml.matchAll(/<a:t\b[^>]*>([\s\S]*?)<\/a:t>/g)].map(row => row[1]).join(' '))
+      .replace(/\s+/g, ' ').trim()
+    if (text) sections.push(`Slide ${slide.match[1]}\n${text}`)
+  }
+  return sections.join('\n\n')
+}
+
 // ------------------------------------------------------------- dispatch
 
 const extOf = name => (String(name).match(/\.([a-z0-9]+)$/i)?.[1] || '').toLowerCase()
@@ -139,6 +174,24 @@ export async function extractDocText(file) {
       return { text }
     } catch (e) {
       return { err: 'Could not read this Word document (' + (e?.message || 'unknown') + ') — the name is attached, not the contents.' }
+    }
+  }
+
+  if (['xlsx', 'xls'].includes(ext) || type.includes('spreadsheetml') || type === 'application/vnd.ms-excel') {
+    try {
+      const text = await extractWorkbookText(await file.arrayBuffer(), ext)
+      return text ? { text } : { err: 'This spreadsheet has no readable cell content.' }
+    } catch (e) {
+      return { err: `Could not read this spreadsheet (${e?.message || 'unknown'}). It may be damaged or password-protected.` }
+    }
+  }
+
+  if (ext === 'pptx' || type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
+    try {
+      const text = await extractPptxText(await file.arrayBuffer())
+      return text ? { text } : { err: 'This presentation has no readable slide text.' }
+    } catch (e) {
+      return { err: `Could not read this presentation (${e?.message || 'unknown'}). It may be damaged or password-protected.` }
     }
   }
 

@@ -74,13 +74,21 @@ test('lead field edits are persisted and audited with the current role', () => {
   assert.match(inbox, /AI field "\$\{field\?\.k \|\| 'unknown'\}" updated/)
 })
 
-test('lead decisions collect the identity fields required for registration', () => {
+test('lead decisions save incomplete details and keep creation checks in registration', () => {
   for (const field of ['sellTo', 'eucName', 'eucLocation', 'contactPerson', 'contactPhone']) {
     assert.match(inbox, new RegExp(`decisionDraft\\.${field}`), `${field} must be editable in Lead decisions`)
   }
   assert.match(inbox, /REQUIRED_IDENTITY_FIELDS/)
-  assert.match(inbox, /Complete the mandatory fields before saving/)
-  assert.match(inbox, /registrationBlocked = missingIdentity\.length > 0/)
+  assert.doesNotMatch(inbox, /Complete the mandatory fields before saving|const registrationBlocked|Required before registration:/)
+  const save = inbox.slice(inbox.indexOf('const saveDecisions ='), inbox.indexOf('const addResponseFiles =', inbox.indexOf('const saveDecisions =')))
+  assert.doesNotMatch(save, /missingIdentity|registrationFields/)
+  assert.match(save, /persistDecisionDraft\(decisionDraft, \{ audit: true \}\)/)
+  const open = inbox.slice(inbox.indexOf('const openRegistration ='), inbox.indexOf('const missingInformationPanel ='))
+  assert.doesNotMatch(open, /registrationBlocked|inquiryMissing|registrationPendingLow|verificationBlocked/)
+  assert.match(open, /lead\.status !== 'Qualified'/)
+  assert.match(open, /flushPersistence/)
+  const register = read('src/pages/Register.jsx')
+  assert.match(register, /missingIdentity\.length/)
 })
 
 test('lead decision drafts autosave without audit spam and explicit save remains audited', () => {

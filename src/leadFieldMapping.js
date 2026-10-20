@@ -4,6 +4,8 @@ import { EUC_LOCATION_LABELS } from './leadLabels.js'
 
 const LABELS = {
   sellTo: [/^sell[ -]?to(?: customer)?$/, /^customer(?: name)?$/, /^buyer$/],
+  customerLocation: [/^sell[ -]?to customer location$/, /^customer (?:location|address)$/, /^buyer (?:location|address)$/],
+  contactEmail: [/^(?:contact )?e[- ]?mail$/],
   eucName: [
     /^euc(?: name)?$/, /^eun(?: name)?$/, /^end user(?: name)?$/,
     /^ultimate customer(?: name)?$/, /^beneficiary(?: name)?$/,
@@ -48,6 +50,19 @@ export const leadFieldValue = (fields = [], key) => {
     ? matchers.map(re => usable.find(item => re.test(labelText(item.k)))).find(Boolean)
     : usable.find(item => matchers.some(re => re.test(labelText(item.k))))
   return field?.v == null ? '' : String(field.v).trim()
+}
+
+// Apply newly extracted locations to a live decision draft only when the
+// salesperson has not entered or cleared that field during this editing
+// session and there is no saved value to preserve.
+export const mergeLocationDecisionDraft = (draft = {}, saved = {}, suggestions = {}, touched = new Set()) => {
+  const next = { ...draft }
+  for (const key of ['sellToCustomerLocation', 'eucLocation']) {
+    const proposed = String(suggestions[key] ?? '').trim()
+    if (!proposed || String(draft[key] ?? '').trim() || String(saved[key] ?? '').trim() || touched.has(key)) continue
+    next[key] = suggestions[key]
+  }
+  return next
 }
 
 // A plain email often describes the end user in prose instead of using an

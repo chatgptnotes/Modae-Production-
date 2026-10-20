@@ -9,14 +9,15 @@ import XLSX from 'xlsx-js-style'
 import { Modal } from './ui.jsx'
 import { Icon } from './icons.jsx'
 import { getFile } from './leadBlobs.js'
-import { extractDocxText } from './docText.js'
 import WorkbookPreview from './proposal/WorkbookPreview.jsx'
+import { supabaseAuth } from './supabase.js'
 
-const isImage = (name, type) => (type || '').startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(name)
+const isImage = (name, type) => /^image\/(png|jpeg|gif|webp|svg\+xml|bmp|avif)$/i.test(type || '') || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(name)
 const isPdf = (name, type) => type === 'application/pdf' || /\.pdf$/i.test(name)
-const isSpreadsheet = (name, type) => /spreadsheet|excel|sheet/i.test(type || '') || /\.(xlsx?|xlsm|csv)$/i.test(name)
-const isDocx = (name, type) => /wordprocessingml\.document|msword/i.test(type || '') || /\.docx?$/i.test(name)
+const isSpreadsheet = (name, type) => /spreadsheet|excel|sheet/i.test(type || '') || /\.(xlsx?|xlsm|ods|csv)$/i.test(name)
 const isText = (name, type) => (type || '').startsWith('text/') || /\.(txt|md|json|eml|log)$/i.test(name)
+const isOfficeDocument = (name, type) => /\.(doc|docx|docm|ppt|pptx|pptm|odt|odp|rtf)$/i.test(name)
+  || /application\/(msword|vnd\.ms-powerpoint|rtf)|wordprocessingml|opendocument\.(text|presentation)|presentationml\.presentation/i.test(type || '')
 
 function TextPreview({ text, label = 'Document text' }) {
   return (
@@ -27,23 +28,54 @@ function TextPreview({ text, label = 'Document text' }) {
   )
 }
 
-function DocxPreview({ blob, fallback = '' }) {
-  const [text, setText] = useState(fallback)
+function OfficeDocumentPreview({ blob, filename, fallback = '' }) {
+  const [pdf, setPdf] = useState(null)
   const [error, setError] = useState('')
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const controller = new AbortController()
     let dead = false
-    if (!blob) return undefined
-    blob.arrayBuffer().then(buffer => extractDocxText(buffer)).then(value => {
-      if (!dead) setText(value)
-    }).catch(e => {
-      if (!dead) setError(e?.message || 'The Word document could not be read.')
-    })
-    return () => { dead = true }
-  }, [blob])
+    setPdf(null)
+    setError('')
+    setLoading(true)
+    ;(async () => {
+      try {
+        const { data } = await supabaseAuth?.getSession?.() || { data: null }
+        const token = data?.session?.access_token
+        const response = await fetch('/api/document-preview', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/octet-stream',
+            'X-File-Name': encodeURIComponent(filename),
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            ...(!token && import.meta.env?.DEV ? { 'X-WinTrack-Local-Preview': 'true' } : {}),
+          },
+          body: blob,
+          signal: controller.signal,
+        })
+        if (!response.ok) {
+          const body = await response.json().catch(() => ({}))
+          throw new Error(body?.error || `Document preview returned HTTP ${response.status}.`)
+        }
+        const result = await response.blob()
+        if (result.type !== 'application/pdf') throw new Error('The document preview did not return a PDF.')
+        if (!dead) setPdf(result)
+      } catch (cause) {
+        if (!dead && cause?.name !== 'AbortError') setError(cause?.message || 'This document could not be converted for preview.')
+      } finally {
+        if (!dead) setLoading(false)
+      }
+    })()
+    return () => { dead = true; controller.abort() }
+  }, [blob, filename])
 
-  if (error && !text) return <p className="hint att-view-note"><Icon name="alert" size={12} /> {error}</p>
-  return <TextPreview text={text || 'This Word document has no readable text.'} label="Word document preview" />
+  if (loading) return <p className="hint att-view-note">Preparing document preview…</p>
+  if (error) return <>
+    <p className="hint att-view-note"><Icon name="alert" size={12} /> {error} The original file is still available to download.</p>
+    {fallback && <TextPreview text={fallback} label="Extracted document text" />}
+  </>
+  return pdf ? <PdfPreview blob={pdf} /> : null
 }
 
 function SpreadsheetPreview({ blob, fallback = '' }) {
@@ -208,7 +240,7 @@ export default function AttachmentViewer({ leadId, attachment, onClose, dialogTi
     if (blob && isImage(filename, type) && url) {
       return <div className="att-view-canvas"><img src={url} alt={filename} /></div>
     }
-    if (blob && isDocx(filename, type)) return <DocxPreview blob={blob} fallback={attachment.text || ''} />
+    if (blob && isOfficeDocument(filename, type)) return <OfficeDocumentPreview blob={blob} filename={filename} fallback={attachment.text || ''} />
     if (blob && isSpreadsheet(filename, type)) return <SpreadsheetPreview blob={blob} fallback={attachment.text || ''} />
     if (blob && isText(filename, type)) {
       return <TextFilePreview blob={blob} fallback={attachment.text || ''} />

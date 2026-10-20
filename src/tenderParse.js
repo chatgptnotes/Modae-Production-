@@ -511,6 +511,26 @@ export function parseLeadLineItems(text) {
   return rows
 }
 
+// Common procurement schedule table, including PDF text layers that flatten
+// the columns into one line: serial, description, quantity, unit, application.
+// Requiring a matching header and at least two rows keeps prose numbers out.
+export function extractLeadTableLineItems(text) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n').map(line => line.trim()).filter(Boolean)
+  const hasScheduleHeader = lines.some(line =>
+    /item\s*\/\s*description/i.test(line) && /\bqty\b|\bquantity\b/i.test(line) && /\bunit\b/i.test(line),
+  )
+  if (!hasScheduleHeader) return []
+  const rows = lines.flatMap(line => {
+    const match = line.match(/^\s*(\d{1,3})[.)]?\s+(.+?)\s+(\d+(?:\.\d+)?)\s+(ea|each|nos?\.?|pcs?\.?|pieces?|sets?)\s+(.+)$/i)
+    if (!match) return []
+    const [, serial, item, quantity, unit, application] = match
+    const applicationText = application.trim().replace(/^for\s+/i, '').replace(/[.;]+$/, '')
+    const description = `${item.trim()} for ${applicationText}`
+    return [{ description, partNumber: '', customerRef: '', qty: Number(quantity), uom: unit, confidence: 96, evidence: line.trim(), serial }]
+  })
+  return rows.length >= 2 ? rows : []
+}
+
 // ----------------------------------------------------------------- builders
 
 export function buildOpportunityDraft(parse) {

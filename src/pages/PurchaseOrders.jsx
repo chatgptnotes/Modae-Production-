@@ -1,4 +1,4 @@
-import React, { useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { displayOpportunityId } from '../seed.js'
@@ -12,6 +12,7 @@ import usePhoneLayout from '../tablet/usePhoneLayout.js'
 import './purchaseOrders.css'
 import { bookingRegister, businessDate, historicalWin } from '../orderBookings.js'
 import BookingReview from '../BookingReview.jsx'
+import { WorkspaceRecordBoundary } from '../ui/WorkspaceSync.jsx'
 
 // Customer purchase orders: proposal-vs-PO validation queue plus the booked
 // order book. Sales owners see their own opportunities; approvers/admins see
@@ -28,8 +29,27 @@ function OrderStat({ label, value, detail }) {
   </div>
 }
 
+function LoadedBookingReview({ id }) {
+  const store = useStore(), ref = useRef(store)
+  ref.current = store
+  const [status, setStatus] = useState('loading')
+  const [retry, setRetry] = useState(0)
+  useEffect(() => {
+    let active = true
+    void ref.current.loadOpportunityDetails(id).then(ok => { if (active) setStatus(ok ? 'ready' : 'error') })
+      .catch(() => { if (active) setStatus('error') })
+    return () => { active = false }
+  }, [id, retry])
+  const opp = store.loadedOpportunity(id)
+  if (status === 'error') return <p role="alert">Could not load booking details. <button onClick={() => setRetry(n => n + 1)}>Retry</button></p>
+  if (status !== 'ready') return <p role="status">Loading booking details…</p>
+  if (!opp) return <p role="alert">This opportunity is unavailable.</p>
+  return <WorkspaceRecordBoundary records={[{ entity: 'opportunities', id }]}><BookingReview store={store} opp={opp} /></WorkspaceRecordBoundary>
+}
+
 export default function PurchaseOrders() {
   const store = useStore()
+  const [openedReviews, setOpenedReviews] = useState(new Set())
   const narrow = usePhoneLayout()
   const phone = narrow && store.viewMode === 'tablet'
   const nav = useNavigate()
@@ -92,13 +112,13 @@ export default function PurchaseOrders() {
           <div><h3 id="booking-verification-title">Awaiting booking verification</h3><p className="hint">Verify the customer commitment before it counts as a booked order.</p></div>
           <span className="proposal-sent-count">{register.pending.length} pending</span>
         </div>
-        {register.pending.map(opp => <details className="purchase-order-review" key={opp.id}>
+        {register.pending.map(opp => <details className="purchase-order-review" key={opp.id} onToggle={event => { if (event.currentTarget.open) setOpenedReviews(previous => new Set([...previous, opp.id])) }}>
           <summary>
             <span className="purchase-order-chevron" aria-hidden="true">›</span>
             <span className="purchase-order-customer"><strong>{opp.sellTo || opp.oppName || 'Customer not recorded'}</strong><span>{displayOpportunityId(opp.id)}{opp.sellTo && opp.oppName && opp.sellTo !== opp.oppName ? ` · ${opp.oppName}` : ''}</span></span>
             <span className="purchase-order-pending">Pending verification</span>
           </summary>
-          <div className="purchase-order-review-body">{historicalWin(opp) ? <BookingReview store={store} opp={opp} /> : <button type="button" onClick={() => nav(`/opp/${opp.id}/po`)}>Review customer PO and joint acceptance</button>}</div>
+          <div className="purchase-order-review-body">{historicalWin(opp) ? (openedReviews.has(opp.id) ? <LoadedBookingReview id={opp.id} /> : null) : <button type="button" onClick={() => nav(`/opp/${opp.id}/po`)}>Review customer PO and joint acceptance</button>}</div>
         </details>)}
       </section>}
 

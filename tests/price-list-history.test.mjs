@@ -13,6 +13,7 @@ test('saving after hydration preserves unloaded archives, including cached archi
   const revisions = new Map([['price_list_versions|old', 2]])
   const writes = []
   const save = new Function('supabase', 'normalizedRecords', 'normalizedRevisions', 'workspaceDrafts', 'SYNC_ENTITIES', 'workspaceSyncState', 'committedWorkspace', `
+    const viewCache = { patch: () => {} };
     const normalizedKey = (entity,id) => entity+'|'+id;
     const currentActorId = async () => 'qa';
     const annotateRpcError = (entity,error) => error;

@@ -6,7 +6,7 @@ const source=fs.readFileSync('src/datastore.js','utf8')
 function fixture(rpc){
   const drafts=new DraftRegistry(),records=new Map([['leads|A',{data:{id:'A',subject:'base'},rev:2}],['leads|B',{data:{id:'B',subject:'base'},rev:2}]]),revisions=new Map([['leads|A',2],['leads|B',2]])
   const fn=new Function('supabase','workspaceDrafts','normalizedRecords','normalizedRevisions','SYNC_ENTITIES',`
-    const workspaceSyncState={enabled:true};const committedWorkspace=()=>{};const currentActorId=async()=> 'U';const annotateRpcError=(entity,e)=>e;const MAX_CONFLICT_RETRIES=3;const normalizedKey=(e,id)=>e+'|'+id;
+    const viewCache={patch:()=>{}};const workspaceSyncState={enabled:true};const committedWorkspace=()=>{};const currentActorId=async()=> 'U';const annotateRpcError=(entity,e)=>e;const MAX_CONFLICT_RETRIES=3;const normalizedKey=(e,id)=>e+'|'+id;
     ${source.match(/function normalizedPayload\([^]*?\n\}/)[0]}
     ${source.match(/async function saveNormalizedRowsNow\([^]*?\n\}/)[0]}
     return saveNormalizedRowsNow;

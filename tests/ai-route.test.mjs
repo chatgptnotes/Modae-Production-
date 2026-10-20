@@ -2,7 +2,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import handler from '../api/ai.js'
 import { aiRateLimit, allowRequest } from '../api/ai.js'
-import { formatEmailBody, textFromTaskResult } from '../src/ai.js'
+import { AI_UPSTREAM_TIMEOUT_MS } from '../api/_ai-providers.js'
+import { formatEmailBody, textFromTaskResult, usesLocalDemoAi } from '../src/ai.js'
 
 process.env.NODE_ENV = 'test'
 
@@ -21,6 +22,10 @@ test('AI request limit defaults to 120 and accepts a positive server override', 
     if (before === undefined) delete process.env.AI_RATE_LIMIT
     else process.env.AI_RATE_LIMIT = before
   }
+})
+
+test('AI upstream timeout leaves room within the browser request timeout', () => {
+  assert.equal(AI_UPSTREAM_TIMEOUT_MS, 40000)
 })
 
 test('AI request limiter allows 120 requests and blocks the next one in its window', () => {
@@ -63,6 +68,64 @@ test('AI route rejects requests without an application session', async () => {
     assert.equal(res.out.status, 401)
     assert.equal(res.out.body.errorCode, 'AI_AUTH_REQUIRED')
   })
+})
+
+test('AI route allows a localhost demo request in development without Supabase', async () => {
+  const oldEnv = process.env.NODE_ENV
+  const oldFetch = globalThis.fetch
+  process.env.NODE_ENV = 'development'
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }) })
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({
+        method: 'POST',
+        headers: { 'x-wintrack-local-ai': 'true', host: 'localhost:3000', origin: 'http://localhost:5173' },
+        body: { task: 'health' },
+      }, res)
+      assert.equal(res.out.status, 200)
+      assert.equal(res.out.body.ok, true)
+    })
+  } finally {
+    globalThis.fetch = oldFetch
+    if (oldEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = oldEnv
+  }
+})
+
+test('AI route rejects local demo requests outside development or localhost', async () => {
+  const oldEnv = process.env.NODE_ENV
+  process.env.NODE_ENV = 'development'
+  try {
+    for (const headers of [
+      { 'x-wintrack-local-ai': 'true', host: 'example.com', origin: 'http://localhost:5173' },
+      { 'x-wintrack-local-ai': 'true', host: 'localhost:3000', origin: 'https://example.com' },
+      { host: 'localhost:3000', origin: 'http://localhost:5173' },
+    ]) {
+      const res = response()
+      await handler({ method: 'POST', headers, body: { task: 'health' } }, res)
+      assert.equal(res.out.status, 401)
+      assert.equal(res.out.body.errorCode, 'AI_AUTH_REQUIRED')
+    }
+    process.env.NODE_ENV = 'production'
+    const production = response()
+    await handler({
+      method: 'POST',
+      headers: { 'x-wintrack-local-ai': 'true', host: 'localhost:3000', origin: 'http://localhost:5173' },
+      body: { task: 'health' },
+    }, production)
+    assert.equal(production.out.status, 401)
+    assert.equal(production.out.body.errorCode, 'AI_AUTH_REQUIRED')
+  } finally {
+    if (oldEnv === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = oldEnv
+  }
+})
+
+test('browser marks only unauthenticated development AI requests as local demo', () => {
+  assert.equal(usesLocalDemoAi(true, undefined), true)
+  assert.equal(usesLocalDemoAi(true, 'session-token'), false)
+  assert.equal(usesLocalDemoAi(false, undefined), false)
 })
 
 test('AI route rejects oversized payloads before calling Gemini', async () => {
@@ -118,7 +181,11 @@ test('AI route explains when the configured Gemini model is unavailable', async 
 
 test('AI route health check returns the configured model on success', async () => {
   const oldFetch = globalThis.fetch
-  globalThis.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }) })
+  let outputTokenLimit = 0
+  globalThis.fetch = async (_url, options) => {
+    outputTokenLimit = JSON.parse(options.body).generationConfig.maxOutputTokens
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: 'ok' }] } }] }) }
+  }
   try {
     await withEnv('server-side-only', async () => {
       const res = response()
@@ -126,6 +193,44 @@ test('AI route health check returns the configured model on success', async () =
       assert.equal(res.out.status, 200)
       assert.equal(res.out.body.ok, true)
       assert.equal(res.out.body.model, 'gemini-2.5-flash')
+      assert.equal(outputTokenLimit, 256)
+    })
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test('AI lead extraction has enough output room for structured document results', async () => {
+  const oldFetch = globalThis.fetch
+  let outputTokenLimit = 0
+  globalThis.fetch = async (_url, options) => {
+    outputTokenLimit = JSON.parse(options.body).generationConfig.maxOutputTokens
+    return { ok: true, json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+      summary: 'Enquiry.', route: 'Mixed', urgency: 'Normal', completeness: 80, suggestedOwner: '',
+      fields: [], lineItems: [], missing: [], next: [],
+    }) }] } }] }) }
+  }
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({ method: 'POST', headers: { authorization: 'Bearer test-token' }, body: {
+        task: 'lead.extract', payload: { attachments: [{ name: 'rfq.pdf', text: 'three line items' }] },
+      } }, res)
+      assert.equal(res.out.status, 200)
+      assert.equal(outputTokenLimit, 4096)
+    })
+  } finally { globalThis.fetch = oldFetch }
+})
+
+test('AI route reports a truncated structured response instead of a network failure', async () => {
+  const oldFetch = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: true, json: async () => ({ candidates: [{
+    finishReason: 'MAX_TOKENS', content: { parts: [{ text: '{"summary":"cut off' }] },
+  }] }) })
+  try {
+    await withEnv('server-side-only', async () => {
+      const res = response()
+      await handler({ method: 'POST', headers: { authorization: 'Bearer test-token' }, body: { task: 'lead.extract' } }, res)
+      assert.equal(res.out.status, 502)
+      assert.equal(res.out.body.errorCode, 'AI_OUTPUT_TRUNCATED')
     })
   } finally { globalThis.fetch = oldFetch }
 })

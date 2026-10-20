@@ -2,7 +2,7 @@ import { isLocalDemoSession } from '../authMode.js'
 import { workspaceSyncState } from '../workspaceSyncState.js'
 import { releaseWorkspaceElementInputs } from '../workspaceInputOwnership.js'
 import { WorkspaceRecordBoundary, useWorkspaceWatch } from '../ui/WorkspaceSync.jsx'
-import { REGISTRATION_FIELDS, registrationFields } from '../businessRules.js'
+import { REGISTRATION_FIELDS } from '../businessRules.js'
 import { useFieldLists } from '../useFieldLists.js'
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -19,7 +19,7 @@ import { displayOpportunityId, LEAD_SOURCES, routeForType, newProposal } from '.
 
 import { isAdminRole } from '../utils.js'
 import { aiEnabled, runTaskResult, runText } from '../ai.js'
-import { aiAttachmentPayload } from '../aiAttachments.js'
+import { aiAttachmentPayload, completeAiAttachmentPayload } from '../aiAttachments.js'
 import { extractDocText } from '../docText.js'
 import { fmtSize } from '../filestore.js'
 import { hold, add as holdMore, remove as removeHeldFile } from '../leadFiles.js'
@@ -35,7 +35,7 @@ import './phoneEnquiry.css'
 import usePhoneDialogViewport from '../tablet/usePhoneDialogViewport.js'
 import useListState from '../tablet/useListState.js'
 import { findDuplicates } from '../insights.js'
-import { parseLeadLineItems } from '../tenderParse.js'
+import { parseLeadLineItems, extractLeadTableLineItems } from '../tenderParse.js'
 import { deterministicLeadRoute, leadTextChunks, mergeLeadResults, cleanDisplayValue, extractLeadIdentityFacts } from '../leadExtraction.js'
 import { scanAttachment, parsedToLeadFields, deterministicPromptContext, mergeDeterministicIntoAi } from '../docScan.js'
 import { customerContactFromText, customerCompanyFromText, customerPhoneFromText, hardenLeadExtraction, isFastTrackLead, isInternalSender, isRegistrationCriticalField, normalizeLeadContactFields, opportunityOwnerFor, routeOwner, routeOwnerForLocation, sourceFieldFacts, supplyMissing } from '../leadRules.js'
@@ -44,14 +44,14 @@ import {
   QUOTE_FEE_DOCUMENTS, answeredPatch, clarificationItems, clarificationKindFor,
   clarificationSender, draftClarification, draftKycRejection, draftPatch, senderLabel, sentPatch,
 } from '../leadClarification.js'
-import { kycItemApproved, kycVerificationComplete, leadVerificationComplete, verificationItem } from '../leadVerification.js'
+import { kycItemApproved, kycVerificationComplete, verificationItem } from '../leadVerification.js'
 import { checklistFor, classRule } from '../customerClasses.js'
 import { kycIdentityKey, simulatedKycValue, validateKycValue } from '../kycValidation.js'
 import { extractKycIdentityCandidate, normalizeKycCandidate } from '../kycExtraction.js'
 import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
-import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
+import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity, mergeLocationDecisionDraft } from '../leadFieldMapping.js'
 import { deriveOpportunityScope, scopeForReview } from '../leadScope.js'
 import { normalizeLocationValue, useGlobalLocationSearch } from '../locations.js'
 import { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
@@ -59,6 +59,7 @@ import { LEAD_LABELS, extractLabeledValue } from '../leadLabels.js'
 import CustomerPicker from '../CustomerPicker.jsx'
 import { findLeadById } from '../leadInboxSelection.js'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
+import { useWorkspaceFont } from '../ui/WorkspaceFontContext.jsx'
 export { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -74,14 +75,39 @@ function PreviewFieldText({ value }) {
   return parts.map((part, index) => <React.Fragment key={index}>{part}{/[@._/-]/.test(part) && <wbr />}</React.Fragment>)
 }
 
-function InboxLeadPreview({ lead }) {
+function InboxLeadPreview({ lead: indexLead, collapsed, onToggle, toggleDisabled }) {
+  const store = useStore(), storeRef = useRef(store)
+  storeRef.current = store
+  const [details, setDetails] = useState({ status: 'loading' })
+  const [retry, setRetry] = useState(0)
+  const expectedRev = store.workspaceLeadRevisions?.[indexLead.id] || 0
+  useEffect(() => {
+    if (collapsed) return
+    let active = true
+    setDetails({ status: 'loading' })
+    void storeRef.current.loadLeadDetails(indexLead.id, { expectedRev, force: retry > 0 }).then(ok => {
+      if (active) setDetails({ status: ok ? 'ready' : 'error' })
+    }).catch(() => { if (active) setDetails({ status: 'error' }) })
+    return () => { active = false }
+  }, [indexLead.id, collapsed, expectedRev, retry])
+  const lead = details.status === 'ready' ? store.loadedLead(indexLead.id) || indexLead : indexLead
   const nav = useNavigate()
   const [panel, setPanel] = useState('overview')
   const [viewing, setViewing] = useState(null)
   const converted = lead.status === 'Converted' && lead.oppId
   const fields = lead.ai?.fields || []
-  return <aside className="mailbox-preview" aria-label="Selected lead preview">
-    <div className="mailbox-preview-head"><h2>Lead details</h2><span className={`pill ${PILL[lead.status] || 'Blue'}`}>{lead.status || 'Unknown'}</span></div>
+  return <aside className={`mailbox-preview${collapsed ? ' mailbox-preview--collapsed' : ''}`} aria-label="Selected lead preview">
+    <div className="mailbox-preview-head">
+      {!collapsed && <><h2>Lead details</h2><span className={`pill ${PILL[lead.status] || 'Blue'}`}>{lead.status || 'Unknown'}</span></>}
+      <button type="button" className="mailbox-preview-toggle" onClick={onToggle} disabled={toggleDisabled}
+        aria-label={collapsed ? 'Expand Lead details' : 'Collapse Lead details'} title={collapsed ? 'Expand Lead details' : 'Collapse Lead details'}
+        aria-expanded={!collapsed} aria-controls="mailbox-preview-content">
+        <Icon name={collapsed ? 'chevronLeft' : 'chevronRight'} size={16} />
+        {collapsed && <span>Lead details</span>}
+      </button>
+    </div>
+    <div className="mailbox-preview-content" id="mailbox-preview-content" hidden={collapsed}>
+    {details.status !== 'ready' ? <p role="status">{details.status === 'error' ? <>Could not load lead details. <button onClick={() => setRetry(n => n + 1)}>Retry</button></> : 'Loading lead details…'}</p> : <>
     <h3>{lead.subject || 'Untitled enquiry'}</h3>
     <p className="mailbox-preview-sender"><PreviewFieldText value={`${lead.sender || lead.from || 'Sender not recorded'} · ${ddMmmYY((lead.ts || '').slice(0, 10))}`} /></p>
     {converted && <div className="inbox-linked-opportunity"><div><small>Opportunity</small><button type="button" onClick={() => nav(`/opp/${lead.oppId}`)}>{displayOpportunityId(lead.oppId)}</button></div><button type="button" onClick={() => nav(`/opp/${lead.oppId}`)}>Open opportunity <Icon name="arrowRight" size={13} /></button></div>}
@@ -113,6 +139,8 @@ function InboxLeadPreview({ lead }) {
       </div>
     </div>
     {viewing && <AttachmentViewer leadId={lead.id} attachment={viewing} onClose={() => setViewing(null)} />}
+    </>}
+    </div>
   </aside>
 }
 export const isUnavailableAiSummary = lead => /^AI extraction was unavailable\b/i.test(String(lead?.ai?.summary || '').trim())
@@ -172,6 +200,7 @@ const ConfBadge = ({ c }) => (
 // only stamp state:'pending' on each field, because "AI proposes, humans decide"
 // is enforced by that state — nothing is accepted until someone accepts it.
 export async function extractLead({ from, subject, body, attachments = [], aiAttachments = [] }, store) {
+  const completeAiAttachments = await completeAiAttachmentPayload(attachments, aiAttachments)
   const attachmentText = (attachments || [])
     .filter(a => a.text?.trim())
     .map(a => `Attachment: ${a.name}\n${a.text}`)
@@ -193,6 +222,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     acc.lineItems.push(...found.lineItems)
     return acc
   }, { fields: [], lineItems: [] })
+  deterministic.lineItems.push(...extractLeadTableLineItems(attachmentText))
   const deterministicContext = scanned.length ? deterministicPromptContext(scanned) : ''
 
   // Mirrors attachmentMeta()'s budget-shrinking order so "truncated" here
@@ -211,7 +241,9 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       filesScanned: (attachments || []).filter(a => a.text?.trim()).length,
       pages: (attachments || []).reduce((n, a) => n + (a.pages || 0), 0),
       truncatedFiles,
-      visualOnlyFiles: (attachments || []).filter(a => a.err).map(a => a.name),
+      visualOnlyFiles: (attachments || []).filter(a => a.err && !completeAiAttachments.some(file => file.name === a.name)).map(a => a.name),
+      unprocessedFiles: completeAiAttachments.filter(file => file.skippedReason).map(file => ({ name: file.name, reason: file.skippedReason })),
+      convertedFiles: [...new Set(convertedFiles)],
       parserHits: scanned.map(s => s.name),
     }
   }
@@ -225,6 +257,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   }
   const fallback = store.config?.aiModel?.provider === 'Built-in fallback'
   const results = []
+  const convertedFiles = []
   let aiResult = { error: '' }
   if (chunks.length) {
     for (const chunk of chunks) {
@@ -232,7 +265,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
         ...common,
         body: chunk.source === 'Email body' ? chunk.text : '',
         attachments: chunk.source === 'Email body' ? [] : [{ name: chunk.source.replace(/^Attachment: /, ''), text: chunk.text }],
-        aiAttachments: chunk.index === 0 ? aiAttachments : [],
+        aiAttachments: chunk.index === 0 ? completeAiAttachments : [],
         chunk: {
           source: chunk.source,
           index: chunk.index,
@@ -242,10 +275,12 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
           phase: chunk.total > 1 ? (chunk.index === chunk.total - 1 ? 'final-segment' : 'segment') : 'single-source',
         },
       }, { fallback })
+      convertedFiles.push(...(aiResult.data?.convertedFiles || []))
       if (aiResult.data?.data) results.push(aiResult.data.data)
     }
   } else {
-    aiResult = await runTaskResult('lead.extract', { ...common, body, attachments, aiAttachments }, { fallback })
+    aiResult = await runTaskResult('lead.extract', { ...common, body, attachments, aiAttachments: completeAiAttachments }, { fallback })
+    convertedFiles.push(...(aiResult.data?.convertedFiles || []))
     if (aiResult.data?.data) results.push(aiResult.data.data)
   }
   const mergedResults = mergeLeadResults(results)
@@ -286,7 +321,13 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       || labeled(String.raw`deliver(?:y|ed)\\s+to|${LEAD_LABELS.eucLocation}`)
     const phone = customerPhoneFromText(text)
     const contactPerson = customerContactFromText(text)
-    const scopeValue = deriveOpportunityScope([], body)
+    // On provider failure, the full attachment text is retained below as
+    // evidence, but must not be reparsed as loose email lines. RFQ numbers,
+    // table serials and dates otherwise become bogus product line items.
+    const fallbackLineItems = deterministic.lineItems.length
+      ? deterministic.lineItems
+      : parseLeadLineItems(body || '')
+    const scopeValue = deriveOpportunityScope(fallbackLineItems, body)
       .replace(/^dear[^\n]*\n+/i, '')
       .replace(/^\s*(?:customer|euc|eun|end\s+user|ultimate\s+customer|beneficiary|site|plant|station|project\s+site|installation\s+site|contact\s+person|contact\s+phone)[^\n:]*\s*:[^\n]*\n?/gim, '')
       .replace(/\n\s*(?:regards|best regards|kind regards),[\s\S]*$/i, '')
@@ -307,7 +348,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     if (body?.trim()) fields.push({ group: 'RFQ', k: 'Opportunity scope', v: sliceAtWordBoundary(scopeValue, 1200), conf: 90, ev: 'Customer request in email body' })
     if (attachmentText) fields.push({ group: 'RFQ', k: 'Attachment content', v: sliceAtWordBoundary(cleanDisplayValue(attachmentText), 4000), conf: 45, ev: 'Attached document content', note: 'Fallback preview; the complete source is retained separately. Confirm the scope, quantities and specifications.' })
     const missing = ['Customer name', 'Required quantities and specifications']
-    const lineItems = parseLeadLineItems(`${body || ''}\n${attachmentText}`)
+    const lineItems = fallbackLineItems
     if (attachmentHasSpecs) {
       const i = missing.indexOf('Required quantities and specifications')
       if (i >= 0) missing.splice(i, 1)
@@ -365,9 +406,13 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       note: `Resolved as ${sourceRoute} from the source scope.`,
     })
   }
-  const lineItems = (Array.isArray(ai.lineItems) && ai.lineItems.length
-    ? ai.lineItems
-    : parseLeadLineItems(`${body || ''}\n${attachmentText}`)).map(x => ({
+  const lineItems = (deterministic.lineItems.length >= 2
+    ? deterministic.lineItems
+    : Array.isArray(ai.lineItems) && ai.lineItems.length
+      ? ai.lineItems
+    : deterministic.lineItems.length
+      ? deterministic.lineItems
+      : parseLeadLineItems(body || '')).map(x => ({
       description: x.description || x.desc || '',
       partNumber: x.partNumber || x.pn || '',
       customerRef: x.customerRef || x.partNumber || x.pn || '',
@@ -1026,7 +1071,7 @@ const fieldChip = (f, med) => {
   if (f.state === 'rejected') return <span className="decision-status-icon rejected" role="status" aria-label="Rejected" title="Rejected"><Icon name="x" size={11} /></span>
   return f.conf >= med
     ? <span className="decision-status-icon review" role="status" aria-label="Review required" title="Review required"><Icon name="alert" size={11} /></span>
-    : <span className="decision-status-icon blocked" role="status" aria-label="Blocks stage" title="Blocks stage"><Icon name="alert" size={11} /></span>
+    : <span className="decision-status-icon blocked" role="status" aria-label="Low confidence — review suggested" title="Low confidence — review suggested"><Icon name="alert" size={11} /></span>
 }
 
 function LeadSourceContext({ lead, canAct, phoneLayout = false }) {
@@ -1439,10 +1484,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     const sourcePhone = customerPhoneFromText(`${lead.subject || ''}\n${lead.body || ''}`)
     return ({
     source: lead.source || '',
-    contactEmail: lead.contactEmail ?? (internalSender ? '' : lead.from || ''),
+    contactEmail: lead.contactEmail || mappedLeadFieldValue(ai.fields, 'contactEmail') || (internalSender ? '' : lead.from || ''),
     notes: lead.notes ?? lead.remarks ?? '',
     sellTo: identity.sellTo || sourceValue('Sell-to customer'),
-    sellToCustomerLocation: lead.sellToCustomerLocation || customer?.location || sourceValue('Sell-to customer location') || '',
+    sellToCustomerLocation: lead.sellToCustomerLocation || customer?.location || mappedLeadFieldValue(ai.fields, 'customerLocation') || sourceValue('Sell-to customer location') || '',
     scope: scopeForReview(lead, mappedLeadFieldValue(ai.fields, 'scope') || sourceValue('Opportunity scope')),
     location: initialLocation,
     region: initialRegion,
@@ -1464,6 +1509,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   })}
   const [decisionDraft, setDecisionDraft] = useState(initialDecisions)
   const persistedDecisionRef = useRef(initialDecisions())
+  const touchedLocationFieldsRef = useRef(new Set())
   const decisionDraftRef = useRef(decisionDraft)
   decisionDraftRef.current = decisionDraft
   const decisionAuditPendingRef = useRef(false)
@@ -1503,9 +1549,16 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   // one more file. The manual button still replaces everything, confirmed first.
   const runExtraction = async ({ source, keepDecisions, detail, failureNote = '' }) => {
     setReExtracting(true); setReErr(''); setReNote('')
-    const hydrated = { ...source, attachments: await fullLeadAttachments(source, source.attachments) }
-    const extracted = await extractLead(hydrated, store)
-    setReExtracting(false)
+    let extracted
+    try {
+      const hydrated = { ...source, attachments: await fullLeadAttachments(source, source.attachments) }
+      extracted = await extractLead(hydrated, store)
+    } catch {
+      setReErr(failureNote || 'Could not re-read the saved attachments. Check that the files are available, then retry.')
+      return false
+    } finally {
+      setReExtracting(false)
+    }
     if (!extracted) {
       setReErr(failureNote || 'AI extraction was unavailable. The attachment was saved, but the previous extracted fields are unchanged. Retry when the AI proxy is available.')
       return false
@@ -1518,6 +1571,30 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     // an unassigned lead keeps its prior suggested owner until a user changes it.
     next.suggestedOwner = routeOwnerForLocation(source.region || source.location, store.config, next.suggestedOwner || source.suggestedOwner)
     store.updateLead(lead.id, next, detail || '')
+    if (next.ai?.fields) {
+      const extractedIdentity = leadIdentity(next, next.ai.fields)
+      const extractedCustomer = matchCustomer(store.customers, { ...next, sellTo: extractedIdentity.sellTo })
+      const extractedSourceFacts = sourceFieldFacts(`${next.subject || ''}\n${next.body || ''}`)
+      const suggestions = {
+        sellToCustomerLocation: next.sellToCustomerLocation
+          || extractedCustomer?.location
+          || mappedLeadFieldValue(next.ai.fields, 'customerLocation')
+          || extractedSourceFacts.find(field => field.k === 'Sell-to customer location')?.v
+          || '',
+        eucLocation: normalizeLocationValue(extractedIdentity.eucLocation
+          || mappedLeadFieldValue(next.ai.fields, 'eucLocation')),
+      }
+      const refreshedDraft = mergeLocationDecisionDraft(
+        decisionDraftRef.current,
+        persistedDecisionRef.current,
+        suggestions,
+        touchedLocationFieldsRef.current,
+      )
+      if (refreshedDraft.eucLocation !== decisionDraftRef.current.eucLocation) {
+        setEucLocationSearch(refreshedDraft.eucLocation || '')
+      }
+      setDecisionDraft(refreshedDraft)
+    }
     store.recordAiAction(lead.id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.re-extract', result: { completeness: next.completeness, missing: next.ai?.missing || [], route: next.route } })
     setReNote('Extraction updated.')
     return true
@@ -1728,30 +1805,16 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const rule = (store.config.ownershipRules || []).find(r => r.owner === regionalOwner)
   const ownerRuleLabel = rule ? `${rule.region} rule` : 'Ownership rule'
 
-  const verificationComplete = leadVerificationComplete({ ...lead, existingCustomerKyc: previewCustomer?.kyc === 'Valid' }, previewCustomerStatus, { config: store.config })
-  const verificationDeferred = previewCustomerStatus === 'Blue' && lead.verification?.kycRequestStatus === 'deferred'
-  const verificationBlocked = !verificationComplete && !verificationDeferred
-  const registrationRequired = new Set(registrationFields(store.config).map(([key]) => key))
-  const missingIdentity = registrationFields(store.config)
-    .filter(([key]) => !String(decisionDraft[key] || '').trim())
-    .map(([, label]) => label)
   const effectiveMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, ai.fields, ai.lineItems)
-  const inquiryMissing = !decisionDraft.inquiryType
-    || (decisionDraft.inquiryType === 'Firm/RFQ' && (!String(decisionDraft.rfqNumber || '').trim() || !String(decisionDraft.rfqDate || '').trim()))
-  // The compact rail is for additional AI follow-up only. Registration-critical
-  // fields already have a single source of truth in the Lead decisions form and
-  // its required-before-registration warning, so do not repeat them here.
+  // Keep the compact rail focused on additional follow-up suggestions.
+  // Customer and contact details remain editable in the form; all are optional.
   const reviewMissing = effectiveMissing.filter(item => {
     const text = String(item || '').toLowerCase()
     return !isRegistrationCriticalField(item, store.config)
       && !/sell[-\s]?to\s+customer|customer\s+name|euc|end\s+user|contact\s+person|contact\s+(?:phone|number)|phone\s+number/i.test(text)
   })
   const displayedMissing = compact ? reviewMissing : effectiveMissing
-  // AI clarification items are optional follow-up information. They remain
-  // visible below, but do not prevent opportunity registration; only the
-  // mandatory identity fields, low-confidence decisions, verification and
-  // approval gates block the next step.
-  const registrationBlocked = missingIdentity.length > 0 || inquiryMissing || registrationPendingLow.length > 0 || verificationBlocked
+  // Lead details and AI review suggestions never block opening Opportunity Creation.
   const canAct = !['Converted', 'Dropped'].includes(lead.status) && store.canPerform?.('leads.edit') !== false
   const clarificationAvailable = canAct && !!clarificationKindFor(lead, previewCustomerStatus)
   const clarificationParts = (ai.lineItems || []).filter(item =>
@@ -1760,7 +1823,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
 
   const openRegistration = async () => {
     if (store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false) return
-    if (registrationBlocked || directCreateBusy || lead.status !== 'Qualified') return
+    if (directCreateBusy || lead.status !== 'Qualified') return
     setDirectCreateBusy(true)
     setDecisionErr('')
     try {
@@ -1888,7 +1951,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const attachments = lead.attachments || []
   // Duplicate candidates, computed live against the rest of the inbox and
   // minus anything already dismissed on this lead.
-  const dupes = findDuplicates(lead, store.leads)
+  const dupes = findDuplicates(lead, store.workspaceNavigation?.leads || store.leads)
     .filter(d => !(lead.dismissedDuplicates || []).includes(d.leadId))
 
   const reassign = () => {
@@ -1985,6 +2048,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   useEffect(() => {
     const fresh = initialDecisions()
     persistedDecisionRef.current = fresh
+    touchedLocationFieldsRef.current = new Set()
     decisionDraftRef.current = fresh
     setDecisionDraft(fresh)
     setDecisionSaved(false)
@@ -2017,13 +2081,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const saveDecisions = async event => {
     const editor=event?.currentTarget?.closest('.lead-decision-card')
     setDecisionErr('')
-    const missingIdentity = registrationFields(store.config)
-      .filter(([key]) => !String(decisionDraft[key] || '').trim())
-      .map(([, label]) => label)
-    if (missingIdentity.length) {
-      setDecisionErr(`Complete the mandatory fields before saving: ${missingIdentity.join(', ')}.`)
-      return
-    }
     const routedOwner = routeOwner(decisionDraft.region, store.config, decisionDraft.owner)
     const isOverride = routedOwner && decisionDraft.owner !== routedOwner
     const currentLeadOwner = lead.assignedOwner || lead.owner || regionalOwner
@@ -2110,6 +2167,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   }
 
   const updateDecisionField = (key, value) => {
+    if (key === 'sellToCustomerLocation' || key === 'eucLocation') touchedLocationFieldsRef.current.add(key)
     setDecisionDraft(previous => ({ ...previous, [key]: value }))
     setDecisionErr('')
     setDecisionSaved(false)
@@ -2391,7 +2449,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
         <div className="lead-decision-head">
           <div>
             <b>Lead decisions</b>
-            <span>Correct routing values before registration</span>
+            <span>Review routing values (optional)</span>
           </div>
           {decisionIsDirty && <span className="lead-decision-unsaved">Unsaved changes</span>}
           {decisionAutosaving && <span className="lead-decision-saving">Saving…</span>}
@@ -2399,6 +2457,12 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
         </div>
         <div className="lead-decision-grid">
           <div className="lead-decision-subsection">Customer and contact</div>
+          <label><span className="decision-field-heading">Assigned owner</span>
+            <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
+              onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })} name="inbox-owner">
+              {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
+            </select>
+          </label>
           <label><span className="decision-field-heading">Lead source</span>
             <select value={decisionDraft.source} disabled={lead.status === 'Dropped'} onChange={e => updateDecisionField('source', e.target.value)} name="lead-decision-source">
               <option value="">Select source</option>
@@ -2410,7 +2474,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             <input type="email" value={decisionDraft.contactEmail} disabled={lead.status === 'Dropped'} onChange={e => updateDecisionField('contactEmail', e.target.value)} placeholder="name@customer.com" name="lead-decision-contact-email" />
           </label>
             <div data-phone-field="Sell-to customer">
-              <span className="decision-field-heading">Sell To Customer {registrationRequired.has('sellTo') && <span className="required-mark">*</span>} {decisionAiMeta('sellTo', false)}</span>
+              <span className="decision-field-heading">Sell To Customer  {decisionAiMeta('sellTo', false)}</span>
               <CustomerPicker
                 customers={store.customers}
                 value={decisionDraft.sellTo}
@@ -2424,19 +2488,19 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               />
               {decisionAiStatus('sellTo')}
             </div>
-          <label data-phone-field="Sell-to customer location"><span className="decision-field-heading">Sell To Customer Location {registrationRequired.has('sellToCustomerLocation') && <span className="required-mark">*</span>}</span>
+          <label data-phone-field="Sell-to customer location"><span className="decision-field-heading">Sell To Customer Location </span>
             <div className="decision-value-row"><input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" name="inbox-sell-to-customer-location" /></div>
           </label>
           <label><span className="decision-field-heading">Opportunity scope {decisionAiMeta('scope', false)}</span>
-            <div className="decision-value-row"><textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
+            <div className="decision-value-row"><textarea className="lead-scope-input" rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" name="inbox-scope" />{decisionAiStatus('scope')}</div>
             </label>
-          <label><span className="decision-field-heading">EUC Name {registrationRequired.has('eucName') && <span className="required-mark">*</span>} {decisionAiMeta('eucName', false)}</span>
+          <label><span className="decision-field-heading">EUC Name  {decisionAiMeta('eucName', false)}</span>
             <div className="decision-value-row"><CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
               onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" ariaLabel="EUC name" />{decisionAiStatus('eucName')}</div>
             </label>
-          <label><span className="decision-field-heading">EUC Location {registrationRequired.has('eucLocation') && <span className="required-mark">*</span>} {decisionAiMeta('eucLocation', false)}</span>
+          <label><span className="decision-field-heading">EUC Location  {decisionAiMeta('eucLocation', false)}</span>
             <div className="euc-location-search">
               <div className="decision-value-row"><input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
                 onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" name="inbox-search-euc-city-or-state" />{decisionAiStatus('eucLocation')}</div>
@@ -2448,31 +2512,27 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               </div>}
             </div>
           </label>
-          <label><span className="decision-field-heading">Contact Person {registrationRequired.has('contactPerson') && <span className="required-mark">*</span>} {decisionAiMeta('contactPerson', false)}</span>
+          <label><span className="decision-field-heading">Contact Person  {decisionAiMeta('contactPerson', false)}</span>
             <div className="decision-value-row"><input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" name="inbox-contact-person" />{decisionAiStatus('contactPerson')}</div>
             </label>
-          <label><span className="decision-field-heading">Contact Phone {registrationRequired.has('contactPhone') && <span className="required-mark">*</span>} {decisionAiMeta('contactPhone', false)}</span>
+          <label><span className="decision-field-heading">Contact Phone  {decisionAiMeta('contactPhone', false)}</span>
             <div className="decision-value-row"><input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" name="inbox-contact-phone" />{decisionAiStatus('contactPhone')}</div>
           </label>
           <label className="lead-decision-full"><span className="decision-field-heading">Remarks / notes</span>
             <textarea rows={3} value={decisionDraft.notes} disabled={lead.status === 'Dropped'} onChange={e => updateDecisionField('notes', e.target.value)} placeholder="Additional lead information" name="lead-decision-notes" />
           </label>
-          <div className="lead-decision-subsection">Routing and ownership</div>
-          <label><span className="decision-field-heading">Assigned owner</span>
-            <select value={decisionDraft.owner} disabled={lead.status === 'Dropped'}
-              onChange={e => setDecisionDraft({ ...decisionDraft, owner: e.target.value })} name="inbox-owner">
-              {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
-            </select>
-          </label>
+          <details className="lead-additional-information lead-decision-full">
+            <summary>Additional information</summary>
+            <div className="lead-additional-fields">
           <label><span className="decision-field-heading">Opportunity type {decisionAiMeta('oppType', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })} name="inbox-opp-type">
               {OPP_TYPES.map(type => <option key={type} value={type}>{labelFor('oppType', type)}</option>)}
             </select>{decisionAiStatus('oppType')}</div>
           </label>
-          <label><span className="decision-field-heading">Inquiry type <span className="required-mark">*</span></span>
+          <label><span className="decision-field-heading">Inquiry type </span>
             <select value={decisionDraft.inquiryType} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, inquiryType: e.target.value })} name="inbox-inquiry-type">
               <option value="">Select inquiry type</option>
@@ -2480,10 +2540,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               <option value="Firm/RFQ">Firm/RFQ</option>
             </select>
           </label>
-          <label><span className="decision-field-heading">RFQ number {decisionDraft.inquiryType === 'Firm/RFQ' && <span className="required-mark">*</span>}</span>
+          <label><span className="decision-field-heading">RFQ number </span>
             <input value={decisionDraft.rfqNumber || ''} disabled={lead.status === 'Dropped'} onChange={e => setDecisionDraft({ ...decisionDraft, rfqNumber: e.target.value })} placeholder="Enter RFQ number" name="inbox-enter-rfq-number" />
           </label>
-          <label><span className="decision-field-heading">RFQ date {decisionDraft.inquiryType === 'Firm/RFQ' && <span className="required-mark">*</span>}</span>
+          <label><span className="decision-field-heading">RFQ date </span>
             <input type="date" value={decisionDraft.rfqDate || ''} disabled={lead.status === 'Dropped'} onChange={e => setDecisionDraft({ ...decisionDraft, rfqDate: e.target.value })} name="inbox-date" />
           </label>
           <label><span className="decision-field-heading">Customer class {decisionAiMeta('customerStatus', false)}</span>
@@ -2496,7 +2556,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               {CUSTOMER_STATUSES.map(status => <option key={status} value={status}>{labelFor('customerStatus', status)}</option>)}
             </select>{decisionAiStatus('customerStatus')}</div>
           </label>
-          <OptionalLeadFields phone={phoneLayout}>
           <label><span className="decision-field-heading">Business unit {decisionAiMeta('bu', false)}</span>
             <div className="decision-value-row"><select value={decisionDraft.bu} disabled={lead.status === 'Dropped'}
               onChange={e => setDecisionDraft({ ...decisionDraft, bu: e.target.value })} name="inbox-bu">
@@ -2518,18 +2577,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               {PRODUCTS.map(product => <option key={product} value={product}>{product === 'Various' ? 'Multiple equipment items' : product}</option>)}
             </select>{decisionAiStatus('product')}</div>
           </label>
-          </OptionalLeadFields>
+            </div>
+          </details>
         </div>
-        {missingIdentity.length > 0 && lead.status !== 'Dropped' && (
-          <div className="warnbox" style={{ marginTop: 8 }}>
-            <b>Required before registration:</b> {missingIdentity.join(', ')}.
-            {clarificationAvailable && (
-              <button type="button" className="compact-missing-email-action" disabled={clarBusy} onClick={draftClarificationMail}>
-                <Icon name="mail" size={12} /> {clarBusy ? 'Drafting email…' : 'Draft clarification email'}
-              </button>
-            )}
-          </div>
-        )}
         {decisionErr && <div className="errbox" style={{ marginTop: 8 }}>{decisionErr}</div>}
         {decisionDraft.owner !== routeOwner(decisionDraft.region, store.config, decisionDraft.owner) && (
           <label className="afield" style={{ display: 'block', marginTop: 8 }}>Owner override reason
@@ -2606,12 +2656,14 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   ? `Complete document scan: ${ai.scan.completed} section${ai.scan.completed === 1 ? '' : 's'} processed${ai.scan.files ? ` across ${ai.scan.files} file${ai.scan.files === 1 ? '' : 's'}` : ''}.`
                   : `Partial document scan: ${ai.scan.completed || 0} of ${ai.scan.chunks || 1} sections processed.`}
               </p>
-              {(ai.scan.truncatedFiles?.length > 0 || ai.scan.visualOnlyFiles?.length > 0) && (
+              {ai.scan.convertedFiles?.length > 0 && <p className="hint" role="status">Office files converted to PDF for AI: {ai.scan.convertedFiles.join(', ')}.</p>}
+              {(ai.scan.truncatedFiles?.length > 0 || ai.scan.visualOnlyFiles?.length > 0 || ai.scan.unprocessedFiles?.length > 0) && (
                 <p className="hint" role="status">
                   <Icon name="alert" size={12} />{' '}
                   {[
                     ai.scan.truncatedFiles?.length ? `${ai.scan.truncatedFiles.length} file${ai.scan.truncatedFiles.length === 1 ? '' : 's'} truncated by the text budget` : '',
                     ai.scan.visualOnlyFiles?.length ? `${ai.scan.visualOnlyFiles.length} file${ai.scan.visualOnlyFiles.length === 1 ? '' : 's'} could not be read as text` : '',
+                    ...(ai.scan.unprocessedFiles || []).map(file => `${file.name} was not sent to AI because it ${file.reason === 'file-too-large' ? 'exceeds the per-file size limit' : file.reason === 'too-many-files' ? 'exceeds the eight-file visual scan limit' : file.reason === 'unsupported-image-format' ? 'uses an image format Gemini cannot read directly' : 'exceeds the combined file size limit'}`),
                   ].filter(Boolean).join(' — ')}. The scan may be incomplete for these files.
                 </p>
               )}
@@ -2793,30 +2845,30 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             <div className="lead-decision-head">
               <div>
                 <b>Lead decisions</b>
-                <span>Correct routing values before registration</span>
+                <span>Review routing values (optional)</span>
               </div>
               {decisionIsDirty && <span className="lead-decision-unsaved">Unsaved changes</span>}
               {decisionAutosaving && <span className="lead-decision-saving">Saving…</span>}
               {decisionSaved && !decisionIsDirty && !decisionAutosaving && <span className="lead-decision-saved">Saved just now</span>}
             </div>
             <div className="lead-decision-grid">
-              <label>Sell To Customer {registrationRequired.has('sellTo') && <span className="required-mark">*</span>} {decisionAiMeta('sellTo')}
+              <label>Sell To Customer  {decisionAiMeta('sellTo')}
                 <CustomerPicker customers={store.customers} value={decisionDraft.sellTo} disabled={lead.status === 'Dropped'}
                   onChange={value => updateDecisionField('sellTo', value)} allowCreate={false} label="" ariaLabel="Sell to customer" />
               </label>
-              <label>Sell To Customer Location {registrationRequired.has('sellToCustomerLocation') && <span className="required-mark">*</span>}
+              <label>Sell To Customer Location
                 <input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" name="inbox-sell-to-customer-location-2" />
               </label>
               <label>Opportunity scope {decisionAiMeta('scope')}
-                <textarea rows={5} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
+                <textarea className="lead-scope-input" rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" name="inbox-scope-2" />
               </label>
-              <label>EUC Name {registrationRequired.has('eucName') && <span className="required-mark">*</span>} {decisionAiMeta('eucName')}
+              <label>EUC Name  {decisionAiMeta('eucName')}
                 <CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
                   onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" ariaLabel="EUC name" />
               </label>
-              <label>EUC Location {registrationRequired.has('eucLocation') && <span className="required-mark">*</span>} {decisionAiMeta('eucLocation')}
+              <label>EUC Location  {decisionAiMeta('eucLocation')}
                 <div className="euc-location-search">
                   <input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
                     onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" name="inbox-search-euc-city-or-state-2" />
@@ -2828,11 +2880,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   </div>}
                 </div>
               </label>
-              <label>Contact Person {registrationRequired.has('contactPerson') && <span className="required-mark">*</span>} {decisionAiMeta('contactPerson')}
+              <label>Contact Person  {decisionAiMeta('contactPerson')}
                 <input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('contactPerson', e.target.value)} placeholder="Enter contact person" name="inbox-contact-person-2" />
               </label>
-              <label>Contact Phone {registrationRequired.has('contactPhone') && <span className="required-mark">*</span>} {decisionAiMeta('contactPhone')}
+              <label>Contact Phone  {decisionAiMeta('contactPhone')}
                 <input type="tel" value={decisionDraft.contactPhone} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('contactPhone', e.target.value)} placeholder="Enter contact phone" name="inbox-contact-phone-2" />
               </label>
@@ -2842,6 +2894,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   {OWNERS.map(owner => <option key={owner} value={owner}>{labelFor('owner', owner)}</option>)}
                 </select>
               </label>
+              <details className="lead-additional-information lead-decision-full">
+                <summary>Additional information</summary>
+                <div className="lead-additional-fields">
               <label>Opportunity type {decisionAiMeta('oppType')}
                 <select value={decisionDraft.oppType} disabled={lead.status === 'Dropped'}
                   onChange={e => setDecisionDraft({ ...decisionDraft, oppType: e.target.value })} name="inbox-opp-type-2">
@@ -2904,17 +2959,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                     onClick={() => updateDecisionRegion('Other / Unclassified')}>Other / Unclassified</button>
                 </div>
               </details>
+                </div>
+              </details>
             </div>
-            {missingIdentity.length > 0 && lead.status !== 'Dropped' && (
-              <div className="warnbox" style={{ marginTop: 8 }}>
-                <b>Required before registration:</b> {missingIdentity.join(', ')}.
-                {clarificationAvailable && (
-                  <button type="button" className="compact-missing-email-action" disabled={clarBusy} onClick={draftClarificationMail}>
-                    <Icon name="mail" size={12} /> {clarBusy ? 'Drafting email…' : 'Draft clarification email'}
-                  </button>
-                )}
-              </div>
-            )}
             {decisionErr && <div className="errbox" style={{ marginTop: 8 }}>{decisionErr}</div>}
             {decisionDraft.owner !== routeOwner(decisionDraft.region, store.config, decisionDraft.owner) && (
               <label className="afield" style={{ display: 'block', marginTop: 8 }}>Owner override reason
@@ -2968,16 +3015,16 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
 
           {lead.status === 'Qualified' && registrationPendingLow.length > 0 && (
             <WarnBox>
-              <b>Registration still blocked</b> by {registrationPendingLow.length} identity field{registrationPendingLow.length > 1 ? 's' : ''} awaiting a decision:
+              <b>Optional AI review:</b> {registrationPendingLow.length} identity field{registrationPendingLow.length > 1 ? 's' : ''} awaiting a decision:
               <ul>{registrationPendingLow.map((f, i) => <li key={i}>{f.k} ({f.conf}% confidence)</li>)}</ul>
-              Each must be accepted, edited or rejected.
+              You can review these suggestions now or complete them in Opportunity Creation.
             </WarnBox>
           )}
           {lead.status === 'Qualified' && deferredPendingLow.length > 0 && (
             <WarnBox>
               <b>Follow-up information</b> — these low-confidence sourcing or commercial fields can be completed after the opportunity is created:
               <ul>{deferredPendingLow.map((f, i) => <li key={i}>{f.k} ({f.conf}% confidence)</li>)}</ul>
-              Create the opportunity after the mandatory identity and verification checks are complete.
+              These suggestions do not block continuing to Opportunity Creation.
             </WarnBox>
           )}
           {compact && <div className="compact-source-rail">
@@ -3011,14 +3058,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           )}
           {lead.status === 'Qualified' && (
             <>
-            <button className="primary ws-action registration-action lead-footer-button" disabled={registrationBlocked || directCreateBusy || store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false}
-              title={registrationBlocked
-                ? verificationBlocked
-                  ? `Complete ${previewCustomerStatus} customer verification first`
-                  : missingIdentity.length > 0
-                  ? 'Complete the mandatory customer, EUC and contact fields first'
-                  : 'Resolve the low-confidence fields first'
-                : undefined}
+            <button className="primary ws-action registration-action lead-footer-button" disabled={directCreateBusy || store.canPerform?.('opportunities.create') === false || store.canPerform?.('leads.edit') === false}
               onClick={openRegistration}>
               {directCreateBusy ? 'Opening…' : 'Create opportunity'} <Icon name="check" size={14} />
             </button>
@@ -3054,7 +3094,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               <div className="ws-foot-notes">
                 {registrationPendingLow.length > 0 && (
                   <p className="ws-foot-note">
-                    Blocked — {registrationPendingLow.length} identity field{registrationPendingLow.length > 1 ? 's' : ''} below the {med}% confidence threshold.
+                    Optional review — {registrationPendingLow.length} identity field{registrationPendingLow.length > 1 ? 's' : ''} below the {med}% confidence threshold.
                   </p>
                 )}
                 {lead.status === 'Qualified' && effectiveMissing.length > 0 && (
@@ -3062,11 +3102,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                     <b>Optional follow-up:</b> {effectiveMissing.length} missing item{effectiveMissing.length > 1 ? 's' : ''} can be completed after registration.
                   </p>
                 )}
-                {verificationBlocked && (
-                  <p className="ws-foot-note">
-                    Blocked — {previewCustomerStatus} customer verification is not complete.
-                  </p>
-                )}
+
               </div>
             </>
           )}
@@ -3100,22 +3136,18 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   )
   if (!phoneLayout || compact) return detailContent
   const issues = [
-    ...missingIdentity.map(label => ({ label, note: 'Needed before registration' })),
-    ...(inquiryMissing ? [{ label: 'Inquiry type', note: 'Complete the enquiry type and any required RFQ reference/date' }] : []),
     ...registrationPendingLow.map(field => {
       const key = Object.entries(decisionFieldPatterns).find(([, pattern]) => pattern.test(field.k))?.[0]
-      return { label: `Review ${field.k}`, field: REQUIRED_IDENTITY_FIELDS.find(([name]) => name === key)?.[1] || 'Additional extracted fields', note: 'Confirm this low-confidence identity field before registration' }
+      return { label: `Review ${field.k}`, field: REQUIRED_IDENTITY_FIELDS.find(([name]) => name === key)?.[1] || 'Additional extracted fields', note: 'Optional: review this AI suggestion now or in Opportunity Creation' }
     }),
-    ...(verificationBlocked ? [{ label: 'Customer verification', note: 'Complete the existing customer verification checks' }] : []),
   ]
-  const blockedNote = registrationBlocked ? 'Complete the checks in Needs attention before registration.' : ''
   const phoneActions = canAct ? [
     { label: 'Reassign lead', onClick: () => setReassignOpen(true) },
     { label: 'Compare with original', onClick: () => setCompareOpen(true) },
     { label: 'Re-run extraction', onClick: reExtract, disabled: reExtracting },
     { label: 'Add a document', onClick: () => docInput.current?.click(), disabled: addingDocs },
     ...(clarificationAvailable ? [{ label: 'Draft clarification', panel: 'details', onClick: draftClarificationMail }] : []),
-    ...(lead.status === 'Qualified' ? [{ label: 'Create opportunity', onClick: openRegistration, disabled: registrationBlocked || directCreateBusy }] : []),
+    ...(lead.status === 'Qualified' ? [{ label: 'Create opportunity', onClick: openRegistration, disabled: directCreateBusy }] : []),
     ...(lead.status !== 'Qualified' && isFastTrackLead(previewLead, store.config, customer) ? [{ label: 'Fast-track to registration', disabled: store.canPerform?.('leads.edit') === false, onClick: () => {
       store.updateLead(lead.id, { status: 'Qualified', customerStatus: previewCustomerStatus, redFlag: previewCustomerStatus === 'Red', fastTrack: true, fastTrackStartedAt: lead.fastTrackStartedAt || nowIST() }, 'Green customer fast-track started')
       nav('/register/' + lead.id)
@@ -3129,7 +3161,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     details={<>{detailContent}{reErr && <ErrBox>{reErr}</ErrBox>}{reNote && <p role="status">{reNote}</p>}</>}
     email={<LeadSourceContext lead={lead} canAct={canAct} phoneLayout />} actions={phoneActions}
     action={canAct ? lead.status === 'Qualified'
-      ? { label: 'Continue registration', onClick: openRegistration, disabled: registrationBlocked || directCreateBusy, note: blockedNote }
+      ? { label: 'Continue registration', onClick: openRegistration, disabled: directCreateBusy }
       : { label: 'Qualify lead', onClick: () => store.updateLead(lead.id, { status: 'Qualified' }), disabled: store.canPerform?.('leads.edit') === false, note: 'Qualification does not create an opportunity.' }
       : undefined} onBack={() => nav('/inbox')} />
     <input ref={docInput} type="file" multiple hidden onChange={event => { addDocuments(event.target.files); event.target.value = '' }} name="inbox-file-5" />
@@ -3318,6 +3350,9 @@ export default function Inbox() {
   const [ageF, setAgeF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:ageF`, '')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [previewLeadId, setPreviewLeadId] = useState('')
+  const preferences = useWorkspaceFont()
+  const leadDetailsCollapsed = preferences.leadDetailsCollapsed
+  const toggleLeadDetails = () => { void preferences.saveLayout({ leadDetailsCollapsed: !leadDetailsCollapsed }).catch(() => {}) }
   const [inboxView, setInboxView] = useState('all')
   const [openHeaderFilter, setOpenHeaderFilter] = useState(null)
   const [repairingAi, setRepairingAi] = useState(false)
@@ -3556,8 +3591,11 @@ export default function Inbox() {
     setRepairingAi(true); setRepairAiNote('')
     let repaired = 0
     let failed = 0
-    for (const source of staleAiLeads) {
+    for (const indexLead of staleAiLeads) {
       try {
+        if (!await store.loadLeadDetails(indexLead.id)) throw new Error('Could not load lead')
+        const source = store.loadedLead(indexLead.id)
+        if (!source) throw new Error('Lead is unavailable')
         const hydrated = { ...source, attachments: await fullLeadAttachments(source, source.attachments) }
         const extracted = await extractLead(hydrated, store)
         if (!extracted?.ai?.summary || isUnavailableAiSummary(extracted)) {
@@ -3885,7 +3923,7 @@ export default function Inbox() {
         </Modal>
       )}
 
-      <div className={`mailbox-split${previewLead && !phone ? '' : ' mailbox-split--no-preview'}`}>
+      <div className={`mailbox-split${previewLead && !phone ? leadDetailsCollapsed ? ' mailbox-split--collapsed-preview' : '' : ' mailbox-split--no-preview'}`}>
       <div className="mailbox-list-panel">
       <div className="mailbox-list" ref={mailboxListRef} id="mailbox-lead-list" onScroll={updateMailboxScrollMetrics}>
         {phone && mobileFiltersOpen && <div className="phone-inbox-selection" role="group" aria-label="Selected lead actions"><button type="button" onClick={selectAllVisible}>Select visible</button><button type="button" onClick={() => setReadForSelected(true)} disabled={showArchive || !selectedIds.size}>Mark read</button><button type="button" onClick={() => setReadForSelected(false)} disabled={showArchive || !selectedIds.size}>Mark unread</button><button type="button" onClick={deleteSelected} disabled={!selectedIds.size || store.canPerform?.('records.delete') === false}>Delete</button><button type="button" onClick={() => { clearSelection(); setMobileFiltersOpen(false) }}>Done</button><span>{selectedIds.size} selected</span></div>}
@@ -3974,7 +4012,7 @@ export default function Inbox() {
         <span className="mailbox-horizontal-scrollbar-thumb" style={{ width: `${mailboxThumbWidth}px`, transform: `translateX(${mailboxThumbLeft}px)` }} />
       </div>
       </div>
-      {previewLead && !phone && <InboxLeadPreview key={previewLead.id} lead={previewLead} />}
+      {previewLead && !phone && <InboxLeadPreview key={previewLead.id} lead={previewLead} collapsed={leadDetailsCollapsed} onToggle={toggleLeadDetails} toggleDisabled={!preferences.loaded || preferences.saving} />}
       </div>
       {inboxPagination}
       {!showArchive && <WorkspaceInsights signals={inboxInsights} />}

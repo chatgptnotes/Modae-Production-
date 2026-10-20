@@ -141,7 +141,7 @@ test('inbox always uses fitted rows instead of summary cards', () => {
 test('inbox keeps pagination visible outside the scrolling message list', () => {
   assert.match(inbox, /React\.cloneElement\(pagination, \{ alwaysVisible: true, label: 'Inbox pages' \}\)/)
   assert.match(inbox, /<div className="mailbox-list-panel">[\s\S]*?<div className="mailbox-list"[^>]*>[\s\S]*?<\/div>[\s\S]*?<\/div>/)
-  assert.match(inbox, /<InboxLeadPreview key=\{previewLead\.id\} lead=\{previewLead\} \/>}\s*<\/div>\s*\{inboxPagination\}\s*\{!showArchive && <WorkspaceInsights signals=\{inboxInsights\} \/>\}/)
+  assert.match(inbox, /<InboxLeadPreview key=\{previewLead\.id\} lead=\{previewLead\}[^\n]* \/>}\s*<\/div>\s*\{inboxPagination\}\s*\{!showArchive && <WorkspaceInsights signals=\{inboxInsights\} \/>\}/)
   assert.match(css, /\.mailbox-split\s*\{[^}]*flex: 1 1 auto;[^}]*min-height: 0;/)
   assert.match(css, /\.mailbox-list-panel\s*\{[^}]*display: flex;[^}]*flex-direction: column;[^}]*min-height: 0;/)
   assert.match(css, /\.mailbox-list-panel > \.mailbox-list\s*\{[^}]*overflow-y: auto;/)
@@ -168,7 +168,7 @@ test('Lead Preview wraps field columns and scrolls within its panel', () => {
 })
 
 test('inbox aging alert remains a compact full-width banner below pagination', () => {
-  assert.match(inbox, /<InboxLeadPreview key=\{previewLead\.id\} lead=\{previewLead\} \/>}\s*<\/div>\s*\{inboxPagination\}\s*\{!showArchive && <WorkspaceInsights signals=\{inboxInsights\} \/>\}/)
+  assert.match(inbox, /<InboxLeadPreview key=\{previewLead\.id\} lead=\{previewLead\}[^\n]* \/>}\s*<\/div>\s*\{inboxPagination\}\s*\{!showArchive && <WorkspaceInsights signals=\{inboxInsights\} \/>\}/)
   assert.match(css, /\.mailbox-page > \.list-pagination\s*\{[^}]*width: 100%;/)
   assert.match(css, /\.mailbox-page > \.workspace-insights\s*\{[^}]*min-height: 34px;[^}]*border-left: 3px solid #D99200;/)
 })
@@ -251,7 +251,7 @@ test('subject and preview stay contained inside the inbox cell', () => {
 test('opportunity scope is optional during lead qualification and registration', () => {
   assert.match(inbox, /const missing = \['Customer name', 'Required quantities and specifications'\]/)
   assert.match(inbox, /if \(text\.includes\('opportunity scope'\)\) return false/)
-  assert.match(inbox, /<textarea rows=\{5\} value=\{decisionDraft\.scope\}/)
+  assert.match(inbox, /<textarea className="lead-scope-input" rows=\{3\} value=\{decisionDraft\.scope\}/)
   assert.match(css, /\.lead-decision-grid input, \.lead-decision-grid select, \.lead-decision-grid textarea \{[\s\S]*border: 1px solid var\(--ws-border-strong\)/)
   const register = fs.readFileSync(new URL('../src/pages/Register.jsx', import.meta.url), 'utf8')
     assert.match(register, /const missingInfo = \[/)
@@ -259,7 +259,7 @@ test('opportunity scope is optional during lead qualification and registration',
 })
 
 test('AI missing information is optional for registration', () => {
-  assert.match(inbox, /const registrationBlocked = missingIdentity\.length > 0 \|\| inquiryMissing \|\| registrationPendingLow\.length > 0 \|\| verificationBlocked/)
+  assert.doesNotMatch(inbox, /const registrationBlocked|registrationRequired|className="required-mark"/)
   // The interactive "Missing information" panel (with per-item +Add) is the
   // single source of truth for optional follow-up items — a second static
   // "Optional information still missing" box used to repeat the same list.
@@ -504,7 +504,8 @@ test('compact lead review uses one decision form and a bounded review rail', () 
   assert.match(css, /compact-action-col > \.ws-foot > \.lead-footer-button \{[\s\S]*?height: 38px;[\s\S]*?min-height: 38px;/,
     'all lead footer buttons should share one explicit height rule')
   assert.match(inbox, /<div className="lead-decision-subsection">Customer and contact<\/div>/)
-  assert.match(inbox, /<div className="lead-decision-subsection">Routing and ownership<\/div>/)
+  assert.match(inbox, /<details className="lead-additional-information lead-decision-full">/)
+  assert.match(inbox, /<summary>Additional information<\/summary>/)
   assert.match(inbox, /aria-label="Search EUC city or state"/)
   assert.match(inbox, /className="location-suggestions euc-location-suggestions" role="listbox"/)
   assert.match(inbox, /const selectEucLocation = \(item\) =>/)
@@ -525,7 +526,7 @@ test('compact lead review uses one decision form and a bounded review rail', () 
   assert.match(css, /\.secondary-action \{[\s\S]*?background: var\(--ws-blue-soft\) !important;/)
 })
 
-test('compact missing information does not duplicate mandatory registration blockers', () => {
+test('compact missing information avoids repeating editable customer and contact fields', () => {
   assert.match(inbox, /const reviewMissing = effectiveMissing\.filter\(item => \{/)
   assert.match(inbox, /contact\\s\+\(\?:phone\|number\)/)
   assert.match(inbox, /const displayedMissing = compact \? reviewMissing : effectiveMissing/)
@@ -566,4 +567,15 @@ test('active lead approval keeps the outer content flexible while inner panels s
   assert.match(css, /\.lead-workspace:has\(\.active-structured-grid\) \.active-structured-grid,[\s\S]*?height: auto;[\s\S]*?flex: 1 1 0%;/)
   assert.match(css, /compact-routing-panel > \.lead-decision-card \{[\s\S]*?flex: 1 1 0%;[\s\S]*?overflow-y: auto;/)
   assert.match(css, /compact-action-col > \.ws-body \{[\s\S]*?flex: 1 1 0%;[\s\S]*?overflow-y: auto;/)
+})
+
+
+test('assigned owner stays in the main customer section above collapsed additional details', () => {
+  const form = inbox.slice(inbox.indexOf('<div className="lead-decision-subsection">Customer and contact</div>'))
+  const owner = form.indexOf('name="inbox-owner"')
+  const details = form.indexOf('<details className="lead-additional-information lead-decision-full">')
+  assert.ok(owner > 0 && owner < details)
+  assert.ok(form.indexOf('name="inbox-opp-type"') > details)
+  assert.doesNotMatch(form.slice(details, form.indexOf('name="inbox-opp-type"')), /<details[^>]*\bopen\b/)
+  assert.match(css, /field-sizing:\s*content/)
 })

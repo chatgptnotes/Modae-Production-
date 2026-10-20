@@ -5,6 +5,7 @@ const resolutions=new Map()
 export const workspaceRecordResolution=(entity,id)=>resolutions.get(recordKey(entity,id))||0
 export function resolvedWorkspaceRecord(entity,id){const key=recordKey(entity,id);resolutions.set(key,workspaceRecordResolution(entity,id)+1);syncChanged()}
 export function registerWorkspaceEditor(key,records){editors.set(key,records);return()=>editors.delete(key)}
+export function activeWorkspaceEditorRecords(){return [...new Map([...editors.values()].flat().map(row=>[recordKey(row.entity,row.id),row])).values()]}
 // A boundary remount resets all its children. Include overlapping boundaries
 // so discarding one record never silently drops another form's local inputs.
 export function relatedWorkspaceRecords(records){

@@ -31,13 +31,17 @@ test('approval request cards and summary expand with the page in both themes', (
   assert.match(rule, /min-width:\s*0/)
 })
 
-test('opportunity IDs stay white while classification colours remain on customer status', () => {
+test('opportunity IDs follow the table theme while classification colours remain on customer status', () => {
   for (const name of ['Green', 'Blue', 'Amber', 'Red']) {
     const selector = `.shell .tracker-page table.sheet td.oppid.${name}`
     const start = styles.indexOf(selector)
     assert.ok(start >= 0, `${name} ID override must exist`)
-    assert.match(styles.slice(start, styles.indexOf('}', start)), /background:\s*#fff\s*!important/)
+    const rule = styles.slice(start, styles.indexOf('}', start))
+    assert.match(rule, /background:\s*var\(--surface-default\)\s*!important/)
+    assert.match(rule, /color:\s*var\(--text-primary\)\s*!important/)
   }
+  assert.match(styles, /\.shell \.tracker-page table\.sheet tbody tr:hover td\.oppid\s*\{\s*background:\s*var\(--action-secondary-hover\)\s*!important/)
+  assert.match(styles, /\.shell \.tracker-page table\.sheet td\.oppid a\s*\{\s*background:\s*transparent\s*!important;\s*color:\s*inherit\s*!important/)
   assert.match(styles, /table\.sheet td\.cstat\.Green[\s\S]*?background/)
 })
 

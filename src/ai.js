@@ -18,6 +18,7 @@ const AI_URL = '/api/ai'
 export const usesRailwayAi = () => true
 
 export const aiEnabled = () => !!AI_URL
+export const usesLocalDemoAi = (isDevelopment, accessToken) => Boolean(isDevelopment && !accessToken)
 
 const DEFAULT_TIMEOUT = 45000
 const inflight = new Map()
@@ -46,6 +47,7 @@ export async function runTaskResult(task, payload = {}, { timeoutMs = DEFAULT_TI
       headers: {
         'Content-Type': 'application/json',
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(usesLocalDemoAi(Boolean(import.meta.env?.DEV), accessToken) ? { 'X-WinTrack-Local-AI': 'true' } : {}),
       },
       body: JSON.stringify(body),
       signal: ctl.signal,

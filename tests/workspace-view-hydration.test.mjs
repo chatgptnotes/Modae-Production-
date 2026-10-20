@@ -13,10 +13,10 @@ function harness() {
   const baseline = { current: {} }, hydrated = { current: false }, epoch = { current: 1 }, requested = { current: null }
   const calls = [], pending = []
   let summary = null, activeView = null
-  const ctx = vm.createContext({ Promise, JSON, Map, stateRef, lastSavedRef: baseline, hydratedRef: hydrated, authEpochRef: epoch,
+  const ctx = vm.createContext({ Promise, JSON, Map, Date, installedViewsRef: { current: new WeakSet() }, setWorkspaceCheckedAt() {}, stateRef, lastSavedRef: baseline, hydratedRef: hydrated, authEpochRef: epoch,
     authInvalidRef: { current: false }, viewRequestsRef: { current: new Map() }, requestedViewRef: requested,
     approvalViewRevisionsRef: { current: {} }, bootRef: { current: {} }, workspaceSyncState: {},
-    datastore: { dbEnabled: () => true, loadWorkspaceView: view => { calls.push(view); return new Promise(resolve => pending.push(resolve)) }, installWorkspaceViewRevisions() {} },
+    datastore: { peekWorkspaceView: () => null, dbEnabled: () => true, loadWorkspaceView: view => { calls.push(view); return new Promise(resolve => pending.push(resolve)) }, installWorkspaceViewRevisions() {} },
     mergeWorkspaceView, registerDirtyRecords() {}, applyAuthoritativeProfile: s => s, migrate: s => s,
     emptyState: s => ({ ...s, opportunities: [], proposals: {}, audit: [] }), syncedOf: s => s,
     setState: s => { stateRef.current = s }, recordFrom: (s, entity, id) => s[entity]?.find?.(r => r.id === id),

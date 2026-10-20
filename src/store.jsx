@@ -1,5 +1,7 @@
+import { workspaceSyncRequest } from './workspaceSyncApi.js'
+import { workspaceProjectionVersion } from './workspaceAccess.js'
 import { parseProbabilityPct } from './opportunityProbability.js'
-import { mergeWorkspaceView, workspaceViewForPath } from './workspaceViews.js'
+import { mergeWorkspaceView, workspaceViewForPath, workspaceNeedsCatalogue, reconcileWorkspaceCollection } from './workspaceViews.js'
 import { activeWorkspaceInput, appliedWorkspaceInput } from './workspaceInputOwnership.js'
 import { WorkspaceSyncRuntime } from './ui/WorkspaceSync.jsx'
 import { workspaceDrafts, SYNC_ENTITIES } from './workspaceDrafts.js'
@@ -316,6 +318,8 @@ export function StoreProvider({ children }) {
   const [authProfileError, setAuthProfileError] = useState('')
   const [overview, setOverview] = useState(null)
   const [activeDataView, setActiveDataView] = useState(null)
+  const [workspaceCheckedAt, setWorkspaceCheckedAt] = useState(0)
+  const installedViewsRef = useRef(new WeakSet())
   const viewRequestsRef = useRef(new Map())
   const requestedViewRef = useRef(null)
   const authEpochRef = useRef(0)
@@ -323,6 +327,8 @@ export function StoreProvider({ children }) {
   const pendingAuthUserRef = useRef(null)
   const [liveSyncStatus, setLiveSyncStatus] = useState(() => supabaseConfigError ? 'config-error' : datastore.dbEnabled() ? 'connecting' : 'offline')
   const [adminSaveState, setAdminSaveState] = useState('saved')
+  const priceListsEpochRef = useRef(null)
+  const catalogueUsersRef = useRef(new Set())
   const [priceListsStatus, setPriceListsStatus] = useState(() => Object.keys(state.priceLists || {}).length ? 'ready' : 'loading')
   const [sourcingDataStatus, setSourcingDataStatus] = useState(() => datastore.dbEnabled() ? 'loading' : 'ready')
   const [sourcingDataError, setSourcingDataError] = useState('')
@@ -552,27 +558,32 @@ export function StoreProvider({ children }) {
       try {
         const result = await datastore.loadWorkspaceView(view, { force, isCurrent: current })
         if (!current() || !result || activate && requestedViewRef.current !== key) return false
-        registerDirtyRecords()
-        datastore.installWorkspaceViewRevisions(result, (entity, id) => hydratedRef.current && JSON.stringify(recordFrom(stateRef.current, entity, id)) !== JSON.stringify(recordFrom(lastSavedRef.current, entity, id)))
-        const slices = mergeWorkspaceView(lastSavedRef.current, result)
-        if (!hydratedRef.current) {
-          // No business editor mounts before this first authoritative response.
-          // Summary opportunities stay out of canonical state and save baselines.
-          const next = applyAuthoritativeProfile(migrate({ ...emptyState(stateRef.current),
-            audit: [], ...slices, demoData: false, priceLists: {},
-            auth: stateRef.current.auth, role: stateRef.current.role, roles: stateRef.current.roles,
-          }), slices.users)
-          approvalViewRevisionsRef.current = result.slices._approvalRevisions || {}
-          stateRef.current = next
-          lastSavedRef.current = syncedOf(next)
-          bootRef.current = syncedOf(next)
-          hydratedRef.current = true
-          setState(next)
-        } else applyServer(slices)
+        if (!installedViewsRef.current.has(result)) {
+          registerDirtyRecords()
+          datastore.installWorkspaceViewRevisions(result, (entity, id) => hydratedRef.current && JSON.stringify(recordFrom(stateRef.current, entity, id)) !== JSON.stringify(recordFrom(lastSavedRef.current, entity, id)))
+          const slices = mergeWorkspaceView(lastSavedRef.current, result)
+          if (!hydratedRef.current) {
+            // No business editor mounts before this first authoritative response.
+            // Summary opportunities stay out of canonical state and save baselines.
+            const next = applyAuthoritativeProfile(migrate({ ...emptyState(stateRef.current),
+              audit: [], ...slices, demoData: false, priceLists: {},
+              auth: stateRef.current.auth, role: stateRef.current.role, roles: stateRef.current.roles,
+            }), slices.users)
+            approvalViewRevisionsRef.current = result.slices._approvalRevisions || {}
+            stateRef.current = next
+            lastSavedRef.current = syncedOf(next)
+            bootRef.current = syncedOf(next)
+            hydratedRef.current = true
+            setState(next)
+          } else applyServer(slices)
+          installedViewsRef.current.add(result)
+        }
         if (activate && requestedViewRef.current === key) {
           setOverview(result.summary)
           setActiveDataView(view)
+          setWorkspaceCheckedAt(datastore.peekWorkspaceView(view, stateRef.current.auth?.user?.id)?.at || Date.now())
         }
+        setSyncDiagnostics(d => ({ ...d, lastLoadError: null }))
         setLiveSyncStatus('live')
         setSourcingDataStatus(view.kind === 'detail' || view.kind === 'full' ? 'ready' : 'loading')
         setSourcingDataError('')
@@ -601,7 +612,7 @@ export function StoreProvider({ children }) {
     registerDirtyRecords()
     if (diagnostics) setSyncDiagnostics(diagnostics)
     const s = stateRef.current
-    const updates = {}
+    const updates = {}, baselineSlices = {}
     for (const [k, v] of Object.entries(syncedOf(slices))) {
       // A background slice may not have a server baseline yet because the
       // fast boot path intentionally skips large records. Compare those
@@ -611,29 +622,35 @@ export function StoreProvider({ children }) {
       const hasSavedBaseline = Object.prototype.hasOwnProperty.call(lastSavedRef.current, k)
       const baseline = hasSavedBaseline ? lastSavedRef.current[k] : bootRef.current[k]
       const dirty = k in s && JSON.stringify(s[k]) !== JSON.stringify(baseline)
-      if (workspaceSyncState.enabled && [...SYNC_ENTITIES,'sparesLines','clarifications'].includes(k)) {
-        let merged = { [k]: v }
-        const entity=k==='sparesLines'?'spares_lines':k
-        for (const entry of workspaceDrafts.entries.values()) if (entry.entity === entity) {
-          const local = recordFrom(s,entity,entry.id)
-          merged = replaceRecord(merged,{entity,id:entry.id,data:local,available:!!local})
-        }
-        updates[k] = merged[k]
+      if ([...SYNC_ENTITIES,'sparesLines','clarifications'].includes(k)) {
+        const entity = k === 'sparesLines' ? 'spares_lines' : k
+        const reconciled = reconcileWorkspaceCollection(s[k], baseline, v, id => !!workspaceDrafts.get(entity, id))
+        updates[k] = reconciled.value
+        baselineSlices[k] = reconciled.baseline
         continue
       }
       if (dirty) {
         if (k === 'config') updates.config = { ...s.config, accessPolicy: v.accessPolicy, opportunityNumbering: v.opportunityNumbering }
         continue
       }
+      baselineSlices[k] = v
       if (JSON.stringify(s[k]) === JSON.stringify(v)) continue
       updates[k] = v
     }
     if (Array.isArray(slices.approvals) && (updates.approvals || JSON.stringify(s.approvals) === JSON.stringify(slices.approvals))) {
       // Bind expectedRev to the version actually presented, never to a newer
       // datastore revision that a dirty local slice refused to display.
-      approvalViewRevisionsRef.current = Object.fromEntries(Object.entries(slices._approvalRevisions || {}).map(([id,rev])=>[id,workspaceDrafts.get('approvals',id) ? approvalViewRevisionsRef.current[id] : rev]))
+      const revisions = { ...slices._approvalRevisions }
+      for (const row of s.approvals || []) {
+        const old = lastSavedRef.current.approvals?.find(saved => saved.id === row.id)
+        if (workspaceDrafts.get('approvals', row.id) || JSON.stringify(row) !== JSON.stringify(old)) {
+          if (approvalViewRevisionsRef.current[row.id] !== undefined) revisions[row.id] = approvalViewRevisionsRef.current[row.id]
+          else delete revisions[row.id]
+        }
+      }
+      approvalViewRevisionsRef.current = revisions
     }
-    const serverSlices = syncedOf(slices)
+    const serverSlices = baselineSlices
     const baselineUpdates = {
       ...(serverSlices.leads ? { leadSyncBaseline: serverSlices.leads } : {}),
       ...(serverSlices.clarifications ? { clarificationSyncBaseline: serverSlices.clarifications } : {}),
@@ -650,7 +667,9 @@ export function StoreProvider({ children }) {
       ...baselineUpdates,
     }))
     lastSavedRef.current = { ...lastSavedRef.current, ...Object.fromEntries(Object.entries(serverSlices)) }
-    setState(applyAuthoritativeProfile(merged, serverSlices.users))
+    const next = applyAuthoritativeProfile(merged, serverSlices.users)
+    stateRef.current = next
+    setState(next)
   }
 
   const loadApprovedPriceLists = async ({ force = false } = {}) => {
@@ -659,11 +678,8 @@ export function StoreProvider({ children }) {
       setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'ready' : 'empty')
       return
     }
-    // A configured Supabase project is authoritative. Do not display or
-    // republish a catalogue left behind in the browser while the server read
-    // is pending or unavailable.
-    lastSavedRef.current = { ...lastSavedRef.current, priceLists: {} }
-    setState(s => Object.keys(s.priceLists || {}).length ? { ...s, priceLists: {} } : s)
+    // Boot clears connected catalogues. Later checks retain the last loaded
+    // catalogue and its baseline so a refresh cannot erase an open editor.
     setPriceListsStatus(Object.keys(stateRef.current.priceLists || {}).length ? 'refreshing' : 'loading')
     try {
       const result = await datastore.loadPriceLists({ force })
@@ -677,11 +693,14 @@ export function StoreProvider({ children }) {
         lastSavedRef.current = { ...lastSavedRef.current, priceLists: next }
         setState(s => ({ ...s, priceLists: next }))
       }
+      priceListsEpochRef.current = epoch
       setPriceListsStatus(Object.keys(next).length ? 'ready' : 'empty')
+      return true
     } catch (error) {
       if (epoch !== authEpochRef.current || authInvalidRef.current) return
       console.warn('Approved price-list load failed:', error?.message || error)
       setPriceListsStatus('error')
+      return false
     }
   }
 
@@ -728,27 +747,13 @@ export function StoreProvider({ children }) {
     if (initialHydrationRef.current === userId) return
     initialHydrationRef.current = userId
     hydrate()
-    const onFocus = () => {
-      if (!hydratedRef.current) return
-      if (!workspaceSyncState.enabled) void pullSharedData()
-    }
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        flushLocalCache()
-        void flushSaves()
-      } else {
-        onFocus()
-      }
-    }
-    const onOnline = () => onFocus()
-    const onPageHide = () => { flushLocalCache(); flushSaves() }
-    window.addEventListener('focus', onFocus)
-    window.addEventListener('online', onOnline)
+    // Route boundaries own activation reads. Hiding a page only saves the
+    // local working copy; it must not flush form drafts to the server.
+    const onVisibility = () => { if (document.visibilityState === 'hidden') flushLocalCache() }
+    const onPageHide = () => flushLocalCache()
     document.addEventListener('visibilitychange', onVisibility)
     window.addEventListener('pagehide', onPageHide)
     return () => {
-      window.removeEventListener('focus', onFocus)
-      window.removeEventListener('online', onOnline)
       document.removeEventListener('visibilitychange', onVisibility)
       window.removeEventListener('pagehide', onPageHide)
     }
@@ -784,14 +789,88 @@ export function StoreProvider({ children }) {
       .catch(e => api.setSpSync(oppId, { state: 'error', folder, error: e?.message || String(e) }))
   }
 
+  const bookingContext = source => {
+    const known = new Map((overview?.opportunities || []).map(row => [row.id, row]))
+    for (const row of source.opportunities || []) {
+      const remote = known.get(row.id)
+      known.set(row.id, { ...remote, ...row, ...(row.booking || remote?.booking ? { booking: row.booking || remote.booking } : {}) })
+    }
+    return { ...source, opportunities: [...known.values()] }
+  }
+  const displayRows = (rows, collection, deleted = []) => {
+    const local = state[collection] || [], baseline = lastSavedRef.current[collection] || []
+    const changed = row => JSON.stringify(row) !== JSON.stringify(baseline.find(saved => saved.id === row.id))
+    const visible = new Set((rows || []).map(row => row.id)), removed = new Set(deleted)
+    return [...(rows || []).filter(row => !removed.has(row.id)).map(row => {
+      const current = local.find(value => value.id === row.id)
+      return current && changed(current) ? current : row
+    }), ...local.filter(row => !visible.has(row.id) && !removed.has(row.id) && changed(row))]
+  }
+
   const api = {
     ...state,
     opportunities: activeDataView?.kind === 'overview' && overview ? overview.opportunities : state.opportunities,
     overviewSignals: ['overview', 'list'].includes(activeDataView?.kind) ? overview?.signals || {} : {},
+    get workspaceNavigation() {
+      const navigation = overview?.navigation
+      return navigation ? { ...navigation,
+        leads: displayRows(navigation.leads, 'leads', state.deletedLeadIds),
+        opportunities: displayRows(navigation.opportunities, 'opportunities', state.deletedOpportunityIds),
+      } : undefined
+    },
+    leadDisplayRows: rows => displayRows(rows, 'leads', state.deletedLeadIds),
+    leadArchiveDisplayRows: rows => displayRows(rows, 'leadArchive', state.deletedLeadIds),
+    opportunityDisplayRows: rows => displayRows(rows, 'opportunities', state.deletedOpportunityIds),
+    workspaceCheckedAt,
+    activeDataView,
+    peekWorkspaceView: view => datastore.peekWorkspaceView(view, state.auth?.user?.id),
     ensureWorkspaceView,
     loadOpportunityDetails: id => ensureWorkspaceView({ kind: 'detail', id }, { activate: false }),
     loadedOpportunity: id => stateRef.current.opportunities.find(row => row.id === id),
-    ensurePriceLists: () => loadApprovedPriceLists(),
+    loadLeadDetails: (id, { expectedRev = 0, force = false } = {}) => ensureWorkspaceView({ kind: 'lead', id }, {
+      activate: false, force: force || (datastore.workspaceRecord('leads', id)?.rev || 0) < expectedRev,
+    }),
+    async loadLeadRecords(ids) {
+      if (!datastore.dbEnabled()) return true
+      const epoch = authEpochRef.current, generation = getWorkspaceGeneration()
+      const current = () => epoch === authEpochRef.current && !authInvalidRef.current && generation === getWorkspaceGeneration()
+      const wanted = [...new Set(ids)]
+      try {
+        for (let offset = 0; offset < wanted.length; offset += 100) {
+          const batch = wanted.slice(offset, offset + 100)
+          const result = await workspaceSyncRequest({ operation: 'read_records', records: batch.map(id => ({ entity: 'leads', id })), generation })
+          if (!current() || result.generation !== generation) return false
+          if (result.accessVersion !== workspaceProjectionVersion({ ...stateRef.current.auth.user, role: stateRef.current.role, roles: stateRef.current.roles }, stateRef.current.config)) { api.syncAccessChanged(); return false }
+          if (result.records?.length !== batch.length || result.records.some(row => !row.available || !row.data)) return false
+          const response = { view: { kind: 'lead' }, slices: { leads: result.records.map(row => row.data) }, revisions: result.records,
+            coverage: { records: { leads: batch } } }
+          datastore.installWorkspaceViewRevisions(response, (entity, id) => JSON.stringify(recordFrom(stateRef.current, entity, id)) !== JSON.stringify(recordFrom(lastSavedRef.current, entity, id)))
+          applyServer(mergeWorkspaceView(lastSavedRef.current, response))
+        }
+        return true
+      } catch (error) {
+        if (current()) {
+          if (error.code === 'WORKSPACE_PURGED') workspaceSyncState.suspended = true
+          setSyncDiagnostics(d => ({ ...d, lastLoadError: { message: error.message } }))
+        }
+        return false
+      }
+    },
+    loadedLead: id => stateRef.current.leads.find(row => row.id === id) || stateRef.current.leadArchive?.find(row => row.id === id),
+    leadForDisplay: (row, rev) => {
+      const local = state.leads.find(lead => lead.id === row.id)
+      if (!local) return row
+      const base = datastore.workspaceRecord('leads', row.id)
+      const dirty = JSON.stringify(local) !== JSON.stringify(lastSavedRef.current.leads.find(lead => lead.id === row.id))
+      return dirty || base && base.rev >= (rev || 0) ? local : row
+    },
+    registerCatalogueUse: () => {
+      const token = Symbol('catalogue')
+      catalogueUsersRef.current.add(token)
+      return () => catalogueUsersRef.current.delete(token)
+    },
+    ensurePriceLists: options => loadApprovedPriceLists(options),
+    priceListsLoaded: priceListsEpochRef.current === authEpochRef.current,
     flushPersistence,
     async saveSelectedRecords(records) {
       if (!workspaceSyncState.enabled || workspaceSyncState.suspended) return false
@@ -842,6 +921,7 @@ export function StoreProvider({ children }) {
       return flushSaves({explicit:true,selection})
     },
     syncAccessChanged() {
+      datastore.resetWorkspaceViewRecords()
       authInvalidRef.current = true
       workspaceSyncState.suspended = true
       clearTimeout(saveTimerRef.current)
@@ -1478,6 +1558,9 @@ export function StoreProvider({ children }) {
     },
 
     updateLead(id, patch, detail = '') {
+      if (datastore.dbEnabled() && (!stateRef.current.leads.some(row => row.id === id) || (datastore.workspaceRecord('leads', id)?.rev || 0) < (overview?.leadRevisions?.[id] || 0))) {
+        return api.loadLeadDetails(id, { expectedRev: overview?.leadRevisions?.[id] }).then(ok => { if (ok && stateRef.current.leads.some(row => row.id === id)) api.updateLead(id, patch, detail) })
+      }
       setState(s => {
         const next = { ...s, leads: s.leads.map(l => (l.id === id ? { ...l, ...patch } : l)) }
         const auditKeys = Object.keys(patch).filter(k => !['readAt', 'starred'].includes(k))
@@ -1507,6 +1590,8 @@ export function StoreProvider({ children }) {
     updateLeads(ids, patch, detail = '') {
       const wanted = new Set(ids || [])
       if (!wanted.size) return
+      const missing = [...wanted].filter(id => !stateRef.current.leads.some(row => row.id === id) || (datastore.workspaceRecord('leads', id)?.rev || 0) < (overview?.leadRevisions?.[id] || 0))
+      if (datastore.dbEnabled() && missing.length) return api.loadLeadRecords(missing).then(ok => { if (ok) api.updateLeads(ids, patch, detail) })
       setState(s => {
         const changed = (s.leads || []).filter(lead => wanted.has(lead.id))
         if (!changed.length) return s
@@ -1522,6 +1607,9 @@ export function StoreProvider({ children }) {
     // are protected here so deleting a mailbox row cannot orphan commercial
     // history; the caller confirms before invoking this action.
     deleteLead(id) {
+      if (datastore.dbEnabled() && ![...stateRef.current.leads, ...(stateRef.current.leadArchive || [])].some(row => row.id === id)) {
+        return api.loadLeadDetails(id).then(ok => ok && [...stateRef.current.leads, ...(stateRef.current.leadArchive || [])].some(row => row.id === id) && api.deleteLead(id))
+      }
       const lead = stateRef.current.leads.find(l => l.id === id)
         || (stateRef.current.leadArchive || []).find(l => l.id === id)
       if (!lead || lead.oppId) return false
@@ -2558,8 +2646,11 @@ export function StoreProvider({ children }) {
     },
     acceptPO(oppId) {
       setState(s => {
-        let next = approvePurchaseOrder(s, oppId)
-        if (next === s) return s
+        const context = bookingContext(s)
+        let next = approvePurchaseOrder(context, oppId)
+        if (next === context) return s
+        const acceptedOpportunity = next.opportunities.find(row => row.id === oppId)
+        next = { ...next, opportunities: s.opportunities.map(row => row.id === oppId ? acceptedOpportunity : row) }
         const both = next.poCompare[oppId].status === 'Accepted'
         if (both) {
           next = {
@@ -2573,10 +2664,14 @@ export function StoreProvider({ children }) {
     },
     confirmOrderBooking(oppId, details) {
       // Validate synchronously so the form can present actionable errors.
-      recordBooking(state, oppId, details)
+      recordBooking(bookingContext(stateRef.current), oppId, details)
       setState(s => {
-        const next = recordBooking(s, oppId, details)
-        return next === s ? s : withAudit(next, 'Order booking confirmed', oppId,
+        const context = bookingContext(s)
+        const recorded = recordBooking(context, oppId, details)
+        if (recorded === context) return s
+        const booked = recorded.opportunities.find(row => row.id === oppId)
+        const next = { ...s, opportunities: s.opportunities.map(row => row.id === oppId ? booked : row) }
+        return withAudit(next, 'Order booking confirmed', oppId,
           `${details.po} · ${details.booked} · ${details.valueK} K₹`)
       })
     },
@@ -2820,7 +2915,9 @@ export function StoreProvider({ children }) {
     },
 
     async refreshSharedData() {
-      return ensureWorkspaceView(workspaceViewForPath(window.location.pathname), { force: true })
+      const path = window.location.pathname, view = workspaceViewForPath(path)
+      const ok = await ensureWorkspaceView(view, { force: true })
+      return ok && ((workspaceNeedsCatalogue(path, view) || catalogueUsersRef.current.size > 0) ? await loadApprovedPriceLists({ force: true }) : true)
     },
 
     // Sourcing has its own fast-load contract. Retrying it should not make
@@ -3012,6 +3109,11 @@ export function StoreProvider({ children }) {
       window.location.reload()
     },
     logout() {
+      datastore.resetWorkspaceViewRecords()
+      viewRequestsRef.current.clear()
+      setOverview(null)
+      setActiveDataView(null)
+      setWorkspaceCheckedAt(0)
       authEpochRef.current++
       externalLoginRef.current = null
       pendingAuthUserRef.current = null
@@ -3295,4 +3397,25 @@ export function nextOppId(opportunities, owner, numbering) {
 export async function reserveOppId(opportunities, owner, roleNames = {}, numbering) {
   if (datastore.dbEnabled()) return datastore.reserveOpportunityNumber()
   return nextOppId(opportunities, owner, numbering)
+}
+
+// Page read models never enter canonical state, local persistence, or save
+// baselines. All action closures above continue to operate on full records.
+export function WorkspacePageStoreProvider({ result, children }) {
+  const store = useStore()
+  if (!result) return children
+  const { summary = {}, view } = result
+  const display = { ...store }
+  if (['overview', 'sent', 'orders'].includes(view.kind)) display.opportunities = store.opportunityDisplayRows(summary.opportunities || [])
+  if (['overview', 'list'].includes(view.kind)) display.overviewSignals = summary.signals || {}
+  if (view.kind === 'inbox') {
+    display.workspaceLeadRevisions = summary.leadRevisions || {}
+    display.leads = store.leadDisplayRows((summary.leads || []).map(row => store.leadForDisplay(row, summary.leadRevisions?.[row.id])))
+    display.leadArchive = store.leadArchiveDisplayRows(summary.leadArchive || [])
+  }
+  if (view.kind === 'sent') {
+    display.proposals = summary.proposalRevisions || {}
+    display.getProposal = id => display.proposals[id] || { revision: '00' }
+  }
+  return <StoreCtx.Provider value={display}>{children}</StoreCtx.Provider>
 }

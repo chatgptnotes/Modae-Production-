@@ -202,10 +202,13 @@ Management and Admin defaults, concurrent ID creation, policy revision conflicts
 and proposal release checks. SQL rollback alone is insufficient after deploying
 the new client; roll back the application and database contract together.
 
-## Personal font preferences
+## Personal appearance preferences
 
 `/api/user-preferences` uses `records.entity = user_preferences`, with the
-Supabase Auth UUID as row ID and `{font}` as data. Reads and writes are server-only
+Supabase Auth UUID as row ID and `{font, sidebarCompact, leadDetailsCollapsed}` as data.
+Missing sidebar fields default to `false` (expanded). PUT accepts a revision and
+one or more of these preferences, preserving omitted fields so font changes and
+sidebar choices cannot erase each other. Reads and writes are server-only
 and tied to an active authenticated profile, with `save_rows` revision checks.
 The existing records schema and migration 022 access boundary are reused; no new
 migration is required. These rows are excluded from shared state projections.

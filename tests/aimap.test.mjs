@@ -124,7 +124,7 @@ test('a dropped lead is not offered as a duplicate', () => {
 
 test('the inbox computes duplicates live rather than reading a seeded list', () => {
   const inbox = read('src/pages/Inbox.jsx')
-  assert.match(inbox, /const dupes = findDuplicates\(lead, store\.leads\)/)
+  assert.match(inbox, /const dupes = findDuplicates\(lead, store\.workspaceNavigation\?\.leads \|\| store\.leads\)/)
   assert.doesNotMatch(inbox, /\{ai\.duplicates\.map/, 'the seeded list must no longer drive the UI')
 })
 

@@ -273,7 +273,7 @@ export default function IntakeForm({ destinationPicker = null }) {
     const name = file.name.toLowerCase()
     const isPdf = file.type.includes('pdf') || name.endsWith('.pdf')
     const isImage = supportsVisualAi(file) && !isPdf
-    const isEmail = name.endsWith('.eml') || name.endsWith('.msg') || file.type === 'message/rfc822'
+    const isEmail = name.endsWith('.eml') || file.type === 'message/rfc822'
     if (!isPdf && !isEmail && !isImage) {
       setAiError('Upload the enquiry as a PDF, image, or saved email (.eml)')
       return
@@ -495,7 +495,7 @@ export default function IntakeForm({ destinationPicker = null }) {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf,application/pdf,.eml,.msg,message/rfc822,.png,.jpg,.jpeg,.webp,image/*"
+                    accept=".pdf,application/pdf,.eml,message/rfc822,.png,.jpg,.jpeg,.webp,.heic,.heif,image/*"
                     onChange={(e) => e.target.files?.[0] && handleFileUpload(e.target.files[0])}
                     style={{ display: 'none' }} name="intake-form-file"
                   />

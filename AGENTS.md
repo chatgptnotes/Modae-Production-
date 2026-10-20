@@ -184,8 +184,9 @@ directory convention, or validation requirement changes.
 
 - Some AI and automation entries intentionally remain deterministic previews.
 - Shared database synchronization remains HTTP pull-based. With server-only
-  `WORKSPACE_SYNC_ENABLED=true`, visible screens also perform bounded revision
-  checks (15-second jitter, elected browser tab); hidden/offline tabs stop.
+  `WORKSPACE_SYNC_ENABLED=true`, open editors also perform bounded revision
+  checks on activation; hidden/offline tabs stop. Page boundaries own scoped
+  activation reads; read-only lists must not also request a revision check.
   Browser BroadcastChannel carries identifiers/revisions only. Do not add
   Supabase Realtime or WebSocket subscriptions for workspace synchronization.
 - Background checks must never flush drafts. Draft baselines remain pinned until
@@ -261,6 +262,9 @@ directory convention, or validation requirement changes.
 - `GET`/`PUT /api/user-preferences` reads/writes only the authenticated account's
   `records` row (`entity = user_preferences`, `id = auth user UUID`). Use `save_rows`
   revisions; never include preferences in generic workspace snapshots or roster saves.
+- Preference data includes `font`, `sidebarCompact` and `leadDetailsCollapsed`.
+  Sidebar flags default to false. Revision-checked PUT merges only submitted
+  preference fields; preserve the other fields when saving fonts or layout.
 - Interface font choices are account-specific. Company documents keep Candara;
   the interface preference must not affect uploaded document content or print fonts.
 - Candara WOFF2 faces are bundled under `public/fonts/candara/` for regular, bold,
@@ -305,6 +309,16 @@ browser heartbeat writes to `user_presence`. Multiple replicas need shared limit
   even when event-driven sync is disabled.
 - `WorkspaceDataBoundary` gates desktop and phone route editors. Row-edit and
   Details drawer entry must load the selected opportunity's dependencies first.
-- View caching is session-local, coalesced and bounded to 15 seconds; writes and
-  account changes invalidate it. Activation refreshes only the visible view;
-  manual refresh bypasses the cache. Do not add idle or typing-triggered reads.
+- View caching is session-local, coalesced, fresh for 180 seconds and limited to
+  20 LRU entries. Expired/invalidated last-good snapshots can paint while an
+  activation read updates the visible view; never reinstall a cached baseline.
+  Confirmed writes patch display summaries and invalidate freshness. Account
+  changes clear views, access changes evict older projections, and generation
+  changes suspend saving until reload. Manual refresh bypasses both visible-view
+  and applicable catalogue caches. Do not add idle or typing-triggered reads.
+- The scoped dependency registry is `src/workspaceViewPlan.js`; the server reader
+  selects those tables/consolidated IDs before querying. Keep lightweight lead
+  and navigation indexes out of canonical state. Apply permission projection to
+  index data and revision metadata. Price catalogue dependencies must finish
+  before pricing editors mount. Partial refreshes reconcile individual records
+  and preserve dirty/form-owned values AND baselines with sync enabled or disabled.

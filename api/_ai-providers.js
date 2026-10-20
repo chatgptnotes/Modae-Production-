@@ -8,7 +8,7 @@ export const AI_PROVIDERS = Object.freeze({
   mistral: { name: 'Mistral', base: 'https://api.mistral.ai/v1', kind: 'chat' },
   openrouter: { name: 'OpenRouter', base: 'https://openrouter.ai/api/v1', kind: 'chat' },
 })
-export const AI_UPSTREAM_TIMEOUT_MS = 10000
+export const AI_UPSTREAM_TIMEOUT_MS = 40000
 export const providerHeaders = (provider, key) => ({ 'Content-Type': 'application/json',
   ...(provider === 'gemini' ? { 'x-goog-api-key': key } : provider === 'anthropic'
     ? { 'x-api-key': key, 'anthropic-version': '2023-06-01' } : { Authorization: `Bearer ${key}` }) })

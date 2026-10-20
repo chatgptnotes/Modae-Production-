@@ -9,7 +9,7 @@ import { dbEnabled, workspaceRecord } from '../datastore.js'
 import { workspaceDrafts, recordKey } from '../workspaceDrafts.js'
 import { createWorkspaceCoordinator } from '../workspaceSync.js'
 import { workspaceSyncRequest } from '../workspaceSyncApi.js'
-import { workspaceSyncState, subscribeWorkspaceSync, syncChanged, watchWorkspace, watchedWorkspace, setSyncEnabled, onWorkspaceCommit, registerWorkspaceEditor, relatedWorkspaceRecords } from '../workspaceSyncState.js'
+import { workspaceSyncState, subscribeWorkspaceSync, syncChanged, watchWorkspace, watchedWorkspace, setSyncEnabled, onWorkspaceCommit, registerWorkspaceEditor, relatedWorkspaceRecords, activeWorkspaceEditorRecords } from '../workspaceSyncState.js'
 import { recordFrom, reviewedRecord } from '../workspaceReconcile.js'
 import './workspaceSync.css'
 
@@ -113,7 +113,13 @@ export function WorkspaceSyncRuntime() {
       coordinator=createWorkspaceCoordinator({scope:`${location.origin}:${result.deploymentId}:${actor}:${generation}:${workspaceProjectionVersion({...storeRef.current.auth.user,role:storeRef.current.role,roles:storeRef.current.roles},storeRef.current.config)}`,interests:()=>{
         const own=watchedWorkspace()
         return {...own,records:own.records.map(r=>({...r,rev:workspaceRecord(r.entity,r.id)?.rev||0})),views:(own.views.length===1?[own.views[0],{...own.views[0],page:scanPage}]:own.views).map(v=>({...v,token:tokens.get(`${v.entity}:${v.page}`)||''})),editing:[...workspaceDrafts.entries.values()].filter(e=>Date.now()-e.touchedAt<120000&&own.records.some(r=>r.entity===e.entity&&r.id===e.id)).slice(0,10).map(({entity,id})=>({entity,id}))}
-      },check:(batch,signal)=>workspaceSyncRequest({operation:'versions',...batch,generation},signal),receive:r=>{void receive(r)},error:handleError})
+      },check:(batch,signal)=>{
+        // Visible pages own their scoped activation read. Only open editors
+        // need a separate conflict check; lists do not perform two requests.
+        const editors=activeWorkspaceEditorRecords()
+        const records=batch.records.filter(row=>editors.some(editor=>editor.entity===row.entity&&editor.id===row.id))
+        return records.length?workspaceSyncRequest({operation:'versions',...batch,records,views:[],generation},signal):Promise.resolve(null)
+      },receive:r=>{void receive(r)},error:handleError})
       coordinatorRef.current=coordinator
     }).catch(handleError)
     const unsubscribe=onWorkspaceCommit(records=>coordinator?.committed(records.filter(r=>Number.isSafeInteger(r.rev))))

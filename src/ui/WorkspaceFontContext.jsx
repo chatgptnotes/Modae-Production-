@@ -44,6 +44,12 @@ export function WorkspaceFontProvider({ auth, active, children }) {
     }
     return () => { delete root.dataset.workspaceFont; root.style.removeProperty('--workspace-font') }
   }, [active, userId, state.font])
-  return <FontContext.Provider value={{ ...state, save: session.save, refresh: session.refresh, remote }}>{children}</FontContext.Provider>
+  return <FontContext.Provider value={{ ...state, save: session.save, saveLayout: session.saveLayout, refresh: session.refresh, remote }}>
+    {children}
+    {active && userId && state.error && <div className="workspace-preference-error" role="alert">
+      <span>{state.error}</span>
+      <button type="button" disabled={state.loading || state.saving} onClick={() => void session.refresh()}>Reload preferences</button>
+    </div>}
+  </FontContext.Provider>
 }
 export const useWorkspaceFont = () => useContext(FontContext)

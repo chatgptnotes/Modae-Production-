@@ -1,3 +1,4 @@
+import WorkspaceDataBoundary from '../ui/WorkspaceDataBoundary.jsx'
 import { isNonSalesUser } from '../accessPolicy.js'
 import NonSalesWorkspace from '../pages/NonSalesWorkspace.jsx'
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -187,10 +188,10 @@ function TabletWorkspace() {
         </div>}
         {refreshMessage && <p className="mobile-refresh-status" role="status">{refreshMessage}</p>}
       </header>}
-      <MobileContent hasTitle={Boolean(title) && !phoneInbox && !phoneLeadDetail} routeKey={`${store.auth?.user?.id || role}:${role}:${loc.pathname}`}>{routes}</MobileContent>
+      <MobileContent hasTitle={Boolean(title) && !phoneInbox && !phoneLeadDetail} routeKey={`${store.auth?.user?.id || role}:${role}:${loc.pathname}`}><WorkspaceDataBoundary>{routes}</WorkspaceDataBoundary></MobileContent>
       <nav className="tab-bottom" aria-label="Main navigation">
         {BOTTOM.filter(t => canSeePage(store.roles || role, t.page)).map(t => {
-          const badge = t.badge ? t.badge(store) : 0
+          const badge = t.badge ? t.badge({ ...store, ...store.workspaceNavigation }) : 0
           return <NavLink key={t.to} to={t.to} className={({ isActive }) => isActive || (t.to === '/opportunities' && loc.pathname.startsWith('/opp/')) ? 'active' : ''}>
             {badge > 0 && <span className="tb-badge">{badge}</span>}
             <Icon name={phoneDashboard && t.to === '/my-dashboard' ? 'home' : phoneDashboard && t.to === '/inbox' ? 'mail' : t.icon} size={20} />{t.label}

@@ -3,6 +3,7 @@ import { assertWorkspaceRowWrite, projectWorkspace } from '../workspaceAccess.js
 import { createServiceClient } from './supabase.js'
 import { mergeConcurrentOpportunityRows as mergeOpportunityRows } from '../workflowTransitions.js'
 import { assertNoApprovalCommandWrite, publicAuditEvent } from '../approvalWriteGuard.js'
+import { readWorkspaceScope } from '../../api/_workspace-view-reader.js'
 
 export type WorkspaceSlices = Record<string, unknown>
 export type WorkspaceReader = () => Promise<WorkspaceSlices>
@@ -93,11 +94,12 @@ const rows = (result: { data: Array<{ id: string, data: unknown }> | null, error
   return result.data || []
 }
 
-export function createWorkspaceReader({ includeRevisions = false } = {}): WorkspaceReader | null {
+export function createWorkspaceReader({ includeRevisions = false, view = null }: { includeRevisions?: boolean, view?: any } = {}): WorkspaceReader | null {
   const url = configuredValue('SUPABASE_URL', 'VITE_SUPABASE_URL')
   const serviceRoleKey = configuredValue('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !serviceRoleKey) return null
   const service = createServiceClient(url, serviceRoleKey)
+  if (view) return () => readWorkspaceScope(service, view)
   return async () => {
     // The server makes this one database read and reuses it for every
     // browser until a successful write invalidates the cache.

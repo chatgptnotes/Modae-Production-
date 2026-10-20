@@ -1,5 +1,6 @@
 import { fetchWorkspaceView } from './workspaceApi.js'
-import { createWorkspaceViewCache } from './workspaceViewCache.js'
+import { patchWorkspaceViewSnapshot } from './workspaceViewSnapshots.js'
+import { createWorkspaceViewCache, WORKSPACE_VIEW_TTL } from './workspaceViewCache.js'
 import { commitWorkspaceRecords } from './workspaceExplicitSave.js'
 import { workspaceDrafts, SYNC_ENTITIES } from './workspaceDrafts.js'
 import { workspaceSyncState, committedWorkspace } from './workspaceSyncState.js'
@@ -28,6 +29,7 @@ export const LOCAL_ONLY = ['_approvalRevisions', 'viewMode', 'viewModePinned', '
   'catalogRev', 'oneTimeCleanups', 'leadDeadlines']
 
 const viewCache = createWorkspaceViewCache()
+let viewAccessVersion = ''
 let viewReadsEnabled = false
 let localDemoMode = false
 
@@ -224,6 +226,7 @@ async function saveConsolidatedRows(entity, rows, label) {
     const conflictIds = new Set(conflicts.map(conflict => conflict.id))
     for (const row of pending) {
       if (conflictIds.has(row.id)) continue
+      viewCache.patch(result => patchWorkspaceViewSnapshot(result, [{ ...row, entity, rev: row.rev + 1, available: !row.deleted }]))
       const key = normalizedKey(entity, row.id)
       normalizedRevisions.set(key, row.rev + 1)
       normalizedRecords.set(key, { data: row.data, rev: row.rev + 1 })
@@ -260,7 +263,7 @@ async function saveConsolidatedState(dirty = {}) {
 }
 
 export function invalidateLoadCache() {
-  viewCache.clear()
+  viewCache.invalidate()
   loadCache = null
   loadCacheAt = 0
 }
@@ -270,6 +273,7 @@ export function invalidateLoadCache() {
 export async function settleWorkspaceReads() {
   await Promise.allSettled([loadInFlight, coreLoadInFlight, priceListInFlight].filter(Boolean))
   invalidateLoadCache()
+  viewCache.clear()
   priceListCache = null
   priceListCacheAt = 0
 }
@@ -343,7 +347,7 @@ async function loadConsolidatedPriceLists() {
 
 export async function loadPriceLists({ force = false } = {}) {
   if (!supabase) return null
-  if (!force && priceListCache && Date.now() - priceListCacheAt < LOAD_CACHE_MS) return { priceLists: priceListCache, cached: true }
+  if (!force && priceListCache && Date.now() - priceListCacheAt < WORKSPACE_VIEW_TTL) return { priceLists: priceListCache, cached: true }
   if (priceListInFlight) return priceListInFlight
   priceListInFlight = (async () => {
     const consolidated = await loadConsolidatedPriceLists()
@@ -835,6 +839,7 @@ async function saveNormalizedRowsNow(entity, rows, retainedIds = new Set()) {
     const conflictIds = new Set(conflicts.map(conflict => conflict.id))
     for (const row of payload) {
       if (conflictIds.has(row.id)) continue
+      viewCache.patch(result => patchWorkspaceViewSnapshot(result, [{ ...row, entity, rev: row.rev + 1, available: !row.deleted }]))
       const key = normalizedKey(entity, row.id)
       normalizedRevisions.set(key, row.rev + 1)
       if (row.deleted) normalizedRecords.delete(key)
@@ -919,6 +924,7 @@ async function saveOpportunityRowsNow(rows) {
     const conflictIds = new Set(conflicts.map(conflict => conflict.id))
     for (const row of payload) {
       if (conflictIds.has(row.id)) continue
+      viewCache.patch(result => patchWorkspaceViewSnapshot(result, [{ ...row, entity: 'opportunities', rev: row.rev + 1, available: !row.deleted }]))
       opportunityRevisions.set(row.id, row.rev + 1)
       if (row.deleted) opportunityRecords.delete(row.id)
       else opportunityRecords.set(row.id, { data: row.data, rev: row.rev + 1 })
@@ -1052,6 +1058,7 @@ export function workspaceRecord(entity,id) {
   return workspaceDrafts.get(entity,id)?.base || (entity === 'opportunities' ? opportunityRecords.get(id) : normalizedRecords.get(normalizedKey(entity,id)))
 }
 export function acceptWorkspaceRecord(row) {
+  viewCache.patch(result => patchWorkspaceViewSnapshot(result, [row]))
   const {entity,id,data,rev,available}=row
   if (entity === 'opportunities') {
     if (!available) { opportunityRecords.delete(id); opportunityRevisions.delete(id) }
@@ -1062,6 +1069,10 @@ export function acceptWorkspaceRecord(row) {
 }
 
 export const saveSelectedWorkspaceRecords=(records,isCurrent)=>commitWorkspaceRecords(records,(name,args)=>supabase.rpc(name,args),isCurrent)
+
+export function peekWorkspaceView(view, actor) {
+  return viewCache.peek(JSON.stringify([actor, getWorkspaceGeneration(), view]))
+}
 
 export async function loadWorkspaceView(view, { force = false, isCurrent = () => true } = {}) {
   if (!dbEnabled()) return null
@@ -1077,6 +1088,11 @@ export async function loadWorkspaceView(view, { force = false, isCurrent = () =>
     result = await read(true)
   }
   if (!isCurrent()) throw new Error('Session changed.')
+  if (result.accessVersion && result.accessVersion !== viewAccessVersion) {
+    const changed = !!viewAccessVersion
+    viewAccessVersion = result.accessVersion
+    if (changed) viewCache.evict((entryKey, value) => value.accessVersion !== result.accessVersion)
+  }
   viewReadsEnabled = true
   return result
 }
@@ -1086,7 +1102,7 @@ export function installWorkspaceViewRevisions(result, isDirty = () => false) {
   // Reconcile known baselines only within the returned scope. Omitted slices
   // and drafts retain their existing revisions; missing scoped rows are gone.
   for (const [id] of opportunityRecords) {
-    if (result.view.kind === 'overview' || result.view.kind === 'detail' && id !== result.view.id) continue
+    if (!Object.hasOwn(result.slices, 'opportunities') || result.view.kind === 'detail' && id !== result.view.id) continue
     if (!returned.has(normalizedKey('opportunities', id)) && !isDirty('opportunities', id)) { opportunityRecords.delete(id); opportunityRevisions.delete(id) }
   }
   for (const [key, previous] of normalizedRecords) {
@@ -1094,8 +1110,9 @@ export function installWorkspaceViewRevisions(result, isDirty = () => false) {
     const sliceKey = entityKey(entity)
     const included = entity === 'state' ? Object.hasOwn(result.slices, id) : Object.hasOwn(result.slices, sliceKey)
     if (!included || returned.has(key) || workspaceDrafts.get(entity, id) || isDirty(entity, id)) continue
+    if (result.coverage?.records?.[sliceKey] && !result.coverage.records[sliceKey].includes(id)) continue
     if (result.view.kind === 'detail' && ['proposals', 'spares_lines', 'clarifications', 'audit'].includes(entity)) {
-      const related = entity === 'proposals' ? id === result.view.id : previous.data?.oppId === result.view.id || previous.data?.opportunityId === result.view.id || previous.data?.ref === result.view.id
+      const related = entity === 'proposals' ? id === result.view.id : previous.data?.oppId === result.view.id || previous.data?.opportunityId === result.view.id || previous.data?.ref === result.view.id || previous.data?.objectId === result.view.id
       if (!related) continue
     }
     normalizedRecords.delete(key); normalizedRevisions.delete(key)
@@ -1115,6 +1132,7 @@ export function installWorkspaceViewRevisions(result, isDirty = () => false) {
 }
 
 export function resetWorkspaceViewRecords() {
+  viewAccessVersion = ''
   viewCache.clear()
   opportunityRecords.clear(); opportunityRevisions.clear()
   normalizedRecords.clear(); normalizedRevisions.clear()

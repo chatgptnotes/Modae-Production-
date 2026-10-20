@@ -4,6 +4,7 @@ import { activeProfile } from './_user-roster.js'
 import { getAdminSupabaseClient } from './_supabase-client.js'
 import { activeAiConnection } from './_ai-integrations.js'
 import { providerRequest, providerText, ProviderError, AI_UPSTREAM_TIMEOUT_MS } from './_ai-providers.js'
+import { convertOfficeToPdf, MAX_CONVERTED_TOTAL_BYTES } from './_office-convert.js'
 
 // Railway Gemini proxy for the browser AI contract.
 // GEMINI_API_KEY is read only on the server. Never expose it through VITE_.
@@ -49,8 +50,27 @@ const authClient = () => {
   return getAdminSupabaseClient()
 }
 
+const isLoopbackHttp = (value, isOrigin = false) => {
+  try {
+    const raw = String(value || '')
+    const url = new URL(isOrigin ? raw : `http://${raw}`)
+    return url.protocol === 'http:'
+      && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname.toLowerCase())
+      && url.pathname === '/'
+      && !url.search && !url.hash && !url.username && !url.password
+  } catch {
+    return false
+  }
+}
+
+const isLocalDemoAiRequest = req => process.env.NODE_ENV !== 'production'
+  && String(req.headers?.['x-wintrack-local-ai'] || '').toLowerCase() === 'true'
+  && isLoopbackHttp(req.headers?.host)
+  && isLoopbackHttp(req.headers?.origin, true)
+
 async function authenticate(req) {
   const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim()
+  if (!token && isLocalDemoAiRequest(req)) return { user: { id: 'local-demo' } }
   if (!token) return { error: [401, 'AI_AUTH_REQUIRED', 'A signed-in application session is required.'] }
   if (process.env.NODE_ENV === 'test' && token === 'test-token') return { user: { id: 'test-user' } }
   const client = authClient()
@@ -666,8 +686,29 @@ function inlineParts(payload) {
     ? payload.aiAttachments
       .filter(a => a && typeof a.dataBase64 === 'string' && typeof a.mimeType === 'string')
       .slice(0, 8)
-      .map(a => ({ inlineData: { mimeType: String(a.mimeType).slice(0, 100), data: a.dataBase64 } }))
+      .map(a => ({ name: String(a.name || 'attachment').slice(0, 160), inlineData: { mimeType: String(a.mimeType).slice(0, 100), data: a.dataBase64 } }))
     : []
+}
+
+async function convertOfficeParts(parts) {
+  const output = []
+  const convertedFiles = []
+  let convertedBytes = 0
+  for (const part of parts) {
+    const extension = String(part.name).match(/\.([a-z0-9]+)$/i)?.[1]?.toLowerCase()
+    if (!['doc', 'docx', 'odt', 'rtf', 'xls', 'xlsx', 'ods', 'ppt', 'pptx', 'odp'].includes(extension)) { output.push({ inlineData: part.inlineData }); continue }
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(part.inlineData.data) || part.inlineData.data.length % 4 !== 0) {
+      const error = new Error('The uploaded Office file has invalid data. Upload it again.')
+      error.code = 'OFFICE_CONVERSION_FAILED'
+      throw error
+    }
+    const converted = await convertOfficeToPdf(Buffer.from(part.inlineData.data, 'base64'), part.name)
+    convertedBytes += converted.bytes.length
+    if (convertedBytes > MAX_CONVERTED_TOTAL_BYTES) throw new Error('The converted PDFs are too large for one AI scan. Try fewer files at a time.')
+    output.push({ inlineData: { mimeType: 'application/pdf', data: converted.bytes.toString('base64') } })
+    convertedFiles.push(part.name)
+  }
+  return { parts: output, convertedFiles }
 }
 
 function conditionEvidencePrompt(p) {
@@ -939,11 +980,21 @@ export default async function handler(req, res) {
                                   : task === 'location.search' ? locationSearchPrompt(payload)
                                     : task === 'admin.routing-review' ? routingReviewPrompt(payload)
                   : leadPrompt(payload)
+  let fileParts = []
+  let convertedFiles = []
+  if (['lead.extract', 'tender.extract', 'clarification.answer', 'approval.condition-evidence', 'kyc.extract'].includes(task)) {
+    try {
+      const converted = await convertOfficeParts(inlineParts(payload))
+      fileParts = converted.parts
+      convertedFiles = converted.convertedFiles
+    }
+    catch (error) { return fail(res, error.code === 'OFFICE_CONVERSION_UNAVAILABLE' ? 503 : 422, error.code || 'OFFICE_CONVERSION_FAILED', error.message || 'The Office file could not be converted.') }
+  }
   const requestBody = {
-    contents: [{ parts: [{ text: prompt }, ...(['lead.extract', 'tender.extract', 'clarification.answer', 'approval.condition-evidence', 'kyc.extract'].includes(task) ? inlineParts(payload) : [])] }],
+    contents: [{ parts: [{ text: prompt }, ...fileParts] }],
     generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'].includes(task)
       ? {
-          maxOutputTokens: task === 'health' ? 8 : 2048,
+          maxOutputTokens: ['lead.extract', 'tender.extract'].includes(task) ? 4096 : 2048,
           responseMimeType: 'application/json',
           responseSchema: task === 'opportunity.search' ? opportunitySearchSchema : task === 'lead.fill' ? fillSchema
             : task === 'vendor.quote' ? vendorQuoteSchema
@@ -964,7 +1015,7 @@ export default async function handler(req, res) {
                                 : task === 'admin.routing-review' ? routingReviewSchema
                 : leadSchema,
         }
-      : { maxOutputTokens: 8 },
+      : task === 'health' ? { maxOutputTokens: 256 } : { maxOutputTokens: 8 },
   }
 
   try {
@@ -1004,13 +1055,20 @@ export default async function handler(req, res) {
     }
     const out = await upstream.json()
     const text = providerText(provider, out)
+    if (provider === 'gemini' && out?.candidates?.[0]?.finishReason === 'MAX_TOKENS') {
+      return fail(res, 502, 'AI_OUTPUT_TRUNCATED', 'The document extraction exceeded the response limit. Try scanning fewer pages at a time.')
+    }
     if (!text) return fail(res, 502, 'AI_EMPTY_RESPONSE', 'Gemini returned no usable output')
     if (task === 'health' || !structuredTasks.has(task)) return send(res, 200, { ok: true, model, text })
     if (task === 'opportunity.search') {
       try { return send(res, 200, { ok: true, model, data: validateSearchResult(JSON.parse(text)) }) }
       catch { return fail(res, 502, 'AI_SEARCH_INVALID', 'AI could not produce a valid search. Please rephrase and try again.') }
     }
-    return send(res, 200, { ok: true, model, data: JSON.parse(text) })
+    try {
+      return send(res, 200, { ok: true, model, data: JSON.parse(text), ...(convertedFiles.length ? { convertedFiles } : {}) })
+    } catch {
+      return fail(res, 502, 'AI_INVALID_RESPONSE', 'AI returned incomplete structured data. Retry the extraction.')
+    }
   } catch (error) {
     if (error instanceof ProviderError) return fail(res, error.status, error.code, error.message)
     console.error('AI proxy failed')

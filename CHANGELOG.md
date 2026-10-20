@@ -1,3 +1,71 @@
+## 2026-10-20 — Collapsible lead information and visible assignment
+
+- Move Assigned owner into Customer and contact. Group the remaining opportunity
+  classification and RFQ inputs under Additional information, collapsed by default
+  and expandable on desktop and phone, without discarding entered values.
+- Size the scope box to its content between 80 and 160 pixels so short scopes do
+  not need an internal scrollbar and longer scopes stay bounded and scrollable.
+
+## 2026-10-20 — Optional Lead Decisions and compact opportunity scope
+
+- Allow incomplete Lead Decisions to be saved and qualified leads to proceed to
+  Opportunity Creation without required-field or AI-review gates. Keep permission,
+  ownership authorization and successful-save checks; Opportunity Creation retains
+  its existing validation.
+- Remove required markers and blocking notices from Lead Decisions while retaining
+  optional AI review guidance on desktop and phone.
+- Reduce Opportunity Scope to three rows with vertical resizing and contained
+  scrolling; keep its status icon beside the first line.
+
+## 2026-10-20 — Page loading and three minute navigation cache
+
+- Load the six main sales views through a shared dependency registry before
+  database reads; keep header/navigation mounted on desktop and phone.
+- Add a session-memory, 20-view LRU cache with three minute freshness, coalesced
+  activation reads and stale display fallback. Manual refresh bypasses caches;
+  hidden/idle pages do not poll. Account/access changes clear older projections.
+- Load full records before lead preview/editing, opportunity editing and booking
+  review; load catalogue data only for pricing screens and wait before mounting
+  their editors. Preserve global immutable booking context during scoped edits.
+- Keep summaries outside persistence baselines, update cached display rows after
+  confirmed saves, and reconcile dirty records independently of unrelated updates
+  with event-driven sync either enabled or disabled.
+- Add cache, scoped query, coverage, permission and draft-baseline regressions.
+  Expose server database timing/query count without business payload logging.
+
+## 2026-10-20 — Preserve lead details from enquiry attachments
+
+- Prefill contact email and customer address from attachment facts during lead
+  review, even when the AI response omits a normalized field.
+- Read flattened procurement schedule rows as line items so table headings and
+  RFQ identifiers do not leak into the opportunity scope.
+- Rebuild visual attachment payloads on re-scan and report files omitted by the
+  provider's eight-file limit.
+
+## 2026-10-20 — Preview business documents in the attachment popup
+
+- Convert Word, PowerPoint, OpenDocument text/presentation and RTF files to
+  temporary PDFs for the existing popup viewer. Keep the original file for
+  downloads and remove conversion files after each request.
+- Retain native previews for PDFs, images, spreadsheets and readable text, with
+  a 10 MB conversion limit and clear download fallback when preview is unavailable.
+- Authenticate conversions with the application session; allow local demo
+  sessions only from loopback during non-production development.
+
+## 2026-10-20 — Remember sidebar layout per account
+
+- Left navigation and Lead inbox's Lead details panel now remember independent
+  collapse choices per account. Connected preferences follow the account across
+  devices; local sessions retain choices per user in the browser.
+- Collapsed navigation keeps icons; collapsed Lead details keeps an accessible
+  reopen control and gives the remaining width to the lead list. Preference
+  saves preserve font choices, check revisions, and report retryable failures.
+- Reuses the existing user preferences records and API; no migration required.
+- Left navigation uses the selected clickable-logo design. The official logo
+  toggles the sidebar, with a subtle dotted underline, descriptive tooltip,
+  keyboard access and smooth content movement. The vertical MENU tab is removed;
+  account preferences and reduced-motion support remain in both themes.
+
 ## 2026-10-19 — Compact dashboard amounts
 
 - Show My and Dashboard amounts in crore units with two decimal places across
@@ -908,3 +976,20 @@
   access; LJ Swaminathan retains both Sales and Management access.
 - Keep role codes internal for routing and permissions while showing full names
   in the user-facing owner and approver displays.
+
+## 2026-10-20 — Broader lead attachment scanning
+
+- Extract readable cells from `.xlsx` and `.xls` workbooks and text from `.pptx`
+  slides, preserving sheet and slide labels for AI review.
+- Convert Word, Excel, PowerPoint, OpenDocument, and RTF uploads to temporary
+  PDFs on the server, including modern Office formats, so visual review can see
+  layout and embedded content. Install LibreOffice Writer, Calc, and Impress in
+  Railway and remove temporary files after conversion. Report conversion, size,
+  damage and password errors clearly.
+- Continue sending PDFs and common images directly for visual AI reading.
+  Limit direct images to Gemini-supported PNG, JPEG, WebP, HEIC and HEIF; report
+  unsupported image types instead of sending them with an unusable MIME type.
+- Re-apply file and byte limits after merging existing and newly added files on
+  a re-scan, so the provider cannot silently drop files beyond its request cap.
+- Stop treating Outlook `.msg` binary files as plain-text email; saved `.eml`
+  messages remain supported.

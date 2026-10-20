@@ -402,21 +402,7 @@ export default function Approvals() {
   const [decisionDrafts, setDecisionDrafts] = useState({})
   const [decisionDrawerId, setDecisionDrawerId] = useState('')
   const [requestTimelineId, setRequestTimelineId] = useState('')
-  const [refreshError, setRefreshError] = useState(false)
-
-  useEffect(() => {
-    let active = true
-    const isVisible = () => typeof document === 'undefined' || document.visibilityState === 'visible'
-    const refresh = async () => {
-      if (!active || !isVisible()) return
-      const refreshed = await store.refreshApprovals()
-      if (active) setRefreshError(!refreshed)
-    }
-    void refresh()
-    return () => {
-      active = false
-    }
-  }, [])
+  const refreshError = !!store.syncDiagnostics?.lastLoadError
 
   useEffect(() => {
     if (!decisionDrawerId && !requestTimelineId) return undefined
