@@ -3,10 +3,13 @@ import assert from 'node:assert/strict'
 import { createRequire } from 'node:module'
 import { buildSync } from 'esbuild'
 import { leadIdentity } from '../src/leadFieldMapping.js'
+import { enquiry, rows } from './fixtures/spares-enquiry.mjs'
+import React from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 
 const require = createRequire(import.meta.url)
 const { outputFiles } = buildSync({
-  stdin: { contents: "export { extractLead } from './src/pages/Inbox.jsx'", resolveDir: process.cwd() },
+  stdin: { contents: "export { extractLead, StructuredItemsTable } from './src/pages/Inbox.jsx'", resolveDir: process.cwd() },
   bundle: true, write: false, platform: 'node', format: 'cjs', packages: 'external',
   loader: { '.js': 'jsx', '.css': 'empty', '.png': 'text', '.jpg': 'text' },
   define: {
@@ -17,6 +20,62 @@ const { outputFiles } = buildSync({
 const bundled = { exports: {} }
 new Function('require', 'module', 'exports', outputFiles[0].text)(require, bundled, bundled.exports)
 const { extractLead } = bundled.exports
+
+test('spares table shows real references, units and every row on desktop and phone', () => {
+  for (const phoneLayout of [false,true]) {
+    const html=renderToStaticMarkup(React.createElement(bundled.exports.StructuredItemsTable,{items:rows.map(r=>({equipmentRef:r[1],partNumber:r[2],description:r[3],qty:Number(r[4]),uom:r[5]})),phoneLayout}))
+    for (const row of rows) assert.ok(html.includes(row[2]))
+    assert.match(html,/Equipment reference/)
+    assert.match(html,/sets/)
+    const empty=renderToStaticMarkup(React.createElement(bundled.exports.StructuredItemsTable,{items:[]}))
+    assert.match(empty,/No spares extracted/)
+    assert.doesNotMatch(empty,/MPC4|VM600|Eddy-current/)
+    const missing=renderToStaticMarkup(React.createElement(bundled.exports.StructuredItemsTable,{items:[{description:'Kit',qty:0}]}))
+    assert.doesNotMatch(missing,/<td>1<\/td>/)
+  }
+})
+
+test('source identity beats invalid high-confidence AI guesses and items survive partial scans', async () => {
+  const originalFetch=globalThis.fetch
+  let calls=0
+  try {
+    globalThis.fetch=async()=>++calls===1 ? Response.json({ok:true,data:{summary:'Spare parts',route:'Spares',fields:[
+      {group:'Customer',k:'Sell-to customer',v:'wrong-filename.pdf',conf:99,ev:'file'},
+      {group:'Customer',k:'Contact person',v:'anita.rao@example.com',conf:99,ev:'From'},
+    ],lineItems:[],missing:[],next:[]}}) : Response.json({ok:false,errorCode:'AI_TIMEOUT',error:'AI request timed out'},{status:504})
+    const lead=await extractLead({from:'',body:'Please read the enquiry.',subject:'',attachments:[{name:'customer-spares-enquiry.pdf',text:enquiry}]},{customers:[],config:{}})
+    assert.equal(lead.contactPerson,'Anita Rao')
+    assert.match(lead.sellTo,/Example Process/)
+    assert.equal(lead.ai.lineItems.length,6)
+    assert.equal(lead.ai.scan.completed,1)
+    assert.equal(lead.ai.scan.complete,false)
+    assert.equal(lead.ai.scan.failures[0].errorCode,'AI_TIMEOUT')
+    assert.ok(lead.ai.fields.every(f=>f.state==='pending'))
+  } finally {globalThis.fetch=originalFetch}
+})
+
+test('attachment-only customer email survives AI failure with all six spares and header details', async () => {
+  const originalFetch = globalThis.fetch
+  try {
+    globalThis.fetch = async () => Response.json({ ok: false, errorCode: 'AI_KEY_MISSING', error: 'AI is not configured' }, { status: 503 })
+    const lead = await extractLead({ from: '', subject: '', body: '', attachments: [{ name: 'customer-spares-enquiry.pdf', text: enquiry }] }, { customers: [], config: {} })
+    assert.match(leadIdentity(lead, lead.ai.fields).sellTo, /^Example Process Systems Pvt\. Ltd\.?$/)
+    assert.equal(leadIdentity(lead, lead.ai.fields).contactPerson, 'Anita Rao')
+    assert.equal(lead.contactEmail, 'anita.rao@example.com')
+    assert.match(lead.sellToCustomerLocation, /Bengaluru/)
+    assert.equal(lead.rfqNumber, 'EPS/RFQ/26-27/184')
+    assert.equal(lead.rfqDate, '2026-10-20')
+    assert.equal(lead.source, 'Email')
+    assert.deepEqual(lead.ai.lineItems.map(x => x.partNumber), rows.map(r => r[2]))
+    assert.deepEqual(lead.ai.lineItems.map(x => x.qty), [4, 2, 12, 6, 2, 2])
+    assert.deepEqual(lead.ai.lineItems.map(x => x.equipmentRef), rows.map(r => r[1]))
+    assert.match(lead.opportunityScope, /seal kit/i)
+    assert.ok(lead.opportunityScope.length <= 220)
+    assert.equal(lead.ai.scan.complete, false)
+    assert.equal(lead.ai.scan.failures[0].errorCode, 'AI_KEY_MISSING')
+    assert.match(lead.ai.summary, /AI is not configured/)
+  } finally { globalThis.fetch = originalFetch }
+})
 
 test('fallback intake does not present the buyer as an extracted EUC', async () => {
   const lead = await extractLead({ from: 'buyer@example.com', subject: 'Probe enquiry', body: 'Customer: ABC EPC\nPlease quote two probes.' }, {

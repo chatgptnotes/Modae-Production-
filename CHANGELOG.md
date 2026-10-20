@@ -1,3 +1,18 @@
+## 2026-10-20 — Accurate enquiry email details and spares
+
+- Prevent attachment filenames from being interpreted as company labels. Recover
+  customer email headers, external contact/signature details and dated RFQ references
+  without substituting internal forwarding signatures for customer identities.
+- Parse equipment-tagged spares schedules with wrapped PDF rows. Preserve optional
+  `equipmentRef`, part numbers, units and quantities through opportunity/proposal
+  handoff, without inventing missing quantities or duplicating repeated table rows.
+- Show the Spares table on desktop and phone, remove fabricated fallback rows,
+  and summarise all requested spares families in Opportunity Scope.
+- Preserve extracted facts when intake fields are blank. Re-run refreshes untouched
+  form suggestions, preserves unsaved values/baselines and reviewed decisions on
+  automatic scans, and reports structured scan failure reasons. Explicit saved
+  RFQ dates/numbers now persist with the other reviewed lead decisions.
+
 ## 2026-10-20 — Collapsible lead information and visible assignment
 
 - Move Assigned owner into Customer and contact. Group the remaining opportunity

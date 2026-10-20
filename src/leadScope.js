@@ -52,6 +52,14 @@ function fromEnquiry(fallback) {
 }
 
 export function deriveOpportunityScope(lineItems = [], fallback = '') {
+  // Equipment-tagged schedules often repeat the same kit at different sizes.
+  // Name every requested family instead of filling the scope with one long spec.
+  if (lineItems.length > 3 && lineItems.every(item => item.equipmentRef && item.description?.includes(';'))) {
+    const names = [...new Set(lineItems.map(item => clean(item.description.split(';')[0]))) ]
+    const list = names.length > 1 ? `${names.slice(0,-1).join(', ')} and ${names.at(-1)}` : names[0]
+    const summary = `Supply of ${list} (${lineItems.length} line items)`
+    if (summary.length < MAX_SCOPE_LENGTH) return concise(summary)
+  }
   const items = (Array.isArray(lineItems) ? lineItems : []).map(item => {
     const description = stripCommercialDetails(item?.description || item?.desc || item?.partNumber || item?.pn || item?.customerRef)
     if (!description) return ''

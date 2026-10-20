@@ -1,4 +1,5 @@
 import { matchParts, parseLeadLineItems } from './tenderParse.js'
+import { extractSparesTable } from './leadSparesTable.js'
 
 const relevantField = /line items?|requested items?|scope|coverage|materials?|parts?|spares?/i
 
@@ -13,7 +14,8 @@ const normalizeItem = item => ({
   description: item.description || item.desc || '',
   partNumber: item.partNumber || item.pn || '',
   customerRef: item.customerRef || item.customerReference || item.sapCode || item.partNumber || item.pn || '',
-  qty: Number(item.qty) || 1,
+  equipmentRef: item.equipmentRef || '',
+  qty: Number(item.qty) > 0 ? Number(item.qty) : 0,
   uom: item.uom || 'EA',
   confidence: Number(item.confidence ?? item.conf) || 0,
   evidence: item.evidence || item.ev || 'Linked lead',
@@ -32,14 +34,21 @@ const normalizeItem = item => ({
 const consolidateItems = items => {
   const merged = new Map()
   items.map(normalizeItem).filter(item => item.description || item.partNumber || item.customerRef).forEach(item => {
-    const key = item.partNumber.trim()
+    const partKey = item.partNumber.trim()
       ? `pn:${item.partNumber.trim().toUpperCase()}`
       : item.description.trim()
         ? `desc:${item.description.trim().toLowerCase()}`
         : `ref:${String(item.customerRef || '').trim().toLowerCase()}`
+    const key = `${partKey}|equipment:${item.equipmentRef}`
     const existing = merged.get(key)
     if (existing) {
-      existing.qty += item.qty
+      if (item.equipmentRef) {
+        // Same equipment/part from AI plus its source table is corroborating
+        // evidence, not an additional order. Prefer the actual source quantity.
+        existing.qty = item.sourceDocument ? item.qty : Math.max(existing.qty, item.qty)
+        if (item.description.length > existing.description.length) existing.description = item.description
+        existing.evidence = [...new Set([existing.evidence,item.evidence])].join('; ')
+      } else existing.qty += item.qty
       if (!existing.description && item.description) existing.description = item.description
       if (!existing.customerRef && item.customerRef) existing.customerRef = item.customerRef
       existing.descriptionMissing = !existing.description.trim()
@@ -56,7 +65,8 @@ export function lineItemsFromLead(lead) {
     ...(Array.isArray(lead?.requestedItems) ? lead.requestedItems : []),
   ]
   const attachmentItems = (lead?.attachments || []).flatMap(attachment => {
-    const parsed = parseLeadLineItems(attachment?.text || '')
+    const table = extractSparesTable(attachment?.text, attachment?.structPages)
+    const parsed = table.length ? table : parseLeadLineItems(attachment?.text || '')
     const document = attachment?.name || attachment?.fileName || attachment?.path || 'Original attachment'
     return parsed.map(item => ({ ...item, sourceDocument: document, evidence: `${document}: ${item.evidence}` }))
   })
@@ -130,6 +140,7 @@ export function buildLeadProposalData(lead, priceLists, vendorPrices = []) {
     const isSuggested = !!pricedMatch && !exactCatalogueReference
     return {
       origin: 'customer',
+      equipmentRef: extracted[i].equipmentRef,
       custRef: extracted[i].customerRef || item.pn || item.description,
       pn: pricedMatch?.pn || item.pn || '',
       desc: pricedMatch?.desc || item.description || '',

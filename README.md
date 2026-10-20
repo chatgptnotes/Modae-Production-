@@ -48,6 +48,13 @@ submission, and follow-up.
   salesperson overrides routing; otherwise configured rules assign the lead, with
   LJS as fallback. Non-sales accounts can submit leads and change personal settings
   without browsing sales records.
+- Enquiry email documents can supply customer/contact details, RFQ headers and
+  equipment-tagged spares tables even when AI is unavailable. Opportunity Scope
+  summarises the requested families; Spares (Requested items on phone) lists the
+  equipment reference, part number, description, quantity and unit. Empty results
+  show no sample items. Re-run refreshes untouched suggestions while retaining
+  unsaved edits and, on automatic scans, accepted/rejected decisions. Scan failures
+  show their reason; all new extracted facts remain pending review.
 - The local directory contains the supplied Mod-AE names and email addresses for
   Sales, Management and Non-sales access. Existing owner IDs remain stable, so
   updating the directory does not change historical lead or opportunity ownership.

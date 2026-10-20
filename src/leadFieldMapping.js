@@ -1,6 +1,7 @@
 // Shared aliases used when turning AI/document fields into lead decisions.
 // Human-edited lead properties are checked before these extracted values.
 import { EUC_LOCATION_LABELS } from './leadLabels.js'
+import { validCustomerName, validContactName } from './leadEmailFacts.js'
 
 const LABELS = {
   sellTo: [/^sell[ -]?to(?: customer)?$/, /^customer(?: name)?$/, /^buyer$/],
@@ -130,7 +131,7 @@ export const leadIdentity = (lead, fields = []) => {
   ].filter(Boolean).join('\n')
   const inferred = inferEucFromText(sourceText)
   const labeledLocation = labeledEucLocationFromText(sourceText)
-  const sellTo = String(lead?.sellTo || leadFieldValue(fields, 'sellTo') || lead?.parse?.sellTo || '').trim()
+  const sellTo = String([lead?.sellTo, leadFieldValue(fields, 'sellTo'), lead?.parse?.sellTo].find(validCustomerName) || '').trim()
   // Retain the same-customer delivery suggestion only when the delivery
   // block actually names that customer. A buyer alone is not EUC evidence.
   const lines = sourceText.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
@@ -156,7 +157,7 @@ export const leadIdentity = (lead, fields = []) => {
     // confirmed Site/Plant extraction is the stronger source in that exact case.
     eucName,
     eucLocation,
-    contactPerson: String(lead?.contactPerson || leadFieldValue(fields, 'contactPerson') || lead?.parse?.contactPerson || '').trim(),
+    contactPerson: String([lead?.contactPerson, leadFieldValue(fields, 'contactPerson'), lead?.parse?.contactPerson].find(validContactName) || '').trim(),
     contactPhone: String(lead?.contactPhone || leadFieldValue(fields, 'contactPhone') || lead?.parse?.contactPhone || '').trim(),
   }
 }

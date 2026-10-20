@@ -123,7 +123,7 @@ const leadSchema = {
     completeness: { type: 'INTEGER' },
     suggestedOwner: { type: 'STRING' },
     lineItems: { type: 'ARRAY', items: { type: 'OBJECT', properties: {
-      description: { type: 'STRING' }, partNumber: { type: 'STRING' }, customerRef: { type: 'STRING' },
+      description: { type: 'STRING' }, partNumber: { type: 'STRING' }, customerRef: { type: 'STRING' }, equipmentRef: { type: 'STRING' },
       qty: { type: 'NUMBER' }, uom: { type: 'STRING' }, confidence: { type: 'INTEGER' }, evidence: { type: 'STRING' },
     }, required: ['description', 'qty', 'confidence', 'evidence'] } },
     fields: { type: 'ARRAY', items: { type: 'OBJECT', properties: {

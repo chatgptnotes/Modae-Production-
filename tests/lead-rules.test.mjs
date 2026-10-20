@@ -1,5 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+
+test('attachment filenames never become company labels', () => {
+  assert.equal(customerCompanyFromText('Attachment: customer-spares-enquiry.pdf'), '')
+  assert.equal(sourceFieldFacts('Attachment: customer-spares-enquiry.pdf').length, 0)
+  assert.equal(customerCompanyFromText('Customer - Eastern Alloy Works'), 'Eastern Alloy Works')
+})
 import { customerCompanyFromText, customerContactFromText, deadlineForLead, expiredLeadDeadline, hardenLeadExtraction, isFastTrackLead, isInternalSender, mergeSourceFieldFacts, normalizeLeadContactFields, opportunityOwnerFor, routeOwner, routeOwnerForLocation, sourceFieldFacts, supplyMissing } from '../src/leadRules.js'
 import { indiaRegionForLocation } from '../src/indiaLocations.js'
 

@@ -36,12 +36,12 @@ const clean = value => String(value ?? '')
   .replace(/[.,]+$/, '')
 
 export const extractLabeledValue = (text, labels) => {
-  const match = String(text || '').match(new RegExp(`(?:${labels})\\s*[:\\-]\\s*(.*?${valueBoundary})`, 'i'))
+  const match = String(text || '').match(new RegExp(`(?:${labels})(?:\\s*:\\s*|[ \\t]+-[ \\t]+)(.*?${valueBoundary})`, 'i'))
   return match ? clean(match[1]) : ''
 }
 
 export const extractAllLabeledValues = (text, labels) => {
-  const pattern = new RegExp(`(?:${labels})\\s*[:\\-]\\s*(.*?${valueBoundary})`, 'ig')
+  const pattern = new RegExp(`(?:${labels})(?:\\s*:\\s*|[ \\t]+-[ \\t]+)(.*?${valueBoundary})`, 'ig')
   return [...String(text || '').matchAll(pattern)].map(match => clean(match[1])).filter(Boolean)
 }
 

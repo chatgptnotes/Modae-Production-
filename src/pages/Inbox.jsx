@@ -51,8 +51,11 @@ import { extractKycIdentityCandidate, normalizeKycCandidate } from '../kycExtrac
 import { downloadKycTemplate } from '../kycTemplate.js'
 import { PROJECT_TYPES, oppTypesForProjectType, templatesForSelection, simulatedLead, simulatedCount, SIMULATED_CUSTOMER_SCENARIOS } from '../simulatedLeads.js'
 import { buildLeadProposalData } from '../leadBoq.js'
-import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity, mergeLocationDecisionDraft } from '../leadFieldMapping.js'
+import { leadFieldValue as mappedLeadFieldValue, splitBuSegment, leadIdentity } from '../leadFieldMapping.js'
 import { deriveOpportunityScope, scopeForReview } from '../leadScope.js'
+import { enquiryEmailFacts, extractedLeadValues } from '../leadEmailFacts.js'
+import { extractSparesTable, uniqueTableRows } from '../leadSparesTable.js'
+import { mergeLeadIntake, mergeLeadReviewSuggestions, reviewFieldLabels, hasHumanLeadEdit } from '../leadReviewMerge.js'
 import { normalizeLocationValue, useGlobalLocationSearch } from '../locations.js'
 import { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 import { LEAD_LABELS, extractLabeledValue } from '../leadLabels.js'
@@ -203,7 +206,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   const completeAiAttachments = await completeAiAttachmentPayload(attachments, aiAttachments)
   const attachmentText = (attachments || [])
     .filter(a => a.text?.trim())
-    .map(a => `Attachment: ${a.name}\n${a.text}`)
+    .map(a => a.text)
     .join('\n\n')
   const attachmentHasSpecs = /specification|part\s*code|short\s*description|parameters|make\s*:/i.test(attachmentText)
   const attachmentHasQuantity = /\b(?:quantity|qty|quantities)\b|\b\d+\s*(?:nos?|pcs?|pieces?|sets?|ea)\b/i.test(attachmentText)
@@ -222,7 +225,14 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     acc.lineItems.push(...found.lineItems)
     return acc
   }, { fields: [], lineItems: [] })
-  deterministic.lineItems.push(...extractLeadTableLineItems(attachmentText))
+  const enquiryTables = (attachments || []).flatMap(a => extractSparesTable(a.text, a.structPages))
+  enquiryTables.push(...extractSparesTable(body))
+  if (enquiryTables.length) deterministic.lineItems = uniqueTableRows(enquiryTables)
+  else deterministic.lineItems.push(...extractLeadTableLineItems(attachmentText))
+  const sourceText = `${subject || ''}\n${body || ''}\n${attachmentText}`
+  const emailFacts = enquiryEmailFacts(sourceText, { from, isInternal: email => isInternalSender(email, store.config) })
+  const explicitFacts = sourceFieldFacts(sourceText)
+  deterministic.fields.push(...emailFacts.filter(f => !explicitFacts.some(existing => existing.k === f.k)), ...explicitFacts)
   const deterministicContext = scanned.length ? deterministicPromptContext(scanned) : ''
 
   // Mirrors attachmentMeta()'s budget-shrinking order so "truncated" here
@@ -245,6 +255,8 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       unprocessedFiles: completeAiAttachments.filter(file => file.skippedReason).map(file => ({ name: file.name, reason: file.skippedReason })),
       convertedFiles: [...new Set(convertedFiles)],
       parserHits: scanned.map(s => s.name),
+      failures,
+      method: results.length ? (deterministic.fields.length || deterministic.lineItems.length ? 'ai-and-deterministic' : 'ai') : 'deterministic',
     }
   }
 
@@ -258,6 +270,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
   const fallback = store.config?.aiModel?.provider === 'Built-in fallback'
   const results = []
   const convertedFiles = []
+  const failures = []
   let aiResult = { error: '' }
   if (chunks.length) {
     for (const chunk of chunks) {
@@ -277,14 +290,15 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       }, { fallback })
       convertedFiles.push(...(aiResult.data?.convertedFiles || []))
       if (aiResult.data?.data) results.push(aiResult.data.data)
+      else failures.push({ source: chunk.source, errorCode: aiResult.errorCode || 'AI_INVALID_RESPONSE', error: aiResult.error || 'AI returned no structured extraction.' })
     }
   } else {
     aiResult = await runTaskResult('lead.extract', { ...common, body, attachments, aiAttachments: completeAiAttachments }, { fallback })
     convertedFiles.push(...(aiResult.data?.convertedFiles || []))
     if (aiResult.data?.data) results.push(aiResult.data.data)
+    else failures.push({ source: 'Enquiry', errorCode: aiResult.errorCode || 'AI_INVALID_RESPONSE', error: aiResult.error || 'AI returned no structured extraction.' })
   }
   const mergedResults = mergeLeadResults(results)
-  const sourceText = `${subject || ''}\n${body || ''}\n${attachmentText}`
   const identityFacts = extractLeadIdentityFacts(sourceText)
   // When Gemini fails outright but a deterministic parse succeeded, still hand
   // back that scaffold rather than falling through to the plain-text fallback
@@ -416,19 +430,22 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
       description: x.description || x.desc || '',
       partNumber: x.partNumber || x.pn || '',
       customerRef: x.customerRef || x.partNumber || x.pn || '',
-      qty: Number(x.qty) || 1, uom: x.uom || 'EA',
+      equipmentRef: x.equipmentRef || '',
+      qty: Number(x.qty) > 0 ? Number(x.qty) : 0, uom: x.uom || 'EA',
       confidence: Math.max(0, Math.min(100, Math.round(x.confidence ?? x.conf ?? 0))),
       evidence: x.evidence || 'Inbound email or attachment',
     }))
   const explicitScope = resolvedFields.find(field => /^(?:opportunity )?scope$|^requested scope$|^requirement$/i.test(String(field.k || '').trim()))?.v
   return {
+    ...leadIdentity({}, resolvedFields),
+    ...extractedLeadValues(resolvedFields),
     route: resolvedRoute,
     urgency: ai.urgency || 'Normal',
     completeness: Math.max(0, Math.min(100, Math.round(ai.completeness ?? 0))),
     suggestedOwner: owner,
     opportunityScope: deriveOpportunityScope(lineItems, explicitScope || cleanDisplayValue(body)),
     ai: {
-      summary: ai.summary || '',
+      summary: [ai.summary, failures.length ? `AI extraction ${results.length ? 'was partial' : 'was unavailable'}: ${[...new Set(failures.map(f => f.error))].join('; ')} Extracted source facts remain suggestions for review.` : ''].filter(Boolean).join(' '),
       fields: resolvedFields.map(f => ({ ...f, v: cleanDisplayValue(f.v), conf: Math.max(0, Math.min(100, Math.round(f.conf ?? 0))), state: 'pending' })),
       lineItems,
       missing: ai.missing || [],
@@ -914,7 +931,7 @@ function PasteLeadModal({ onClose }) {
       return
     }
     const id = 'LD-' + Date.now()
-    store.addLead({ ...extracted, ...newLead(id), sellTo: company || leadIdentity(extracted, extracted.ai?.fields).sellTo, contactPerson: contact || leadIdentity(extracted, extracted.ai?.fields).contactPerson, contactPhone: phoneNumber || leadIdentity(extracted, extracted.ai?.fields).contactPhone, assignedOwner: assignedOwner || opportunityOwnerFor({location: customerLocation || extracted.location || extracted.region || leadIdentity(extracted, extracted.ai?.fields).eucLocation, config:store.config}), duplicateRisk: 'Low' })
+    store.addLead({ ...mergeLeadIntake(extracted, newLead(id)), assignedOwner: assignedOwner || opportunityOwnerFor({location: customerLocation || extracted.sellToCustomerLocation || extracted.location || extracted.region || leadIdentity(extracted, extracted.ai?.fields).eucLocation, config:store.config}), duplicateRisk: 'Low' })
     store.recordAiAction(id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.extract', result: { completeness: extracted.completeness, missing: extracted.ai?.missing || [], route: extracted.route } })
     hold(id, files.map(f => f.file))
     pendingLead.current = id
@@ -1226,21 +1243,24 @@ function LeadSourceContext({ lead, canAct, phoneLayout = false }) {
   )
 }
 
-function StructuredItemsTable({ items, title = 'Requested items', className = '', phoneLayout = false }) {
+export function StructuredItemsTable({ items, title = 'Requested items', className = '', phoneLayout = false }) {
   return (
     <section data-phone-field={phoneLayout ? 'Requested items' : undefined} className={['converted-items', className].filter(Boolean).join(' ')} aria-labelledby={`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-title`}>
       <div className="converted-section-title" id={`${title.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-title`}>{title}</div>
-      <div className="converted-table-wrap">
+      {!items.length ? <p>No spares extracted.</p> : <div className="converted-table-wrap" role="region" aria-label={`${title} item table`} tabIndex={0}>
         <table>
-          <thead><tr><th scope="col">Part description</th><th scope="col">Quantity</th></tr></thead>
+          <thead><tr><th scope="col">Equipment reference</th><th scope="col">Part number</th><th scope="col">Description</th><th scope="col">Quantity</th><th scope="col">Unit</th></tr></thead>
           <tbody>{items.map((item, index) => (
             <tr key={`${item.description || item.desc}-${index}`}>
+              <td>{item.equipmentRef || '—'}</td>
+              <td>{item.partNumber || item.pn || '—'}</td>
               <td>{item.description || item.desc || item.partNumber || 'Unspecified item'}</td>
-              <td>{phoneLayout ? (item.qty ?? item.quantity ?? '—') : item.qty || 1}</td>
+              <td>{Number(item.qty ?? item.quantity) > 0 ? (item.qty ?? item.quantity) : '—'}</td>
+              <td>{item.uom || item.unit || '—'}</td>
             </tr>
           ))}</tbody>
         </table>
-      </div>
+      </div>}
     </section>
   )
 }
@@ -1355,16 +1375,8 @@ function StructuredLeadDetail({ lead, converted = false, phoneLayout = false }) 
   const customer = identity.sellTo || value('sellTo', lead.sellTo || '')
   const contact = identity.contactPerson || value('contactPerson', '')
   const delivery = lead.deliveryAddress || leadFieldValue(fields, /delivery|address/i) || identity.eucLocation || value('eucLocation', lead.location || '')
-  const oppId = lead.oppId || '2609006LJS'
-  const items = lead.ai?.lineItems?.length
-    ? lead.ai.lineItems
-    : [
-        { description: 'Eddy-current proximity probe, 8 mm', qty: 4 },
-        { description: 'Probe extension cable, 5 m', qty: 4 },
-        { description: 'Signal conditioner', qty: 2 },
-        { description: 'MPC4 monitoring card', qty: 1 },
-        { description: 'VM600 rack CPU', qty: 1 },
-      ]
+  const oppId = lead.oppId || ''
+  const items = lead.ai?.lineItems || []
   const missing = lead.ai?.missing || []
 
   return (
@@ -1472,7 +1484,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const explicitCustomerContact = customerContactFromText(leadSourceText)
   const storedCustomerContact = internalSender
     ? explicitCustomerContact
-    : lead.contactPerson || leadFieldValue(ai.fields, /contact\s*person|contact/i) || lead.parse?.contactPerson || explicitCustomerContact || ''
+    : leadIdentity(lead, ai.fields).contactPerson || explicitCustomerContact || ''
   const initialLocation = lead.location || (lead.region && !indiaRegionForLocation(lead.region, store.config) ? lead.region : '') || mappedLeadFieldValue(ai.fields, 'eucLocation')
   const initialRegion = lead.region || indiaRegionForLocation(initialLocation, store.config) || initialLocation
   const regionalOwner = routeOwner(initialRegion, store.config, '')
@@ -1500,8 +1512,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
       ? lead.oppType
       : mappedLeadFieldValue(ai.fields, 'oppType') || (lead.route === 'Service' ? 'Service' : lead.route === 'Project' ? 'Project' : 'Spares'),
     inquiryType: lead.inquiryType || '',
-    rfqNumber: lead.rfqNumber || lead.ref || '',
-    rfqDate: lead.rfqDate || '',
+    rfqNumber: lead.rfqNumber || lead.ref || extractedLeadValues(ai.fields).rfqNumber,
+    rfqDate: lead.rfqDate || extractedLeadValues(ai.fields).rfqDate,
     customerStatus: customerStatusForLead(lead, store.customers),
     bu: buSegment.bu || sourceValue('Business unit') || '',
     segment: buSegment.segment || sourceValue('Segment') || '',
@@ -1510,6 +1522,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const [decisionDraft, setDecisionDraft] = useState(initialDecisions)
   const persistedDecisionRef = useRef(initialDecisions())
   const touchedLocationFieldsRef = useRef(new Set())
+  const extractionSuggestionsRef = useRef({})
   const decisionDraftRef = useRef(decisionDraft)
   decisionDraftRef.current = decisionDraft
   const decisionAuditPendingRef = useRef(false)
@@ -1566,33 +1579,40 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     const next = keepDecisions && extracted.ai
       ? { ...extracted, ai: { ...extracted.ai, fields: mergeDecidedFields(source.ai?.fields, extracted.ai.fields), lineItems: extracted.ai.lineItems || source.ai?.lineItems || [] } }
       : extracted
+    for (const key of ['subject','source']) if (!next[key]) next[key] = source[key] || ''
+    // Refresh suggestions while keeping unsaved form values and reviewed facts.
+    const suggestions = {
+      sellTo: next.sellTo || mappedLeadFieldValue(next.ai?.fields, 'sellTo'),
+      contactPerson: next.contactPerson || mappedLeadFieldValue(next.ai?.fields, 'contactPerson'),
+      contactPhone: next.contactPhone || mappedLeadFieldValue(next.ai?.fields, 'contactPhone'),
+      contactEmail: next.contactEmail, sellToCustomerLocation: next.sellToCustomerLocation,
+      eucName: next.eucName, eucLocation: next.eucLocation,
+      scope: next.opportunityScope, rfqNumber: next.rfqNumber, rfqDate: next.rfqDate,
+      source: next.source, oppType: next.oppType || next.route,
+    }
+    const retainedFields = keepDecisions ? (source.ai?.fields || []) : []
+    const refreshedDraft = mergeLeadReviewSuggestions(decisionDraftRef.current, persistedDecisionRef.current, suggestions, retainedFields, touchedLocationFieldsRef.current, extractionSuggestionsRef.current)
+    for (const key of Object.keys(suggestions)) {
+      const decided = retainedFields.some(f => reviewFieldLabels[key]?.test(f.k) && ['accepted','rejected'].includes(f.state))
+      if (decided || hasHumanLeadEdit(key, decisionDraftRef.current, persistedDecisionRef.current, extractionSuggestionsRef.current) || touchedLocationFieldsRef.current.has(key)) {
+        const property = key === 'scope' ? 'opportunityScope' : key
+        if (Object.hasOwn(source, property)) next[property] = source[property]
+        else delete next[property]
+      }
+    }
+    for (const [key, value] of Object.entries(suggestions)) {
+      if (value && refreshedDraft[key] === value) extractionSuggestionsRef.current[key] = value
+    }
     // Re-reading a document must not silently move the lead out of the
     // salesperson's inbox. Human assignment wins over a fresh AI suggestion;
     // an unassigned lead keeps its prior suggested owner until a user changes it.
     next.suggestedOwner = routeOwnerForLocation(source.region || source.location, store.config, next.suggestedOwner || source.suggestedOwner)
     store.updateLead(lead.id, next, detail || '')
     if (next.ai?.fields) {
-      const extractedIdentity = leadIdentity(next, next.ai.fields)
-      const extractedCustomer = matchCustomer(store.customers, { ...next, sellTo: extractedIdentity.sellTo })
-      const extractedSourceFacts = sourceFieldFacts(`${next.subject || ''}\n${next.body || ''}`)
-      const suggestions = {
-        sellToCustomerLocation: next.sellToCustomerLocation
-          || extractedCustomer?.location
-          || mappedLeadFieldValue(next.ai.fields, 'customerLocation')
-          || extractedSourceFacts.find(field => field.k === 'Sell-to customer location')?.v
-          || '',
-        eucLocation: normalizeLocationValue(extractedIdentity.eucLocation
-          || mappedLeadFieldValue(next.ai.fields, 'eucLocation')),
-      }
-      const refreshedDraft = mergeLocationDecisionDraft(
-        decisionDraftRef.current,
-        persistedDecisionRef.current,
-        suggestions,
-        touchedLocationFieldsRef.current,
-      )
       if (refreshedDraft.eucLocation !== decisionDraftRef.current.eucLocation) {
         setEucLocationSearch(refreshedDraft.eucLocation || '')
       }
+      decisionDraftRef.current = refreshedDraft
       setDecisionDraft(refreshedDraft)
     }
     store.recordAiAction(lead.id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.re-extract', result: { completeness: next.completeness, missing: next.ai?.missing || [], route: next.route } })
@@ -1974,7 +1994,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     const nextFields = updateLeadField(updateLeadField(updateLeadField(updateLeadField(identityFields,
       'Location', draft.location, 'Customer'), 'Opp Type', draft.oppType),
       'BU / Segment', `${draft.bu} / ${draft.segment}`), 'Equipment / Product Family', productDisplayLabel(draft.product))
-    const scopedFields = updateLeadField(nextFields, 'Opportunity scope', draft.scope, 'RFQ')
+    let scopedFields = updateLeadField(nextFields, 'Opportunity scope', draft.scope, 'RFQ')
+    for (const [key, label] of [['source','Lead source'],['contactEmail','Contact email'],['sellToCustomerLocation','Sell-to customer location'],['rfqNumber','RFQ number'],['rfqDate','RFQ date']]) {
+      scopedFields = updateLeadField(scopedFields, label, draft[key], 'RFQ')
+    }
     const nextMissing = reconcileMissingWithDecisions(ai.missing, draft, scopedFields, ai.lineItems)
     const matchedCustomer = matchCustomer(store.customers, { ...lead, sellTo: draft.sellTo })
     const resolvedCustomerStatus = matchedCustomer?.status || draft.customerStatus
@@ -1990,6 +2013,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
       sellTo: String(draft.sellTo || '').trim(),
       sellToCustomerLocation: String(draft.sellToCustomerLocation || '').trim(),
       opportunityScope: String(draft.scope || '').trim(),
+      rfqNumber: String(draft.rfqNumber || '').trim(),
+      rfqDate: String(draft.rfqDate || '').trim(),
       region: draft.region,
       location: draft.location,
       eucName: String(draft.eucName || '').trim(),
@@ -2049,6 +2074,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     const fresh = initialDecisions()
     persistedDecisionRef.current = fresh
     touchedLocationFieldsRef.current = new Set()
+    extractionSuggestionsRef.current = {}
     decisionDraftRef.current = fresh
     setDecisionDraft(fresh)
     setDecisionSaved(false)
@@ -2167,7 +2193,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   }
 
   const updateDecisionField = (key, value) => {
-    if (key === 'sellToCustomerLocation' || key === 'eucLocation') touchedLocationFieldsRef.current.add(key)
+    touchedLocationFieldsRef.current.add(key)
     setDecisionDraft(previous => ({ ...previous, [key]: value }))
     setDecisionErr('')
     setDecisionSaved(false)
@@ -2617,6 +2643,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
           }}>Cancel</button>
         </div>
         {compact && <div className="lead-missing-information-panel">{missingInformationPanel}</div>}
+        {compact && <StructuredItemsTable items={compactItems} title={phoneLayout ? 'Requested items' : 'Spares'} className="compact-spares" phoneLayout={phoneLayout} />}
 
       </section>
 
@@ -2657,6 +2684,8 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   : `Partial document scan: ${ai.scan.completed || 0} of ${ai.scan.chunks || 1} sections processed.`}
               </p>
               {ai.scan.convertedFiles?.length > 0 && <p className="hint" role="status">Office files converted to PDF for AI: {ai.scan.convertedFiles.join(', ')}.</p>}
+              {ai.scan.method === 'deterministic' && <p className="hint" role="status">Source facts were read by the document parser. Review the suggested values.</p>}
+              {ai.scan.failures?.length > 0 && <p className="hint" role="status">{[...new Set(ai.scan.failures.map(failure => failure.error))].join(' ')}</p>}
               {(ai.scan.truncatedFiles?.length > 0 || ai.scan.visualOnlyFiles?.length > 0 || ai.scan.unprocessedFiles?.length > 0) && (
                 <p className="hint" role="status">
                   <Icon name="alert" size={12} />{' '}
@@ -2986,8 +3015,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             {lead.status === 'Converted' && <p className="lead-decision-note">This edits the lead record only. The linked opportunity is unchanged.</p>}
             </div>
           </section>
-
-          {compact && <StructuredItemsTable items={compactItems} title={phoneLayout ? 'Requested items' : 'Spares'} className="compact-spares" phoneLayout={phoneLayout} />}
 
           {ai.next?.length > 0 && (
             <>
@@ -3691,7 +3718,8 @@ export default function Inbox() {
       .map(item => ({
         description: item.description || item.desc || '',
         partNumber: item.partNumber || item.pn || '',
-        qty: Number(item.qty) || 1,
+        equipmentRef: item.equipmentRef || '',
+        qty: Number(item.qty) > 0 ? Number(item.qty) : 0,
         uom: item.uom || 'EA',
       }))
       .filter(item => item.description || item.partNumber)

@@ -283,6 +283,11 @@ browser heartbeat writes to `user_presence`. Multiple replicas need shared limit
 
 ## Stage 1 lead workflow
 
+- Extracted enquiry rows retain optional `equipmentRef` alongside part number,
+  description, quantity and unit through lead review and opportunity handoff.
+  Matching part/equipment rows from AI and their source table corroborate one
+  request; never add their quantities together. Unknown quantities stay unknown.
+  Opportunity Scope is a short summary; the Spares table retains the full rows.
 - `NON_SALES` is submit-only even when mixed with old broader roles. Route it to
   New Lead/personal settings; `/api/lead-intake` supplies safe assignee choices
   and validates submissions without exposing business records.

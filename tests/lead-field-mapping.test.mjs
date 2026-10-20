@@ -1,5 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+
+test('an email address is not a contact person and a filename is not a customer', () => {
+  const identity=leadIdentity({sellTo:'customer-spares-enquiry.pdf',contactPerson:'anita@example.com'},[{k:'Contact email',v:'anita@example.com'}])
+  assert.equal(identity.sellTo,'')
+  assert.equal(identity.contactPerson,'')
+})
 import { leadFieldValue, leadIdentity, splitBuSegment, normalizeLeadLabel, inferEucFromText, labeledEucLocationFromText, mergeLocationDecisionDraft } from '../src/leadFieldMapping.js'
 import { extractLeadIdentityFacts, mergeLeadResults } from '../src/leadExtraction.js'
 import { mergeDeterministicIntoAi } from '../src/docScan.js'

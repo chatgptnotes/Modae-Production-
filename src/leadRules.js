@@ -1,3 +1,4 @@
+import { validCustomerName, validContactName, enquiryEmailFacts } from './leadEmailFacts.js'
 import { registrationFields } from './businessRules.js'
 import { classRule, classDeadlineDays } from './customerClasses.js'
 import { LEAD_LABELS, EUC_LOCATION_LABELS, cleanExtractedValue, extractLabeledValue } from './leadLabels.js'
@@ -77,6 +78,9 @@ const sourceFieldMatches = (field, canonical) => {
     'Sell-to customer': /^(?:sell to customer|sell to|customer name|customer|buyer|company)$/,
     'Contact person': /^(?:contact person|contact|signatory|attn|kind attention)$/,
     'Contact email': /^(?:contact email|email|e mail)$/,
+    'Sell-to customer location': /^(?:sell to customer location|customer location|customer address|buyer location)$/,
+    Subject: /^subject$/,
+    'Lead source': /^lead source$/,
     'Contact phone': /^(?:contact phone|contact number|phone|mobile|telephone)$/,
     'EUC Name': /^(?:euc|euc name|eun|eun name|end user|end user name|ultimate customer|beneficiary)$/,
     'EUC Location': /^(?:euc|eun|end user)(?: site)? (?:location|address)$/,
@@ -97,33 +101,36 @@ const sourceFieldMatches = (field, canonical) => {
 // resolver is intentionally source-only; it never invents a value for a
 // field that the enquiry does not state.
 export const sourceFieldFacts = (text = '') => {
-  const source = String(text || '')
+  const source = String(text || '').replace(/^\s*Attachment:[^\n]*$/gim, '')
   return SOURCE_FIELD_SPECS.flatMap(([k, group, labels]) => {
     const value = k === 'EUC Location'
       ? EUC_LOCATION_LABELS.map(pattern => extractLabeledValue(source, pattern)).find(Boolean)
       : extractLabeledValue(source, labels)
-    return value ? [{ group, k, v: value, conf: 98, ev: `Explicit ${k.toLowerCase()} label in enquiry`, source: 'deterministic' }] : []
+    const valid = k === 'Sell-to customer' ? validCustomerName(value) : k === 'Contact person' ? validContactName(value) : Boolean(value)
+    return valid ? [{ group, k, v: value, conf: 98, ev: `Explicit ${k.toLowerCase()} label in enquiry`, source: 'deterministic' }] : []
   })
 }
 
-export const mergeSourceFieldFacts = (fields = [], text = '') => {
+export const mergeSourceFieldFacts = (fields = [], text = '', additionalFacts = []) => {
   const existing = Array.isArray(fields) ? [...fields] : []
-  for (const sourceField of sourceFieldFacts(text)) {
+  const explicit = sourceFieldFacts(text)
+  for (const sourceField of [...additionalFacts.filter(f => !explicit.some(e => e.k === f.k)), ...explicit]) {
     const index = existing.findIndex(field => sourceFieldMatches(field, sourceField.k))
     if (index < 0) existing.push(sourceField)
-    else existing[index] = { ...existing[index], ...sourceField, state: existing[index].state || 'pending' }
+    else existing[index] = { ...existing[index], ...sourceField, state: existing[index].state || 'pending', alt: [...(existing[index].alt || []), ...(existing[index].v !== sourceField.v ? [{v:existing[index].v,conf:existing[index].conf,ev:existing[index].ev}] : [])] }
   }
   return existing
 }
 
 export const customerCompanyFromText = text => {
-  return extractLabeledValue(text, LEAD_LABELS.sellTo).replace(/[,]+$/, '')
+  const value = extractLabeledValue(String(text || '').replace(/^\s*Attachment:[^\n]*$/gim, ''), LEAD_LABELS.sellTo).replace(/[,]+$/, '')
+  return validCustomerName(value) ? value : ''
 }
 
 export const normalizeLeadContactFields = (fields, { from = '', text = '', config = {} } = {}) => {
   const rows = Array.isArray(fields) ? fields : []
   if (!isInternalSender(from, config)) return rows
-  const explicit = customerContactFromText(text)
+  const explicit = customerContactFromText(text) || enquiryEmailFacts(text, {from, isInternal:email => isInternalSender(email,config)}).find(f => f.k === 'Contact person')?.v
   if (!explicit) return rows.filter(field => !/contact\s+person/i.test(String(field?.k || '')))
   const replacement = { group: 'Customer', k: 'Contact person', v: explicit, conf: 95, ev: 'Explicit customer contact in email body' }
   const first = rows.findIndex(field => /contact\s+person/i.test(String(field?.k || '')))
@@ -141,7 +148,7 @@ const boundedConfidence = (value, fallback = 0) => {
 export const hardenLeadExtraction = (ai, { from = '', text = '', config = {} } = {}) => {
   if (!ai) return ai
   const sourceCompany = customerCompanyFromText(text)
-  const normalized = mergeSourceFieldFacts(normalizeLeadContactFields(ai.fields, { from, text, config }), text)
+  const normalized = mergeSourceFieldFacts(normalizeLeadContactFields(ai.fields, { from, text, config }), text, enquiryEmailFacts(text, { from, isInternal: email => isInternalSender(email, config) }))
   const hasCompany = normalized.some(field => /sell[-\s]?to\s+customer|customer name/i.test(String(field?.k || '')))
   const fields = (sourceCompany && !hasCompany
     ? [...normalized, { group: 'Customer', k: 'Sell-to customer', v: sourceCompany, conf: 98, ev: 'Explicit Customer label in email body' }]
@@ -166,7 +173,7 @@ export const hardenLeadExtraction = (ai, { from = '', text = '', config = {} } =
             : field?.note,
       }
     })
-    .filter(field => field.v)
+    .filter(field => field.v && (!/^(?:sell[- ]?to(?: customer)?|buyer|customer name)$/i.test(field.k) || validCustomerName(field.v)) && (!/^(?:contact person|signatory)$/i.test(field.k) || validContactName(field.v)))
   const lineItems = (Array.isArray(ai.lineItems) ? ai.lineItems : []).map(item => {
     const rawQty = Number(item?.qty)
     const qty = Number.isFinite(rawQty) && rawQty > 0 ? rawQty : 0

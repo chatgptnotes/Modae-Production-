@@ -142,8 +142,8 @@ export function OpportunityDetailsView({ opp, className = '', showValue = true }
           <div className="opportunity-requested-items">
             {opp.requestedItems.map((item, index) => (
               <div className="opportunity-requested-row" key={`${item.description || item.partNumber || 'item'}-${index}`}>
-                <span>{item.description || item.partNumber || 'Unspecified item'}</span>
-                <b>{item.qty || 1} {item.uom || 'EA'}</b>
+                <span>{[item.equipmentRef, item.partNumber, item.description].filter(Boolean).join(' · ') || 'Unspecified item'}</span>
+                <b>{Number(item.qty) > 0 ? item.qty : '—'} {item.uom || 'EA'}</b>
               </div>
             ))}
           </div>

@@ -56,7 +56,7 @@ export function parsedToLeadFields(parsed, attachmentName) {
   }
   const lineItems = (parsed.items || []).map(item => ({
     description: item.description || '', partNumber: item.pn || '', customerRef: item.sapCode || '',
-    qty: Number(item.qty) || 1, uom: item.uom || 'EA',
+    qty: Number(item.qty) > 0 ? Number(item.qty) : 0, uom: item.uom || 'EA',
     confidence: Math.round((item.confidence || 0) * 100),
     evidence: ev, source: 'deterministic',
   }))
@@ -119,7 +119,10 @@ export function mergeDeterministicIntoAi(ai, deterministicFields = [], determini
   }
 
   const lineItems = (ai.lineItems || []).map(x => ({ ...x }))
-  const lineKey = x => norm(x.partNumber || x.customerRef || x.description)
+  const lineKey = x => {
+    const reference = norm(x.partNumber || x.customerRef || x.description)
+    return reference ? `${reference}|${norm(x.equipmentRef)}` : ''
+  }
   const lineIndex = new Map(lineItems.map((x, i) => [lineKey(x), i]).filter(([k]) => k))
   for (const det of deterministicLineItems) {
     const id = lineKey(det)
@@ -135,6 +138,7 @@ export function mergeDeterministicIntoAi(ai, deterministicFields = [], determini
     const existing = lineItems[at]
     lineItems[at] = {
       ...existing,
+      equipmentRef: det.equipmentRef || existing.equipmentRef || '',
       partNumber: det.partNumber || existing.partNumber,
       customerRef: det.customerRef || existing.customerRef,
       description: (existing.description || '').length >= (det.description || '').length ? existing.description : det.description,
