@@ -215,7 +215,7 @@ test('AI lead extraction has enough output room for structured document results'
         task: 'lead.extract', payload: { attachments: [{ name: 'rfq.pdf', text: 'three line items' }] },
       } }, res)
       assert.equal(res.out.status, 200)
-      assert.equal(outputTokenLimit, 4096)
+      assert.equal(outputTokenLimit, 16384)
     })
   } finally { globalThis.fetch = oldFetch }
 })

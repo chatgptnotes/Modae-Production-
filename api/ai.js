@@ -994,7 +994,7 @@ export default async function handler(req, res) {
     contents: [{ parts: [{ text: prompt }, ...fileParts] }],
     generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'].includes(task)
       ? {
-          maxOutputTokens: ['lead.extract', 'tender.extract'].includes(task) ? 4096 : 2048,
+          maxOutputTokens: task === 'lead.extract' ? 16384 : task === 'tender.extract' ? 4096 : 2048,
           responseMimeType: 'application/json',
           responseSchema: task === 'opportunity.search' ? opportunitySearchSchema : task === 'lead.fill' ? fillSchema
             : task === 'vendor.quote' ? vendorQuoteSchema

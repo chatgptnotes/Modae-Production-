@@ -1,3 +1,9 @@
+## 2026-10-21 — More response space for lead extraction
+
+- Increase the AI response limit for lead extraction from 4,096 to 16,384 tokens
+  so detailed enquiry fields and spares tables have more room to finish. Other
+  AI task limits are unchanged.
+
 ## 2026-10-20 — Accurate enquiry email details and spares
 
 ## 2026-10-21 — Correct spares RFQ extraction and submission progress
