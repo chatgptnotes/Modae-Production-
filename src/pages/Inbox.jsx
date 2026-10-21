@@ -443,7 +443,7 @@ export async function extractLead({ from, subject, body, attachments = [], aiAtt
     urgency: ai.urgency || 'Normal',
     completeness: Math.max(0, Math.min(100, Math.round(ai.completeness ?? 0))),
     suggestedOwner: owner,
-    opportunityScope: deriveOpportunityScope(lineItems, explicitScope || cleanDisplayValue(body)),
+    opportunityScope: explicitScope ? deriveOpportunityScope([], explicitScope) : deriveOpportunityScope(lineItems, cleanDisplayValue(body)),
     ai: {
       summary: [ai.summary, failures.length ? `AI extraction ${results.length ? 'was partial' : 'was unavailable'}: ${[...new Set(failures.map(f => f.error))].join('; ')} Extracted source facts remain suggestions for review.` : ''].filter(Boolean).join(' '),
       fields: resolvedFields.map(f => ({ ...f, v: cleanDisplayValue(f.v), conf: Math.max(0, Math.min(100, Math.round(f.conf ?? 0))), state: 'pending' })),
@@ -881,10 +881,13 @@ function PasteLeadModal({ onClose }) {
   const [drag, setDrag] = useState(false)
   const [reading, setReading] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [stage, setStage] = useState('')
+  const submitting = useRef(false)
   const [err, setErr] = useState('')
 
 
   const addFiles = async picked => {
+    if (submitting.current || reading) return
     const list = Array.from(picked || [])
     if (!list.length) return
     setReading(true)
@@ -916,28 +919,52 @@ function PasteLeadModal({ onClose }) {
   })
 
   const add = async () => {
-    if (store.canPerform?.('leads.create') === false) return
-    if (pendingLead.current) {
-      if (!await store.flushPersistence([{entity:'leads',id:pendingLead.current}])) {setErr('Lead has unsaved changes. Retry Generate Lead to save.');return}
-      onClose();nav('/inbox/' + pendingLead.current);return
-    }
-    if (!body.trim() && !files.length && !company.trim() && !subject.trim()) { setErr('Enter a company, subject, message or attachment.'); return }
+    if (submitting.current || reading || store.canPerform?.('leads.create') === false) return
+    submitting.current = true
     setBusy(true); setErr('')
-    const extractionBody = [company && `Customer: ${company}`, contact && `Contact person: ${contact}`, phoneNumber && `Contact phone: ${phoneNumber}`, customerLocation && `Customer location: ${customerLocation}`, body].filter(Boolean).join('\n')
-    const extracted = await extractLead({ from, subject, body: extractionBody, attachments: files, aiAttachments: await aiAttachmentPayload(files) }, store)
-    setBusy(false)
-    if (!extracted) {
-      setErr('Extraction is unavailable — check the AI configuration on the Admin page, or add the mail unextracted and structure it by hand.')
-      return
+    const measureStage = async (name, work) => {
+      const start = performance.now()
+      try { return await work() }
+      finally {
+        const label = `lead-intake:${name}`
+        performance.clearMeasures(label)
+        performance.measure(label, { start, end: performance.now() })
+      }
     }
-    const id = 'LD-' + Date.now()
-    store.addLead({ ...mergeLeadIntake(extracted, newLead(id)), assignedOwner: assignedOwner || opportunityOwnerFor({location: customerLocation || extracted.sellToCustomerLocation || extracted.location || extracted.region || leadIdentity(extracted, extracted.ai?.fields).eucLocation, config:store.config}), duplicateRisk: 'Low' })
-    store.recordAiAction(id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.extract', result: { completeness: extracted.completeness, missing: extracted.ai?.missing || [], route: extracted.route } })
-    hold(id, files.map(f => f.file))
-    pendingLead.current = id
-    if (!await store.flushPersistence([{entity:'leads',id}])) {setErr('Lead has unsaved changes. Retry Generate Lead to save.');return}
-    onClose()
-    nav('/inbox/' + id)
+    try {
+      if (pendingLead.current) {
+        setStage('Saving lead…')
+        if (!await measureStage('save', () => store.flushPersistence([{entity:'leads',id:pendingLead.current}]))) {setErr('Lead has unsaved changes. Retry Generate Lead to save.');return}
+        onClose();nav('/inbox/' + pendingLead.current);return
+      }
+      if (!body.trim() && !files.length && !company.trim() && !subject.trim()) { setErr('Enter a company, subject, message or attachment.'); return }
+      setStage('Preparing attachments…')
+      const extractionBody = [company && `Customer: ${company}`, contact && `Contact person: ${contact}`, phoneNumber && `Contact phone: ${phoneNumber}`, customerLocation && `Customer location: ${customerLocation}`, body].filter(Boolean).join('\n')
+      const aiAttachments = await measureStage('prepare', () => aiAttachmentPayload(files))
+      setStage('Extracting…')
+      const extracted = await measureStage('extract', () => extractLead({ from, subject, body: extractionBody, attachments: files, aiAttachments }, store))
+      if (!extracted) {
+        setErr('Extraction is unavailable — check the AI configuration on the Admin page, or add the mail unextracted and structure it by hand.')
+        return
+      }
+      const id = 'LD-' + Date.now()
+      store.addLead({ ...mergeLeadIntake(extracted, newLead(id)), assignedOwner: assignedOwner || opportunityOwnerFor({location: customerLocation || extracted.sellToCustomerLocation || extracted.location || extracted.region || leadIdentity(extracted, extracted.ai?.fields).eucLocation, config:store.config}), duplicateRisk: 'Low' })
+      pendingLead.current = id
+      store.recordAiAction(id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.extract', result: { completeness: extracted.completeness, missing: extracted.ai?.missing || [], route: extracted.route } })
+      hold(id, files.map(f => f.file))
+      setStage('Saving lead…')
+      if (!await measureStage('save', () => store.flushPersistence([{entity:'leads',id}]))) {setErr('Lead has unsaved changes. Retry Generate Lead to save.');return}
+      onClose()
+      nav('/inbox/' + id)
+    } catch (error) {
+      setErr(pendingLead.current
+        ? 'Lead has unsaved changes. Retry Generate Lead to save.'
+        : 'Could not generate the lead. Your enquiry is retained; please retry.')
+    } finally {
+      submitting.current = false
+      setBusy(false)
+      setStage('')
+    }
   }
 
   const addRaw = () => {
@@ -953,7 +980,7 @@ function PasteLeadModal({ onClose }) {
   }
 
   return (
-    <Modal title="New Lead" onClose={onClose} className="lead-paste-modal">
+    <Modal title="New Lead" onClose={() => { if (!submitting.current) onClose() }} className="lead-paste-modal">
       <div className="drawer-form lead-paste-form">
         <div className="lead-paste-fields">
         {phone && <p className="lead-paste-intro">Paste the message or attach an enquiry document.</p>}
@@ -995,13 +1022,13 @@ function PasteLeadModal({ onClose }) {
           </div>
         </div>
         {phone && <p className="lead-paste-upload-help">Attach an RFQ, BOM or specification. Documents are read with your message.</p>}
-        <p className="lead-paste-status" role="status" aria-live="polite">{reading ? 'Reading attachments…' : busy ? 'Extracting enquiry…' : ''}</p>
+        <p className="lead-paste-status" role="status" aria-live="polite">{reading ? 'Reading attachments…' : busy ? stage : ''}</p>
         {files.map((f, i) => (
           <div key={i} className="attach-row">
             <Icon name="fileText" size={13} />
             <span className="attach-name" style={{ flex: 1 }}>{f.name}</span>
             <span className="attach-meta hint">{f.pages ? `${f.pages} p. · ` : ''}{f.size}</span>
-            <button type="button" title="Remove" aria-label={`Remove ${f.name}`}
+            <button type="button" title="Remove" disabled={busy || reading} aria-label={`Remove ${f.name}`}
               onClick={() => setFiles(files.filter((_, j) => j !== i))}>✕</button>
             {f.err && <div className="hint" style={{ flexBasis: '100%' }}><Icon name="alert" size={11} /> {f.err}</div>}
           </div>
@@ -1012,10 +1039,10 @@ function PasteLeadModal({ onClose }) {
         {err && <div role="alert"><ErrBox>{err}</ErrBox></div>}
         </div>
         <div className="lead-paste-actions">
-          <button onClick={onClose}>Cancel</button>
-          {err && <button disabled={store.canPerform?.('leads.create') === false} onClick={addRaw}>Add unextracted</button>}
+          <button onClick={onClose} disabled={busy}>Cancel</button>
+          {err && <button disabled={busy || Boolean(pendingLead.current) || store.canPerform?.('leads.create') === false} onClick={addRaw}>Add unextracted</button>}
           <button className="primary" onClick={add} disabled={busy || reading || store.canPerform?.('leads.create') === false}>
-            <Icon name="bot" size={13} /> {busy ? 'Extracting…' : 'Generate Lead'}
+            <Icon name="bot" size={13} /> {busy ? stage : 'Generate Lead'}
           </button>
         </div>
       </div>
@@ -1699,6 +1726,11 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     const pattern = decisionFieldPatterns[key]
     return pattern ? ai.fields.find(field => pattern.test(field.k)) : null
   }
+  const deliveryLocationField = decisionAiField('eucLocation')
+  const deliveryLocationNote = deliveryLocationField?.state === 'pending'
+    && deliveryLocationField.note?.includes('confirm end-user location')
+    && decisionDraft.eucLocation === deliveryLocationField.v
+    ? <span className="hint">Delivery address — confirm end-user location</span> : null
   const isMappedDecisionField = field => Object.values(decisionFieldPatterns).some(pattern => pattern.test(field.k))
   const decisionAiStatus = key => {
     const field = decisionAiField(key)
@@ -2526,7 +2558,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             <div className="decision-value-row"><CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
               onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" ariaLabel="EUC name" />{decisionAiStatus('eucName')}</div>
             </label>
-          <label><span className="decision-field-heading">EUC Location  {decisionAiMeta('eucLocation', false)}</span>
+          <label><span className="decision-field-heading">EUC Location  {decisionAiMeta('eucLocation', false)}</span>{deliveryLocationNote}
             <div className="euc-location-search">
               <div className="decision-value-row"><input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
                 onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" name="inbox-search-euc-city-or-state" />{decisionAiStatus('eucLocation')}</div>
@@ -2897,7 +2929,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                 <CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
                   onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" ariaLabel="EUC name" />
               </label>
-              <label>EUC Location  {decisionAiMeta('eucLocation')}
+              <label>EUC Location  {decisionAiMeta('eucLocation')}{deliveryLocationNote}
                 <div className="euc-location-search">
                   <input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
                     onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" name="inbox-search-euc-city-or-state-2" />

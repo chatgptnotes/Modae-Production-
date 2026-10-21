@@ -1,5 +1,17 @@
 ## 2026-10-20 — Accurate enquiry email details and spares
 
+## 2026-10-21 — Correct spares RFQ extraction and submission progress
+
+- Separate adjacent RFQ/date labels, recognize explicit Scope summaries, and reject
+  placeholder phone values even when AI returns them without the annotation.
+- Keep delivery-only EUC suggestions pending confirmation with accurate evidence.
+- Recognize No. table headings and KIT units so all eight sample spares survive
+  provider failure without duplicate quantities.
+- Reuse immutable attachment encodings, show preparation/extraction/save stages,
+  keep submission locked through persistence, and retain the lead ID on retries.
+  Record bounded browser stage timings without logging enquiry contents.
+
+
 - Prevent attachment filenames from being interpreted as company labels. Recover
   customer email headers, external contact/signature details and dated RFQ references
   without substituting internal forwarding signatures for customer identities.

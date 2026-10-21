@@ -18,7 +18,7 @@ export const LEAD_LABELS = {
   contactEmail: String.raw`(?:contact\s+)?e[-\s]?mail`,
   oppName: String.raw`(?:opportunity|opp)\s+name`,
   oppType: String.raw`(?:opportunity|opp)\s+type`,
-  opportunityScope: String.raw`(?:opportunity\s+scope|requested\s+scope|requirement)`,
+  opportunityScope: String.raw`(?:(?:opportunity\s+|requested\s+)?scope|requirement)`,
   category: String.raw`(?:customer\s+)?categor(?:y|ies)`,
   businessUnit: String.raw`(?:business\s+unit|\bbu\b)`,
   segment: String.raw`segment`,
@@ -27,7 +27,7 @@ export const LEAD_LABELS = {
   rfqDate: String.raw`(?:rfq|tender|enquiry|inquiry)\s+date`,
 }
 
-const allLabels = Object.values(LEAD_LABELS).join('|')
+const allLabels = [...Object.values(LEAD_LABELS), String.raw`\bdate`].join('|')
 const valueBoundary = `(?=\\s*(?:${allLabels})\\s*[:\\-]|[\\n;]|$)`
 
 const clean = value => String(value ?? '')

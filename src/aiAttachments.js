@@ -43,6 +43,9 @@ export const visualMimeType = file => {
 
 export const supportsVisualAi = file => Boolean(visualMimeType(file))
 
+// File/Blob bytes are immutable. Reuse encoding during intake without retaining files.
+const encodedFiles = new WeakMap()
+
 export async function aiAttachmentPayload(files = [], { maxFileBytes = AI_FILE_BYTES, maxTotalBytes = AI_TOTAL_BYTES, maxFiles = AI_MAX_FILES } = {}) {
   let total = 0
   let included = 0
@@ -68,11 +71,16 @@ export async function aiAttachmentPayload(files = [], { maxFileBytes = AI_FILE_B
       out.push({ name: file.name, skippedReason: 'too-many-files' })
       continue
     }
-    const bytes = new Uint8Array(await file.arrayBuffer())
-    let binary = ''
-    const chunk = 0x8000
-    for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
-    out.push({ name: file.name, mimeType, dataBase64: btoa(binary) })
+    let dataBase64 = encodedFiles.get(file)
+    if (dataBase64 === undefined) {
+      const bytes = new Uint8Array(await file.arrayBuffer())
+      let binary = ''
+      const chunk = 0x8000
+      for (let i = 0; i < bytes.length; i += chunk) binary += String.fromCharCode(...bytes.subarray(i, i + chunk))
+      dataBase64 = btoa(binary)
+      if (typeof Blob !== 'undefined' && file instanceof Blob) encodedFiles.set(file, dataBase64)
+    }
+    out.push({ name: file.name, mimeType, dataBase64 })
     total += size
     included += 1
   }

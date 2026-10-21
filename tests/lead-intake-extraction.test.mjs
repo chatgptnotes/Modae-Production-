@@ -122,3 +122,41 @@ test('AI intake keeps the end user and plant location through review mapping', a
     globalThis.fetch = originalFetch
   }
 })
+
+test('sample spares RFQ preserves explicit scope and rejects placeholder contact data', async () => {
+  const originalFetch = globalThis.fetch
+  const scope = 'Supply of pump seals, bearings, gaskets, compressor filters and valve service kits.'
+  const sample = `RFQ No: DVE/SP/2026/1042 Date: 21 October 2026
+Customer: Demo Valley Engineering Pvt. Ltd.
+Telephone: +91 00000 00000 (test placeholder)
+Delivery address: Pune, Maharashtra
+Scope: ${scope}
+Item Equipment ref. Part number Description Qty Unit
+1 P-101A MSK-045-EPDM Mechanical seal kit 2 SET
+2 P-101A BRG-6309-C3 Deep-groove ball bearing 4 NOS`
+  try {
+    for (const ok of [true, false]) {
+      globalThis.fetch = async () => Response.json(ok ? {ok:true,data:{fields:[{k:'RFQ number',v:'WRONG',ev:'AI',conf:99},{k:'Contact phone',v:'+91 00000 00000',ev:'AI',conf:99}],lineItems:[]}} : {ok:false,error:'Unavailable'})
+      const lead = await extractLead({attachments:[{name:'spares.pdf',text:sample}]}, {customers:[],config:{}})
+      assert.equal(lead.rfqNumber, 'DVE/SP/2026/1042')
+      assert.equal(lead.opportunityScope, scope)
+      assert.equal(lead.contactPhone, '')
+      assert.equal(lead.ai.lineItems.length, 2)
+      assert.match(lead.ai.fields.find(f => f.k === 'EUC Location').note, /confirm end-user location/)
+    }
+  } finally { globalThis.fetch = originalFetch }
+})
+
+test('eight-row sample RFQ keeps every requested part and RFQ date on provider failure', async () => {
+  const {sampleSparesRfq, sampleSparesRows, sampleSparesScope} = await import('./fixtures/sample-spares-rfq.mjs')
+  const originalFetch = globalThis.fetch
+  try {
+    globalThis.fetch = async () => Response.json({ok:false,error:'Unavailable'})
+    const lead = await extractLead({attachments:[{name:'sample-spares.pdf',text:sampleSparesRfq}]}, {customers:[],config:{}})
+    assert.equal(lead.rfqNumber, 'DVE/SP/2026/1042')
+    assert.equal(lead.rfqDate, '2026-10-21')
+    assert.equal(lead.opportunityScope, sampleSparesScope)
+    assert.equal(lead.contactPhone, '')
+    assert.deepEqual(lead.ai.lineItems.map(r => [r.equipmentRef,r.partNumber,r.description,r.qty,r.uom]), sampleSparesRows.map(r => [r[1],r[2],r[3],Number(r[4]),r[5]]))
+  } finally { globalThis.fetch = originalFetch }
+})

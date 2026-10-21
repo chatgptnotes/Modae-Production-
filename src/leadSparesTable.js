@@ -1,5 +1,5 @@
 const clean = value => String(value ?? '').replace(/\s+/g, ' ').trim()
-const tableHeader = text => /\bitem\b/i.test(text) && /equipment\s*ref/i.test(text) && /part\s*(?:number|no)/i.test(text) && /description/i.test(text) && /\bqty\b|\bquantity\b/i.test(text) && /\bunit\b/i.test(text)
+const tableHeader = text => /\b(?:item|no\.?|s\.?\s*no\.?)\b/i.test(text) && /equipment\s*ref/i.test(text) && /part\s*(?:number|no)/i.test(text) && /description/i.test(text) && /\bqty\b|\bquantity\b/i.test(text) && /\bunit\b/i.test(text)
 const item = cells => ({ serial: clean(cells[0]), equipmentRef: clean(cells[1]), partNumber: clean(cells[2]), description: clean(cells[3]), qty: Number(cells[4]) > 0 ? Number(cells[4]) : 0, uom: clean(cells[5]), confidence: 94, evidence: cells.map(clean).join(' | '), source: 'deterministic' })
 
 export function extractSparesTable(text, structPages = []) {
@@ -11,7 +11,7 @@ export function extractSparesTable(text, structPages = []) {
     for (const line of page) {
       if (tableHeader(line.text || '')) {
         flush()
-        const patterns = [/^item$/i, /^equipment/i, /^part/i, /^description/i, /^(qty|quantity)$/i, /^unit$/i]
+        const patterns = [/^(?:item|no\.?|s\.?\s*no\.?)$/i, /^equipment/i, /^part/i, /^description/i, /^(qty|quantity)$/i, /^unit$/i]
         const starts = patterns.map(pattern => line.items?.find(it => pattern.test(it.str))?.x)
         columns = starts.every(Number.isFinite) ? starts : null
         continue
@@ -40,7 +40,7 @@ export function extractSparesTable(text, structPages = []) {
     if (!line) continue
     if (/^\d{1,3}(?:\s|$)/.test(line)) buffer = line
     else if (buffer) buffer += ` ${line}`
-    const match = buffer.match(/^(\d{1,3})\s+(.+?)\s+([A-Z][A-Z0-9]*(?:[-/][A-Z0-9]+){2,})\s+(.+?)\s+(\d+(?:\.\d+)?)\s+(sets?|nos?\.?|ea|pcs?\.?)$/i)
+    const match = buffer.match(/^(\d{1,3})\s+(.+?)\s+([A-Z][A-Z0-9]*(?:[-/][A-Z0-9]+){2,})\s+(.+?)\s+(\d+(?:\.\d+)?)\s+(sets?|kits?|nos?\.?|ea|pcs?\.?)$/i)
     if (match) { found.push(item(match.slice(1))); buffer = '' }
     else if (/^(?:please|kindly|delivery|regards)\b/i.test(line)) break
   }

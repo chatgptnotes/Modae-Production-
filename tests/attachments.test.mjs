@@ -344,3 +344,17 @@ test('blobs are persisted so a reload can still preview and upload them', () => 
   assert.match(read('src/pages/Register.jsx'), /await take\(lead\.id\)/, 'take() is async now')
   assert.match(read('src/store.jsx'), /leadBlobs\.clearAll/, 'reset demo data must clear the blob store')
 })
+
+test('preparing and completing the same immutable file reads its bytes only once', async () => {
+  const file = new File(['pdf content'], 'sample.pdf', {type:'application/pdf'})
+  let reads = 0
+  const read = file.arrayBuffer.bind(file)
+  file.arrayBuffer = async () => { reads++; return read() }
+  const initial = await aiAttachmentPayload([{file}])
+  const completed = await completeAiAttachmentPayload([{file}], initial)
+  assert.deepEqual(completed, initial)
+  assert.equal(reads, 1)
+  const replacement = new File(['replacement'], 'sample.pdf', {type:'application/pdf'})
+  const replaced = await completeAiAttachmentPayload([{file:replacement}], initial)
+  assert.equal(atob(replaced[0].dataBase64), 'replacement')
+})

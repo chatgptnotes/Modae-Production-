@@ -48,6 +48,13 @@ submission, and follow-up.
   salesperson overrides routing; otherwise configured rules assign the lead, with
   LJS as fallback. Non-sales accounts can submit leads and change personal settings
   without browsing sales records.
+- Lead extraction keeps explicit Scope summaries, separates adjacent RFQ numbers
+  and dates, and leaves clearly marked placeholder phone numbers missing. Delivery
+  addresses may suggest EUC Location but require end-user confirmation. Generate
+  Lead shows preparation, extraction and saving progress; retries after a failed
+  save reuse the same lead. Browser Performance entries `lead-intake:prepare`,
+  `lead-intake:extract` and `lead-intake:save` retain the latest stage durations
+  without document content or customer details.
 - Enquiry email documents can supply customer/contact details, RFQ headers and
   equipment-tagged spares tables even when AI is unavailable. Opportunity Scope
   summarises the requested families; Spares (Requested items on phone) lists the

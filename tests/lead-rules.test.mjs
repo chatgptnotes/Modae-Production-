@@ -237,3 +237,28 @@ test('supplying against a lead the AI never parsed does not throw', () => {
   assert.deepEqual(patch.ai.missing, [])
   assert.equal(patch.completeness, 0)
 })
+
+test('RFQ identifiers stop before an adjacent date and standalone Scope is recognized', () => {
+  const facts = sourceFieldFacts('RFQ No: DVE/SP/2026/1042 Date: 21 October 2026\nScope: Supply of pump seals and bearings.')
+  assert.equal(facts.find(f => f.k === 'RFQ number')?.v, 'DVE/SP/2026/1042')
+  assert.equal(facts.find(f => f.k === 'Opportunity scope')?.v, 'Supply of pump seals and bearings')
+})
+
+test('delivery-only EUC suggestions carry an explicit confirmation note', () => {
+  const field = sourceFieldFacts('Delivery address: Pune, Maharashtra').find(f => f.k === 'EUC Location')
+  assert.equal(field.v, 'Pune, Maharashtra')
+  assert.match(field.note, /Delivery address.*confirm end-user location/)
+  assert.match(field.ev, /delivery/i)
+  const explicit = sourceFieldFacts('Delivery address: Pune\nEUC Location: Nashik').find(f => f.k === 'EUC Location')
+  assert.equal(explicit.v, 'Nashik')
+  assert.ok(!explicit.note)
+})
+
+test('placeholder phones cannot be restored by AI or deterministic overrides', () => {
+  for (const phone of ['+91 00000 00000', '+91 98765 43210 (test placeholder)']) {
+    const result = hardenLeadExtraction({fields:[{k:'Contact phone',v:phone.split(' (')[0],ev:'Source',conf:95}],lineItems:[]}, {text:`Telephone: ${phone}`})
+    assert.ok(!result.fields.some(f => /phone/i.test(f.k)))
+  }
+  const real = hardenLeadExtraction({fields:[],lineItems:[]}, {text:'Telephone: +91 90000 00000'})
+  assert.equal(real.fields.find(f => /phone/i.test(f.k))?.v, '+91 90000 00000')
+})

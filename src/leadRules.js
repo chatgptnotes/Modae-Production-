@@ -51,7 +51,15 @@ export const customerContactFromText = text => {
 }
 
 export const customerPhoneFromText = text => {
-  return extractLabeledValue(text, LEAD_LABELS.contactPhone)
+  const value = extractLabeledValue(text, LEAD_LABELS.contactPhone)
+  return placeholderPhone(value) ? '' : value
+}
+
+const placeholderPhone = value => {
+  const text = String(value || '')
+  const digits = text.replace(/\D/g, '')
+  return /\b(?:placeholder|dummy|test number)\b/i.test(text)
+    || /^0+$/.test(digits) || /^(?:91|0091)0{10}$/.test(digits)
 }
 
 const SOURCE_FIELD_SPECS = [
@@ -103,11 +111,20 @@ const sourceFieldMatches = (field, canonical) => {
 export const sourceFieldFacts = (text = '') => {
   const source = String(text || '').replace(/^\s*Attachment:[^\n]*$/gim, '')
   return SOURCE_FIELD_SPECS.flatMap(([k, group, labels]) => {
-    const value = k === 'EUC Location'
-      ? EUC_LOCATION_LABELS.map(pattern => extractLabeledValue(source, pattern)).find(Boolean)
+    const locationLabel = k === 'EUC Location' && EUC_LOCATION_LABELS.find(pattern => extractLabeledValue(source, pattern))
+    let value = k === 'EUC Location'
+      ? locationLabel && extractLabeledValue(source, locationLabel)
       : extractLabeledValue(source, labels)
-    const valid = k === 'Sell-to customer' ? validCustomerName(value) : k === 'Contact person' ? validContactName(value) : Boolean(value)
-    return valid ? [{ group, k, v: value, conf: 98, ev: `Explicit ${k.toLowerCase()} label in enquiry`, source: 'deterministic' }] : []
+    if (k === 'RFQ date' && !value) {
+      const header = source.split(/\r?\n/).find(line => extractLabeledValue(line, LEAD_LABELS.rfqNumber))
+      if (header) value = extractLabeledValue(header, String.raw`\bdate`)
+    }
+    const deliveryOnly = locationLabel === EUC_LOCATION_LABELS[2]
+    const valid = k === 'Sell-to customer' ? validCustomerName(value) : k === 'Contact person' ? validContactName(value) : k === 'Contact phone' ? Boolean(value) && !placeholderPhone(value) : Boolean(value)
+    return valid ? [{ group, k, v: value, conf: deliveryOnly ? 70 : 98,
+      ev: `Explicit ${deliveryOnly ? 'delivery address' : k.toLowerCase()} label in enquiry`, source: 'deterministic',
+      ...(deliveryOnly ? { note: 'Delivery address — confirm end-user location' } : {}),
+    }] : []
   })
 }
 
@@ -173,7 +190,7 @@ export const hardenLeadExtraction = (ai, { from = '', text = '', config = {} } =
             : field?.note,
       }
     })
-    .filter(field => field.v && (!/^(?:sell[- ]?to(?: customer)?|buyer|customer name)$/i.test(field.k) || validCustomerName(field.v)) && (!/^(?:contact person|signatory)$/i.test(field.k) || validContactName(field.v)))
+    .filter(field => field.v && (!sourceFieldMatches(field, 'Contact phone') || (!placeholderPhone(field.v) && !placeholderPhone(extractLabeledValue(text, LEAD_LABELS.contactPhone)))) && (!/^(?:sell[- ]?to(?: customer)?|buyer|customer name)$/i.test(field.k) || validCustomerName(field.v)) && (!/^(?:contact person|signatory)$/i.test(field.k) || validContactName(field.v)))
   const lineItems = (Array.isArray(ai.lineItems) ? ai.lineItems : []).map(item => {
     const rawQty = Number(item?.qty)
     const qty = Number.isFinite(rawQty) && rawQty > 0 ? rawQty : 0
