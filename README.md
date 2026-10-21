@@ -48,6 +48,13 @@ submission, and follow-up.
   salesperson overrides routing; otherwise configured rules assign the lead, with
   LJS as fallback. Non-sales accounts can submit leads and change personal settings
   without browsing sales records.
+- Lead evidence opens in a readable popup outside the form, with Close and Escape.
+  EUC addresses wrap and grow; Opportunity Scope grows to display its contents.
+  Custom EUC addresses can be saved immediately. **Find with AI** explicitly uses
+  the configured server AI connection for optional location suggestions; typing
+  does not request AI search. Suggestions dismiss on leaving the field or Escape.
+  Missing-information questions exclude supplier offer requirements and unsupported
+  EMD requests; normal clarification drafts ask only the outstanding questions.
 - Lead extraction keeps explicit Scope summaries, separates adjacent RFQ numbers
   and dates, and leaves clearly marked placeholder phone numbers missing. Delivery
   addresses may suggest EUC Location but require end-user confirmation. Generate

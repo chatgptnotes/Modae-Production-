@@ -262,3 +262,13 @@ test('placeholder phones cannot be restored by AI or deterministic overrides', (
   const real = hardenLeadExtraction({fields:[],lineItems:[]}, {text:'Telephone: +91 90000 00000'})
   assert.equal(real.fields.find(f => /phone/i.test(f.k))?.v, '+91 90000 00000')
 })
+
+test('extraction distinguishes supplier offer terms from information the customer must supply', () => {
+  const result = hardenLeadExtraction({fields:[{k:'Warranty',v:'Confirm warranty in offer',ev:'RFQ',conf:95}],lineItems:[{description:'Pump seal kit',qty:0}],missing:[
+    'Specific warranty duration required', 'EMD / Security Deposit requirement details', 'Line 1: quantity',
+  ]},{text:'Please confirm warranty in your offer. Pump seal kit quantity is to be advised.'})
+  assert.deepEqual(result.missing,['Line 1: quantity'])
+  assert.equal(result.fields.find(f=>f.k==='Warranty').v,'Confirm warranty in offer')
+  const required = hardenLeadExtraction({fields:[],lineItems:[],missing:['Required warranty duration']},{text:'Customer warranty duration: To be confirmed by the buyer.'})
+  assert.deepEqual(required.missing,['Required warranty duration'])
+})

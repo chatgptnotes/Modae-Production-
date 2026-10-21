@@ -68,17 +68,15 @@ function mergeLocations(remote, local, limit = 50) {
   return merged
 }
 
-const geminiLocationSearch = async (query, limit) => {
+export const searchAiLocations = async (query, limit = 8) => {
   const payload = await runTask('location.search', { query, limit }, { timeoutMs: 15000 })
-  return Array.isArray(payload?.locations) ? payload.locations.map(item => ({
+  const rows = payload?.data?.locations || payload?.locations
+  return Array.isArray(rows) ? rows.map(item => ({
     city: String(item.city || '').trim(),
     state: String(item.state || '').trim(),
     country: String(item.country || '').trim(),
     countryCode: String(item.countryCode || '').trim().toUpperCase(),
     region: String(item.state || item.country || '').trim(),
-    routingRegion: String(item.countryCode || '').trim().toUpperCase() === 'IN'
-      ? String(item.state || item.country || '').trim()
-      : 'International opportunities',
     routingRegion: String(item.countryCode || '').trim().toUpperCase() === 'IN'
       ? String(item.state || item.country || '').trim()
       : 'International opportunities',
@@ -108,11 +106,11 @@ export function useGlobalLocationSearch(query, limit = 50) {
         const response = await fetch(`/api/locations?q=${encodeURIComponent(normalized)}`)
         const payload = response.ok ? await response.json() : null
         let remote = payload?.ok && Array.isArray(payload.locations) ? payload.locations : []
-        if (!remote.length) remote = await geminiLocationSearch(normalized, limit)
+        if (!remote.length) remote = await searchAiLocations(normalized, limit)
         if (active) setState({ matches: mergeLocations(remote, local, limit), loading: false })
       } catch (error) {
         try {
-          const remote = await geminiLocationSearch(normalized, limit)
+          const remote = await searchAiLocations(normalized, limit)
           if (active) setState({ matches: mergeLocations(remote, local, limit), loading: false })
         } catch {
           if (active) setState({ matches: local, loading: false })

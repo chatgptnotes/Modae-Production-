@@ -1,3 +1,7 @@
+import LeadEvidence from '../ui/LeadEvidence.jsx'
+import AutosizeTextarea from '../ui/AutosizeTextarea.jsx'
+import LeadLocationInput from '../ui/LeadLocationInput.jsx'
+import { filterLeadMissing, leadMissingSource } from '../leadMissing.js'
 import { isLocalDemoSession } from '../authMode.js'
 import { workspaceSyncState } from '../workspaceSyncState.js'
 import { releaseWorkspaceElementInputs } from '../workspaceInputOwnership.js'
@@ -1088,8 +1092,10 @@ export function reconcileMissingWithDecisions(missing = [], decisions = {}, fiel
     const text = String(label || '').toLowerCase()
     if (text.includes('opportunity scope')) return false
     if (text.includes('customer name')) return !String(decisions.sellTo || '').trim()
-    if (text.includes('quantit') || text.includes('specification')) {
-      return !(lineItems || []).some(item => String(item.description || item.desc || '').trim() && Number(item.qty) > 0)
+    if (text.includes('quantit')) {
+      const line = text.match(/\bline\s+(\d+)\b/)
+      if (line) return !(Number(lineItems[Number(line[1]) - 1]?.qty) > 0)
+      return !lineItems.length || !lineItems.every(item => Number(item.qty) > 0)
     }
     return true
   })
@@ -1471,7 +1477,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const drawer = useDrawer()
   const ai = lead.ai
   const med = store.config.aiThresholds?.med ?? 75
-  const [evOpen, setEvOpen] = useState(null)      // field index with evidence expanded
   const [editFor, setEditFor] = useState(null)    // { idx, val, note }
   const [rejFor, setRejFor] = useState(null)      // { idx, note }
   const [fillFor, setFillFor] = useState(null)    // { item, val } — answering a missing item
@@ -1561,11 +1566,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const filteredLocations = locationSearchState.matches
   const visibleLocations = filteredLocations.slice(0, 50)
   const selectedLocation = indiaLocation(decisionDraft.location)
-  const [eucLocationSearch, setEucLocationSearch] = useState(() => initialDecisions().eucLocation || '')
-  const [eucLocationOpen, setEucLocationOpen] = useState(false)
-  const eucLocationQuery = eucLocationSearch.trim().toLowerCase()
-  const eucLocationSearchState = useGlobalLocationSearch(eucLocationQuery)
-  const eucLocationMatches = eucLocationSearchState.matches
+
 
   // Repair legacy/imported leads that stored the fallback Blue class even
   // though the matched Customer Master account is classified Red. This keeps
@@ -1636,9 +1637,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     next.suggestedOwner = routeOwnerForLocation(source.region || source.location, store.config, next.suggestedOwner || source.suggestedOwner)
     store.updateLead(lead.id, next, detail || '')
     if (next.ai?.fields) {
-      if (refreshedDraft.eucLocation !== decisionDraftRef.current.eucLocation) {
-        setEucLocationSearch(refreshedDraft.eucLocation || '')
-      }
       decisionDraftRef.current = refreshedDraft
       setDecisionDraft(refreshedDraft)
     }
@@ -1726,11 +1724,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     const pattern = decisionFieldPatterns[key]
     return pattern ? ai.fields.find(field => pattern.test(field.k)) : null
   }
-  const deliveryLocationField = decisionAiField('eucLocation')
-  const deliveryLocationNote = deliveryLocationField?.state === 'pending'
-    && deliveryLocationField.note?.includes('confirm end-user location')
-    && decisionDraft.eucLocation === deliveryLocationField.v
-    ? <span className="hint">Delivery address — confirm end-user location</span> : null
   const isMappedDecisionField = field => Object.values(decisionFieldPatterns).some(pattern => pattern.test(field.k))
   const decisionAiStatus = key => {
     const field = decisionAiField(key)
@@ -1745,10 +1738,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
         <ConfChip conf={field.conf} thresholds={store.config.aiThresholds} />
         {includeStatus && fieldChip(field, med)}
         <span className="decision-ai-evidence-wrap">
-          <button type="button" className="decision-ai-evidence" aria-label={`View evidence for ${field.k}`} title="View evidence" onClick={() => setEvOpen(evOpen === idx ? null : idx)}>
-            <Icon name="eye" size={13} />
-          </button>
-          {evOpen === idx && <span className="decision-ai-evidence-copy" role="dialog" aria-label={`Evidence for ${field.k}`}>{field.ev}{field.note ? ` — ${field.note}` : ''}</span>}
+          <LeadEvidence field={field} />
         </span>
         {canAct && field.state === 'pending' && (
           <span className="decision-ai-actions" aria-label={`${field.k} decision actions`}>
@@ -1857,7 +1847,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   const rule = (store.config.ownershipRules || []).find(r => r.owner === regionalOwner)
   const ownerRuleLabel = rule ? `${rule.region} rule` : 'Ownership rule'
 
-  const effectiveMissing = reconcileMissingWithDecisions(ai.missing, decisionDraft, ai.fields, ai.lineItems)
+  const effectiveMissing = reconcileMissingWithDecisions(filterLeadMissing(ai.missing, { text: leadMissingSource(lead) }), decisionDraft, ai.fields, ai.lineItems)
   // Keep the compact rail focused on additional follow-up suggestions.
   // Customer and contact details remain editable in the form; all are optional.
   const reviewMissing = effectiveMissing.filter(item => {
@@ -2030,7 +2020,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     for (const [key, label] of [['source','Lead source'],['contactEmail','Contact email'],['sellToCustomerLocation','Sell-to customer location'],['rfqNumber','RFQ number'],['rfqDate','RFQ date']]) {
       scopedFields = updateLeadField(scopedFields, label, draft[key], 'RFQ')
     }
-    const nextMissing = reconcileMissingWithDecisions(ai.missing, draft, scopedFields, ai.lineItems)
+    const nextMissing = reconcileMissingWithDecisions(filterLeadMissing(ai.missing, { text: leadMissingSource(lead) }), draft, scopedFields, ai.lineItems)
     const matchedCustomer = matchCustomer(store.customers, { ...lead, sellTo: draft.sellTo })
     const resolvedCustomerStatus = matchedCustomer?.status || draft.customerStatus
     const fastTrack = isFastTrackLead({ ...lead, customerStatus: resolvedCustomerStatus }, store.config, matchedCustomer || customer)
@@ -2231,19 +2221,6 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     setDecisionSaved(false)
   }
 
-  const updateEucLocation = (value) => {
-    setEucLocationSearch(value)
-    updateDecisionField('eucLocation', value)
-  }
-
-  const selectEucLocation = (item) => {
-    const value = `${item.city}, ${item.state}`
-    const normalized = normalizeLocationValue([item.city, item.state, item.country].filter(Boolean).join(', '))
-    setEucLocationSearch(normalized)
-    setEucLocationOpen(false)
-    updateDecisionField('eucLocation', normalized)
-  }
-
   const detailContent = (
     <div className={compact ? 'compact-workflow-content' : ''}>
     {reassignOpen && <Modal title="Reassign lead" onClose={() => setReassignOpen(false)} className="reassign-modal">
@@ -2435,12 +2412,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                         </div>
                       </div>
                     : <div className="af-val">{f.v}</div>}
-                  <button className="af-ev" onClick={() => setEvOpen(evOpen === idx ? null : idx)}>
-                    <Icon name="eye" size={11} /> Evidence
-                  </button>
-                  {evOpen === idx && (
-                    <div className="af-evidence">{f.ev}{f.note ? ` — ${f.note}` : ''}</div>
-                  )}
+                  <LeadEvidence field={f} label="Evidence" />
                   {rejFor?.idx === idx && (
                     <div className="af-reject">
                       <input placeholder="Rejection note (required)" value={rejFor.note}
@@ -2551,24 +2523,16 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" name="inbox-sell-to-customer-location" /></div>
           </label>
           <label><span className="decision-field-heading">Opportunity scope {decisionAiMeta('scope', false)}</span>
-            <div className="decision-value-row"><textarea className="lead-scope-input" rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
+            <div className="decision-value-row"><AutosizeTextarea className="lead-scope-input" value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
               onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" name="inbox-scope" />{decisionAiStatus('scope')}</div>
             </label>
           <label><span className="decision-field-heading">EUC Name  {decisionAiMeta('eucName', false)}</span>
             <div className="decision-value-row"><CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
               onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" ariaLabel="EUC name" />{decisionAiStatus('eucName')}</div>
             </label>
-          <label><span className="decision-field-heading">EUC Location  {decisionAiMeta('eucLocation', false)}</span>{deliveryLocationNote}
-            <div className="euc-location-search">
-              <div className="decision-value-row"><input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
-                onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" name="inbox-search-euc-city-or-state" />{decisionAiStatus('eucLocation')}</div>
-              {eucLocationOpen && eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
-                {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
-                  onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{[item.state, item.country].filter(Boolean).join(' · ')}</span></button>)}
-                {eucLocationSearchState.loading && <span className="location-suggestion-note">Searching worldwide locations…</span>}
-                {!eucLocationSearchState.loading && !eucLocationMatches.length && <span className="location-suggestion-note">No cities found — you can continue with a custom location.</span>}
-              </div>}
-            </div>
+          <label><span className="decision-field-heading">EUC Location  {decisionAiMeta('eucLocation', false)}</span>
+            <LeadLocationInput value={decisionDraft.eucLocation} disabled={lead.status === 'Dropped'}
+              onChange={value => updateDecisionField('eucLocation', value)} status={decisionAiStatus('eucLocation')} name="inbox-search-euc-city-or-state" />
           </label>
           <label><span className="decision-field-heading">Contact Person  {decisionAiMeta('contactPerson', false)}</span>
             <div className="decision-value-row"><input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
@@ -2922,24 +2886,16 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" name="inbox-sell-to-customer-location-2" />
               </label>
               <label>Opportunity scope {decisionAiMeta('scope')}
-                <textarea className="lead-scope-input" rows={3} value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
+                <AutosizeTextarea className="lead-scope-input" value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
                   onChange={e => updateDecisionField('scope', e.target.value)} placeholder="Enter requested scope or items" name="inbox-scope-2" />
               </label>
               <label>EUC Name  {decisionAiMeta('eucName')}
                 <CustomerPicker customers={store.customers} value={decisionDraft.eucName} disabled={lead.status === 'Dropped'}
                   onChange={value => updateDecisionField('eucName', value)} allowCreate={false} label="" ariaLabel="EUC name" />
               </label>
-              <label>EUC Location  {decisionAiMeta('eucLocation')}{deliveryLocationNote}
-                <div className="euc-location-search">
-                  <input type="search" value={decisionDraft.eucLocation || eucLocationSearch} disabled={lead.status === 'Dropped'}
-                    onFocus={() => setEucLocationOpen(true)} onChange={e => { setEucLocationOpen(true); updateEucLocation(e.target.value) }} placeholder="Search city or state" aria-label="Search EUC city or state" name="inbox-search-euc-city-or-state-2" />
-                  {eucLocationOpen && eucLocationQuery && <div className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
-                    {eucLocationMatches.map(item => <button type="button" key={item.value} className="location-suggestion" disabled={lead.status === 'Dropped'}
-                      onClick={() => selectEucLocation(item)}><strong>{item.city}</strong><span>{[item.state, item.country].filter(Boolean).join(' · ')}</span></button>)}
-                    {eucLocationSearchState.loading && <span className="location-suggestion-note">Searching worldwide locations…</span>}
-                    {!eucLocationSearchState.loading && !eucLocationMatches.length && <span className="location-suggestion-note">No cities found — you can continue with a custom location.</span>}
-                  </div>}
-                </div>
+              <label>EUC Location  {decisionAiMeta('eucLocation')}
+                <LeadLocationInput value={decisionDraft.eucLocation} disabled={lead.status === 'Dropped'}
+                  onChange={value => updateDecisionField('eucLocation', value)} status={decisionAiStatus('eucLocation')} name="inbox-search-euc-city-or-state-2" />
               </label>
               <label>Contact Person  {decisionAiMeta('contactPerson')}
                 <input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}

@@ -1,3 +1,16 @@
+## 2026-10-21 — Readable lead evidence and flexible location entry
+
+- Move lead evidence into a viewport-constrained popup with close, outside-click
+  and Escape support, avoiding the form's 20-pixel clipping bug.
+- Wrap and resize EUC addresses and Opportunity Scope; remove the visible delivery
+  confirmation note while preserving its evidence. Keep custom addresses saveable
+  during optional explicit AI lookup and read structured location results correctly.
+- Filter supplier offer requirements and unsupported EMD warnings consistently in
+  extraction, existing lead review and clarification drafts. Stop adding generic
+  questions automatically; preserve manual questions and sent history.
+- Keep missing quantities for individual rows and unresolved specifications visible
+  even when another spares row is complete.
+
 ## 2026-10-21 — More response space for lead extraction
 
 - Increase the AI response limit for lead extraction from 4,096 to 16,384 tokens

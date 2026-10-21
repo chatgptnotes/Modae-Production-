@@ -9,7 +9,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 const require = createRequire(import.meta.url)
 const { outputFiles } = buildSync({
-  stdin: { contents: "export { extractLead, StructuredItemsTable } from './src/pages/Inbox.jsx'", resolveDir: process.cwd() },
+  stdin: { contents: "export { extractLead, StructuredItemsTable, reconcileMissingWithDecisions } from './src/pages/Inbox.jsx'", resolveDir: process.cwd() },
   bundle: true, write: false, platform: 'node', format: 'cjs', packages: 'external',
   loader: { '.js': 'jsx', '.css': 'empty', '.png': 'text', '.jpg': 'text' },
   define: {
@@ -159,4 +159,13 @@ test('eight-row sample RFQ keeps every requested part and RFQ date on provider f
     assert.equal(lead.contactPhone, '')
     assert.deepEqual(lead.ai.lineItems.map(r => [r.equipmentRef,r.partNumber,r.description,r.qty,r.uom]), sampleSparesRows.map(r => [r[1],r[2],r[3],Number(r[4]),r[5]]))
   } finally { globalThis.fetch = originalFetch }
+})
+
+
+test('one complete spares row does not hide another row missing quantity or specifications', () => {
+  const missing = ['Line 1: quantity', 'Line 2: quantity', 'Required operating specifications']
+  const remaining = bundled.exports.reconcileMissingWithDecisions(missing, {}, [], [
+    {description:'Seal',qty:2}, {description:'Bearing',qty:0},
+  ])
+  assert.deepEqual(remaining,['Line 2: quantity','Required operating specifications'])
 })

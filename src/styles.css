@@ -13141,18 +13141,7 @@ button:not(.primary):not(.danger):not(.dark):not(.ghost):not(.dashboard-funnel-r
   width: 100%;
   padding-right: 32px;
 }
-.lead-workspace .lead-decision-grid textarea.lead-scope-input {
-  field-sizing: content;
-  height: auto;
-  min-height: 80px;
-  max-height: 160px;
-  max-width: 100%;
-  box-sizing: border-box;
-  line-height: 1.4;
-  resize: vertical;
-  overflow: auto;
-  scrollbar-width: thin;
-}
+
 .lead-additional-information {
   min-width: 0;
   border: 1px solid var(--ws-border-strong);

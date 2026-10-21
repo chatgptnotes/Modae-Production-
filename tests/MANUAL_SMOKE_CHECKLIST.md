@@ -560,3 +560,14 @@ Our Ref 2511096RS) are retained with the local reference documents.
 - Interrupt a local restore, reload and verify recovery restores a consistent
   records/files set. Open a second tab during restore to check serialized recovery.
   Test on phone and desktop. Do not use production for restore smoke checks.
+
+### Lead evidence and flexible addresses
+
+- On desktop and phone, in both themes, open several lead evidence controls.
+  Confirm readable source text, no clipped popup, and Close/Escape/outside dismissal.
+- Enter a long EUC address and scope. Verify wrapping, automatic sizing, custom
+  address save/reload and city selection. Type without an AI request; use Find
+  with AI explicitly. Save while lookup is pending and dismiss suggestions.
+- Scan the sample spares enquiry. Supplier warranty/freight requirements and absent
+  EMD must not become customer questions; unknown quantities/specifications must
+  remain. Draft only relevant clarification questions and preserve sent history.

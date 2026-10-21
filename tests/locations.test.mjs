@@ -23,3 +23,20 @@ test('preserves canonical and unrecognized custom locations', () => {
   assert.equal(normalizeLocationValue('Tokyo, Tokyo, Japan'), 'Tokyo, Tokyo, Japan')
   assert.equal(normalizeLocationValue('Remote site, Western Australia - WA'), 'Remote site, Western Australia - WA')
 })
+
+test('explicit AI location search reads the structured response from the configured API', async () => {
+  const { searchAiLocations } = await import('../src/locations.js')
+  const original = globalThis.fetch
+  const calls = []
+  try {
+    globalThis.fetch = async (url, options) => {
+      calls.push({url,body:JSON.parse(options.body)})
+      return Response.json({ok:true,data:{locations:[{city:'Pune',state:'Maharashtra',country:'India',countryCode:'IN'}]}})
+    }
+    const found = await searchAiLocations('Pune',6)
+    assert.equal(calls.length,1)
+    assert.equal(calls[0].body.task,'location.search')
+    assert.equal(found[0].value,'Pune, Maharashtra, India')
+    assert.equal(found[0].routingRegion,'Maharashtra')
+  } finally {globalThis.fetch=original}
+})

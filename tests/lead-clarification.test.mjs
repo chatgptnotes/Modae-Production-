@@ -92,31 +92,29 @@ test('KYC rejection email uses the recorded reason and remains a human-reviewed 
   assert.doesNotMatch(draft.body, /automatically sent/i)
 })
 
-test('the standard questions top up a thin extraction without duplicating it', () => {
-  // "Operating speed (RPM)" already covers the standard RPM question.
-  const items = clarificationItems(lead)
-  assert.equal(items.filter(i => /rpm/i.test(i)).length, 1, 'do not ask for the speed twice')
-  assert.ok(items.includes('End user name'))
-  assert.equal(items.filter(i => /end[\s-]?user/i.test(i)).length, 1)
-
-  // A lead missing something unrelated still gets all five standard questions.
-  const sparse = clarificationItems({ ai: { missing: ['Delivery schedule'] } })
-  assert.equal(sparse[0], 'Delivery schedule')
-  for (const q of STANDARD_CLARIFICATIONS) assert.ok(sparse.includes(q), `must still ask: ${q}`)
+test('clarification drafts ask only the actual missing questions', () => {
+  assert.deepEqual(clarificationItems(lead), lead.ai.missing)
+  assert.deepEqual(clarificationItems({ ai: { missing: ['Delivery schedule'] } }), ['Delivery schedule'])
+  const specific = ['Detailed BOQ with exact part numbers and rack configuration', 'Machine tag details and existing sensor configuration']
+  assert.deepEqual(clarificationItems({ai:{missing:specific}}), specific)
 })
 
-test('a VM600 RFQ receives the complete technical and commercial clarification set', () => {
-  const items = clarificationItems({ ai: { missing: [
-    'Detailed BOQ with exact part numbers and rack configuration',
-    'Machine tag details and existing sensor configuration',
-  ] } })
-  for (const topic of [
-    /part numbers/i, /IOC4T/, /ABE042/, /probe specifications/i,
-    /extension-cable/i, /signal-conditioner/i, /power-supply/i,
-    /end-user/i, /delivery\/site address/i, /machine operating speed/i,
-    /delivery date/i, /RFQ, datasheets/i,
-  ]) assert.ok(items.some(item => topic.test(item)), `missing clarification topic: ${topic}`)
-  assert.equal(items.filter(item => /sensor configuration/i.test(item)).length, 1)
+test('supplier offer requirements and unsupported EMD are not customer questions', () => {
+  const request = { body: 'Please confirm warranty, freight and delivery lead time in your offer.', ai: {missing:[
+    'Specific warranty duration required', 'Freight amount', 'Delivery lead time', 'EMD / Security Deposit requirement details', 'Line 2: quantity',
+  ],fields:[]} }
+  assert.deepEqual(clarificationItems(request), ['Line 2: quantity'])
+  assert.equal(clarificationKindFor({...request,ai:{...request.ai,missing:request.ai.missing.slice(0,4)}}), '')
+  const draft = draftClarification(request, {users:seedUsers,config:seedConfig})
+  assert.deepEqual(draft.items,['Line 2: quantity'])
+  assert.doesNotMatch(draft.body,/warranty|freight|security deposit|IOC4T/i)
+  assert.ok(clarificationItems(request,['Please confirm warranty duration']).includes('Please confirm warranty duration'), 'manual questions survive filtering')
+})
+
+test('an unresolved tender deposit requirement is retained but waived deposits are omitted', () => {
+  const missing = ['EMD amount and submission details']
+  assert.deepEqual(clarificationItems({body:'An EMD is mandatory. Amount to be advised.',ai:{missing}}),missing)
+  assert.deepEqual(clarificationItems({attachments:[{text:'EMD: Not applicable.'}],ai:{missing}}),[])
 })
 
 test('clarification topics remain stable when AI rephrases the question', () => {
@@ -252,4 +250,15 @@ test('proposal email uses the attachment-capable send path', () => {
   assert.match(proposal, /attachments: \[/)
   assert.equal(/Open Gmail compose/.test(proposal), false)
   assert.match(read('src/utils.js'), /export function gmailComposeHref/)
+})
+
+test('offer instructions do not hide buyer deadlines, tax identifiers or a second active deposit requirement', () => {
+  const missing = ['Required delivery date', 'GST registration number', 'Security deposit amount']
+  const enquiry = {body:'Please quote GST and delivery lead time in your offer. No EMD required but security deposit is mandatory; amount to be confirmed.', ai:{missing}}
+  assert.deepEqual(clarificationItems(enquiry), missing)
+})
+
+test('compound technical questions and required deposits with inapplicable exemptions are retained', () => {
+  assert.deepEqual(clarificationItems({body:'Please quote warranty for the supplied probes.',ai:{missing:['Probe specifications and warranty duration']}}),['Probe specifications and warranty duration'])
+  assert.deepEqual(clarificationItems({body:'EMD is required (exemption not applicable).',ai:{missing:['EMD amount and submission details']}}),['EMD amount and submission details'])
 })

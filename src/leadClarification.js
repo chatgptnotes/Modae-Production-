@@ -1,3 +1,4 @@
+import { filterLeadMissing, leadMissingSource } from './leadMissing.js'
 import { MODAE_BRAND } from './branding/modae.js'
 import { displayRole } from './utils.js'
 
@@ -22,9 +23,8 @@ import { displayRole } from './utils.js'
 
 export const DEFAULT_COMMON_MAILBOX = 'sales@modae.demo'
 
-// The complete question set required to validate a technical RFQ and prepare a
-// quotation. Used when the AI is unavailable, and appended to whatever the AI
-// found so a draft is never shorter than the manual one.
+// Legacy template topics retain stable identities for saved clarification history.
+// They are not automatically appended to new customer questions.
 export const STANDARD_CLARIFICATIONS = [
   'Exact manufacturer part numbers, rack configuration, and quantities for every requested item',
   'Please confirm whether the IOC4T is required as an MPC4 add-on or as a separate card',
@@ -130,7 +130,7 @@ export const senderLabel = sender => {
 // ------------------------------------------------------------- what to draft
 export function clarificationKindFor(lead, customerStatus = lead?.customerStatus || '') {
   if (customerStatus === 'Amber' && lead?.amberFeePaid !== true) return 'quote-fee'
-  if ((lead?.ai?.missing || []).length) return 'clarification'
+  if (clarificationItems(lead).length) return 'clarification'
   return ''
 }
 
@@ -164,8 +164,7 @@ const bullet = items => items.map(item => `  •  ${item}`).join('\n')
 
 // --------------------------------------------------------- the two templates
 // Missing scope. `items` is whatever the AI could not find on the enquiry; the
-// standard five are appended so a sparse extraction never produces a mail that
-// asks less than the manual template would.
+// questions are limited to the actual outstanding customer information.
 export function clarificationBody(lead, { customer = null, sender, items = [], aiBody = '' } = {}) {
   if (clean(aiBody)) return clean(aiBody)
   const subject = clean(lead?.subject) || 'your requirement'
@@ -208,12 +207,12 @@ const STANDARD_MATCHERS = [
   /additional|any other|further detail|application-specific/i,
 ]
 
-// The AI's missing list first, in the order it found them, then any of the
-// standard questions it did not already cover.
+// Explicit manual questions are retained even when an AI suggestion is filtered.
 export function clarificationItems(lead, extra = []) {
-  const found = [...(lead?.ai?.missing || []), ...extra].map(clean).filter(Boolean)
-  const covered = i => found.some(f => STANDARD_MATCHERS[i].test(f))
-  return [...found, ...STANDARD_CLARIFICATIONS.filter((_, i) => !covered(i))]
+  return [...new Set([
+    ...filterLeadMissing(lead?.ai?.missing, { text: leadMissingSource(lead) }),
+    ...extra.map(clean).filter(Boolean),
+  ])]
 }
 
 // Stable topic identity prevents an AI rephrasing from creating a second

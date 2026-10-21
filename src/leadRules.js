@@ -1,3 +1,4 @@
+import { filterLeadMissing } from './leadMissing.js'
 import { validCustomerName, validContactName, enquiryEmailFacts } from './leadEmailFacts.js'
 import { registrationFields } from './businessRules.js'
 import { classRule, classDeadlineDays } from './customerClasses.js'
@@ -223,7 +224,7 @@ export const hardenLeadExtraction = (ai, { from = '', text = '', config = {} } =
       item.qty <= 0 && `Line ${index + 1}: quantity`,
     ].filter(Boolean)),
   ])]
-  return { ...ai, fields, lineItems, missing }
+  return { ...ai, fields, lineItems, missing: filterLeadMissing(missing, { text }) }
 }
 
 export function leadConfig(config = {}) {

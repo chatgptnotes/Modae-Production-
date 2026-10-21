@@ -464,6 +464,11 @@ installed-base or known-project reference (Known Project). Return every
 requested material as lineItems with one row per item, preserving description,
 part number, customer reference, quantity, UOM and specifications separately.
 Opportunity scope must be one short sentence describing only the requested equipment or work (about 20 words). Keep dates, quotation instructions, prices, payment, freight, warranty and supporting paperwork in their separate fields. Never copy the entire enquiry into scope.
+The missing list contains only questions the customer needs to answer. Requests
+for us to quote or confirm warranty, freight, price, tax, validity or delivery
+terms belong in the extracted offer requirements, not in missing. Do not ask
+about EMD/security deposits unless the enquiry states an applicable requirement.
+Do not add a generic checklist or ask for a fact already present in the source.
 Ask only for information absent from the complete enquiry, not absent from one
 non-final chunk. For Opp type, classify procurement of physical items with part
 numbers, quantities, sensors, probes, cables or spare materials as Spares, even
