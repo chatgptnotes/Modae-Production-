@@ -952,7 +952,7 @@ function PasteLeadModal({ onClose }) {
         return
       }
       const id = 'LD-' + Date.now()
-      store.addLead({ ...mergeLeadIntake(extracted, newLead(id)), assignedOwner: assignedOwner || opportunityOwnerFor({location: customerLocation || extracted.sellToCustomerLocation || extracted.location || extracted.region || leadIdentity(extracted, extracted.ai?.fields).eucLocation, config:store.config}), duplicateRisk: 'Low' })
+      store.addLead({ ...mergeLeadIntake(extracted, newLead(id)), assignedOwner: assignedOwner || opportunityOwnerFor({location: customerLocation || extracted.sellToCustomerLocation || extracted.location || extracted.region || leadIdentity(extracted, extracted.ai?.fields).eucLocation, config:store.config}), duplicateRisk: 'Low' }, { scheduleSave: false })
       pendingLead.current = id
       store.recordAiAction(id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.extract', result: { completeness: extracted.completeness, missing: extracted.ai?.missing || [], route: extracted.route } })
       hold(id, files.map(f => f.file))

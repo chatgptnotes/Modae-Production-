@@ -1536,14 +1536,14 @@ export function StoreProvider({ children }) {
     },
 
     // ---- Lead inbox -------------------------------------------------------
-    addLead(lead) {
+    addLead(lead, { scheduleSave = true } = {}) {
       setState(s => withAudit(
         { ...s, leads: [{ ...lead, originator: lead.originator || { id: s.auth?.user?.id || '', name: s.auth?.user?.name || '', email: s.auth?.user?.email || '' }, ts: toISTISOString(lead.ts || new Date()) }, ...s.leads] },
         'Lead received', lead.id, lead.subject))
       // A new enquiry is immediately followed by navigation. Publish it after
       // React commits the state update so a quick refresh cannot lose the row
       // before the ordinary draft-save debounce runs.
-      setTimeout(()=>workspaceSyncState.enabled?api.saveSelectedRecords([{entity:'leads',id:lead.id}]):flushSaves(), 0)
+      if (scheduleSave) setTimeout(()=>workspaceSyncState.enabled?api.saveSelectedRecords([{entity:'leads',id:lead.id}]):flushSaves(), 0)
     },
 
     // Throw away the rows the inbox simulator generated, without the blunt
