@@ -277,5 +277,5 @@ test('the mail API accepts business documents and rejects executables', () => {
 test('the Vite dev server proxies the mail API to local Express', () => {
   const viteConfig = read('vite.config.js')
   assert.match(viteConfig, /server: \{ proxy:/)
-  assert.match(viteConfig, /'\/api': 'http:\/\/localhost:3000'/)
+  assert.match(viteConfig, /'\/api': apiTarget/)
 })

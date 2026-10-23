@@ -10,7 +10,7 @@ function harness({ uploadFails = false, deleteFails = false } = {}) {
     listUserFiles: async () => recovered,
     deleteUserFile: async scope => { calls.push('retire'); assert.equal(scope.fileName, 'original.pdf'); if(deleteFails)throw new Error('Could not retire restored copy'); recovered = [] },
   })
-  const source = readFileSync('src/filestore.js', 'utf8').replace(/^import .*\n/gm, '').replace(/^export /gm, '')
+  const source = readFileSync('src/filestore.js', 'utf8').replace(/^import .*\n/gm, '').replace(/^export /gm, '').replaceAll('import.meta.env', '({})')
   vm.runInContext(`${source}; globalThis.api = { uploadOppFile, listOppFiles }`, context)
   return { ...context.api, calls }
 }

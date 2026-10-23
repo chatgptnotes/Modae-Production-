@@ -4,7 +4,7 @@ import { createUserPreferencesHandler } from '../api/user-preferences.js'
 import { createWorkspaceDataHandler } from '../api/workspace-data.js'
 
 const response = () => ({ statusCode: 200, headers: {}, setHeader(key, value) { this.headers[key] = value }, status(code) { this.statusCode = code; return this }, json(body) { this.body = body; return this } })
-const defaultLayout = { sidebarCompact: false, leadDetailsCollapsed: false }
+const defaultLayout = { sidebarCompact: false, leadDetailsCollapsed: false, inboxPreviewWidth: 420 }
 function fixture() {
   const id = '18a1eae5-442c-437e-8934-9874442abe67'
   const profile = { id: 'legacy-sales', authId: id, email: 'sales@example.com', status: 'Active', roles: ['STANDARD_USER'] }
@@ -101,9 +101,9 @@ test('sidebar preferences save independently and font-only clients preserve both
   assert.equal((await f.run('PUT', { sidebarCompact: true, rev: 0 })).statusCode, 200)
   assert.equal((await f.run('PUT', { leadDetailsCollapsed: true, rev: 1 })).statusCode, 200)
   await f.run('PUT', { font: 'inter', rev: 2 })
-  assert.deepEqual((await f.run()).body, { font: 'inter', sidebarCompact: true, leadDetailsCollapsed: true, rev: 3 })
+  assert.deepEqual((await f.run()).body, { font: 'inter', sidebarCompact: true, leadDetailsCollapsed: true, inboxPreviewWidth: 420, rev: 3 })
   await f.run('PUT', { sidebarCompact: false, rev: 3 })
-  assert.deepEqual((await f.run()).body, { font: 'inter', sidebarCompact: false, leadDetailsCollapsed: true, rev: 4 })
+  assert.deepEqual((await f.run()).body, { font: 'inter', sidebarCompact: false, leadDetailsCollapsed: true, inboxPreviewWidth: 420, rev: 4 })
   assert.equal(f.records.find(row => row.id === 'other-user').rev, 9)
 })
 
@@ -115,6 +115,14 @@ test('sidebar writes reject non-booleans and stale revisions', async () => {
   await f.run('PUT', { leadDetailsCollapsed: true, rev: 0 })
   assert.equal((await f.run('PUT', { sidebarCompact: true, rev: 0 })).statusCode, 409)
   assert.equal((await f.run()).body.leadDetailsCollapsed, true)
+})
+
+test('preview width is bounded, revision checked, and preserves other account preferences', async () => {
+  const f = fixture()
+  for (const width of [319, 721, 420.5, '500']) assert.equal((await f.run('PUT', { inboxPreviewWidth: width, rev: 0 })).statusCode, 400)
+  assert.equal((await f.run('PUT', { inboxPreviewWidth: 560, rev: 0 })).statusCode, 200)
+  assert.deepEqual((await f.run()).body, { font: 'candara', ...defaultLayout, inboxPreviewWidth: 560, rev: 1 })
+  assert.equal((await f.run('PUT', { sidebarCompact: true, rev: 1 })).body.inboxPreviewWidth, 560)
 })
 
 test('generic workspace reads and writes cannot expose or alter personal preferences, including for admins', async () => {

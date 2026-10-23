@@ -1,59 +1,21 @@
-import React, { useEffect, useId, useRef, useState } from 'react'
+import React, { useId } from 'react'
 import AutosizeTextarea from './AutosizeTextarea.jsx'
-import { localLocationSearch, normalizeLocationValue, searchAiLocations } from '../locations.js'
 
-export default function LeadLocationInput({ value, onChange, disabled, status, name }) {
-  const id = useId()
-  const root = useRef(null)
-  const request = useRef(0)
-  const [open, setOpen] = useState(false)
-  const [remote, setRemote] = useState([])
-  const [busy, setBusy] = useState(false)
-  const [message, setMessage] = useState('')
-  const matches = remote.length ? remote : localLocationSearch(value, 6)
-  const close = () => { setOpen(false); request.current++; setBusy(false) }
-
-  useEffect(() => {
-    request.current++
-    setRemote([]); setBusy(false); setMessage('')
-  }, [value])
-  useEffect(() => () => { request.current++ }, [])
-
-  const search = async () => {
-    const token = ++request.current
-    setBusy(true); setMessage('Searching locations…'); setOpen(false)
-    try {
-      const found = await searchAiLocations(String(value || '').replace(/\s+/g, ' ').trim(), 6)
-      if (token !== request.current) return
-      setRemote(found); setOpen(found.length > 0)
-      setMessage(found.length ? '' : 'No suggestions. You can save your custom address.')
-    } catch {
-      if (token === request.current) setMessage('Search unavailable. You can save your custom address.')
-    } finally {
-      if (token === request.current) setBusy(false)
-    }
-  }
-
-  return <div ref={root} className="euc-location-search"
-    onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) close() }}
-    onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); close() } }}>
+export default function LeadLocationInput({ value, onChange, onCheck, disabled, status, name, ariaLabel = 'EUC location or custom address' }) {
+  const hintId = useId()
+  return <div className="lead-location-field">
     <div className="decision-value-row">
-      <AutosizeTextarea className="lead-location-input" value={value || ''} disabled={disabled}
-        name={name} placeholder="Enter an address or search for a city" aria-label="EUC location or custom address"
-        aria-expanded={open && matches.length > 0} aria-controls={open && matches.length ? id : undefined}
-        onChange={event => { request.current++; setRemote([]); setBusy(false); setMessage(''); setOpen(true); onChange(event.target.value) }} />
+      <AutosizeTextarea className="lead-location-input" rows={1} value={value || ''} disabled={disabled}
+        name={name} placeholder="Enter an address" aria-label={ariaLabel} aria-describedby={hintId}
+        onChange={event => onChange(event.target.value)}
+        onKeyDown={event => {
+          if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey
+            || event.isComposing || event.nativeEvent?.isComposing || event.keyCode === 229) return
+          event.preventDefault(); event.stopPropagation()
+          if (!disabled && !event.repeat && String(value || '').trim()) onCheck?.()
+        }} />
       {status}
     </div>
-    {open && matches.length > 0 && <div id={id} className="location-suggestions euc-location-suggestions" role="listbox" aria-label="EUC location suggestions">
-      {matches.map(item => <button type="button" role="option" aria-selected={false} key={item.value || `${item.city}|${item.state}`} className="location-suggestion" disabled={disabled}
-        onClick={() => { onChange(normalizeLocationValue([item.city,item.state,item.country].filter(Boolean).join(', '))); close(); setMessage('') }}>
-        <strong>{item.city}</strong><span>{[item.state,item.country].filter(Boolean).join(' · ')}</span>
-      </button>)}
-    </div>}
-    <div className="lead-location-tools">
-      <button type="button" disabled={disabled || busy || String(value || '').trim().length < 2} onClick={search}>Find with AI</button>
-      {open && <button type="button" disabled={disabled} onClick={() => { close(); setMessage('Custom address kept. Use Save changes to save the lead.') }}>Use this address</button>}
-      {message && <span role="status">{message}</span>}
-    </div>
+    <span id={hintId} className="lead-address-shortcut">Enter to check · Shift+Enter for a new line</span>
   </div>
 }

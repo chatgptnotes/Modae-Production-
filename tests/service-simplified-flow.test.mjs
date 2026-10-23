@@ -24,7 +24,7 @@ test('Scope Confirmation owns the single site-visit decision', () => {
   const workbench = fs.readFileSync('src/pages/Workbench.jsx', 'utf8')
   const request = fs.readFileSync('src/workbench/ServiceRequestPanel.jsx', 'utf8')
   const scope = fs.readFileSync('src/workbench/ServiceScopePanel.jsx', 'utf8')
-  assert.match(workbench, /function RequirementTab\(\{ opp, onContinueToScope, onContinueToRate \}\)/)
+  assert.match(workbench, /function RequirementTab\(\{ opp, onEditDetails, onContinueToScope, onContinueToRate \}\)/)
   assert.match(workbench, /<ServiceRequestPanel opp=\{opp\} onContinue=\{onContinueToScope\} \/>/)
   assert.match(workbench, /<ServiceScopePanel opp=\{opp\} onContinue=\{onConfirmScope\} \/>/)
   assert.doesNotMatch(request, /Site visit/)

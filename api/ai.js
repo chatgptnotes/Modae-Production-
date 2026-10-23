@@ -223,6 +223,11 @@ const replyClassifySchema = {
   required: ['outcome', 'confidence', 'summary', 'nextStep', 'revisionType', 'evidence'],
 }
 
+const mailClassifySchema = { type: 'OBJECT', properties: {
+  classification: { type: 'STRING', enum: ['lead', 'not_lead'] },
+  confidence: { type: 'INTEGER' }, reason: { type: 'STRING' },
+}, required: ['classification', 'confidence', 'reason'] }
+
 const tenderExtractSchema = {
   type: 'OBJECT',
   properties: {
@@ -828,6 +833,10 @@ REPLY:
 ${cap(p.body, 12000)}`
 }
 
+function mailClassifyPrompt(p) {
+  return `${HOUSE}\n\nClassify this incoming shared-mailbox message for a sales workspace. A lead is a genuine customer/prospect enquiry, RFQ, request for a quotation, spare parts, service, project or product information. Not a lead includes newsletters, spam, internal notes, automated notices, invoices/receipts unrelated to a new sales enquiry, and unrelated mail. Read any supplied attachment contents or images as part of the same request. If essential content is unreadable, still classify from available evidence and explain that briefly. Do not invent facts.\n\nReturn concise JSON with classification lead or not_lead, confidence 0–100, and reason.\n\nFROM: ${cap(p.from, 500)}\nSUBJECT: ${cap(p.subject, 1000)}\nEMAIL:\n${cap(p.body, 30000)}\nATTACHMENT TEXT:\n${cap(p.attachmentText, 30000) || '(none readable)'}`
+}
+
 function tenderExtractPrompt(p) {
   return `${HOUSE}
 
@@ -951,7 +960,7 @@ export default async function handler(req, res) {
   if (JSON.stringify(input).length > MAX_REQUEST_CHARS) {
     return fail(res, 413, 'AI_PAYLOAD_TOO_LARGE', 'The document or request is too large for AI processing.')
   }
-  const structuredTasks = new Set(['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'])
+  const structuredTasks = new Set(['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'mail.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'])
   const requestedModel = String(input.model || '')
   const requested = /^gemini-[\w.-]+$/.test(requestedModel)
     ? (MODEL_ALIASES[requestedModel] || requestedModel)
@@ -959,11 +968,11 @@ export default async function handler(req, res) {
   // All AI tasks use the same stable multimodal model. Health checks may still
   // request a specific model so Admin can verify a configured endpoint.
   let model = task === 'health' ? requested : DEFAULT_MODEL
-  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'].includes(task)) {
+  if (!['health', 'lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'lead.clarify', 'email.clarification', 'email.followup', 'reply.classify', 'mail.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'].includes(task)) {
     return fail(res, 400, 'AI_BAD_REQUEST', `Unsupported task: ${task}`)
   }
 
-  const prompt = task === 'opportunity.search' ? opportunitySearchPrompt(payload) : task === 'health' ? 'Reply with the single word: ok'
+  const prompt = task === 'opportunity.search' ? opportunitySearchPrompt(payload) : task === 'mail.classify' ? mailClassifyPrompt(payload) : task === 'health' ? 'Reply with the single word: ok'
     : task === 'lead.fill' ? fillPrompt(payload)
       : task === 'vendor.quote' ? vendorQuotePrompt(payload)
           : task === 'email.proposal' ? proposalEmailPrompt(payload)
@@ -987,7 +996,7 @@ export default async function handler(req, res) {
                   : leadPrompt(payload)
   let fileParts = []
   let convertedFiles = []
-  if (['lead.extract', 'tender.extract', 'clarification.answer', 'approval.condition-evidence', 'kyc.extract'].includes(task)) {
+  if (['lead.extract', 'tender.extract', 'clarification.answer', 'approval.condition-evidence', 'kyc.extract', 'mail.classify'].includes(task)) {
     try {
       const converted = await convertOfficeParts(inlineParts(payload))
       fileParts = converted.parts
@@ -997,11 +1006,11 @@ export default async function handler(req, res) {
   }
   const requestBody = {
     contents: [{ parts: [{ text: prompt }, ...fileParts] }],
-    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'].includes(task)
+    generationConfig: ['lead.extract', 'lead.fill', 'vendor.quote', 'email.proposal', 'email.proofread', 'clarification.suggest', 'spares.match', 'clarification.answer', 'approval.condition-evidence', 'approval.comment-review', 'kyc.extract', 'template.map', 'proposal.review', 'price-list.inspect', 'reply.classify', 'mail.classify', 'tender.extract', 'location.search', 'admin.routing-review', 'opportunity.search'].includes(task)
       ? {
           maxOutputTokens: task === 'lead.extract' ? 16384 : task === 'tender.extract' ? 4096 : 2048,
           responseMimeType: 'application/json',
-          responseSchema: task === 'opportunity.search' ? opportunitySearchSchema : task === 'lead.fill' ? fillSchema
+          responseSchema: task === 'mail.classify' ? mailClassifySchema : task === 'opportunity.search' ? opportunitySearchSchema : task === 'lead.fill' ? fillSchema
             : task === 'vendor.quote' ? vendorQuoteSchema
               : task === 'email.proposal' ? emailProposalSchema
                 : task === 'email.proofread' ? emailProofreadSchema

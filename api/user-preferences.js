@@ -2,6 +2,7 @@ import { getAdminSupabaseClient } from './_supabase-client.js'
 import { activeProfile } from './_user-roster.js'
 import { FONT_CHOICES } from '../src/fontChoices.js'
 import { normalizeUserPreferences } from '../src/userFontPreferences.js'
+import { MIN_INBOX_PREVIEW_WIDTH, MAX_INBOX_PREVIEW_WIDTH } from '../src/userFontPreferences.js'
 
 const fonts = new Set(FONT_CHOICES.map(font => font.id))
 const fail = (message, status) => { throw Object.assign(new Error(message), { status }) }
@@ -24,9 +25,11 @@ export function createUserPreferencesHandler({ getClient = getAdminSupabaseClien
       const id = auth.data.user.id
       const input = req.body
       if (req.method === 'PUT' && (!input || typeof input !== 'object' || Array.isArray(input)
-        || Object.keys(input).length < 2 || Object.keys(input).some(key => !['font', 'sidebarCompact', 'leadDetailsCollapsed', 'rev'].includes(key))
+        || Object.keys(input).length < 2 || Object.keys(input).some(key => !['font', 'sidebarCompact', 'leadDetailsCollapsed', 'inboxPreviewWidth', 'rev'].includes(key))
         || (Object.hasOwn(input, 'font') && !fonts.has(input.font))
         || ['sidebarCompact', 'leadDetailsCollapsed'].some(key => Object.hasOwn(input, key) && typeof input[key] !== 'boolean')
+        || (Object.hasOwn(input, 'inboxPreviewWidth') && (!Number.isInteger(input.inboxPreviewWidth)
+          || input.inboxPreviewWidth < MIN_INBOX_PREVIEW_WIDTH || input.inboxPreviewWidth > MAX_INBOX_PREVIEW_WIDTH))
         || !Number.isSafeInteger(input.rev) || input.rev < 0 || input.rev >= Number.MAX_SAFE_INTEGER)) {
         fail('Choose supported preferences and a valid preference revision.', 400)
       }

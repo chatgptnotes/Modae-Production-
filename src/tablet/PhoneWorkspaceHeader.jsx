@@ -12,10 +12,16 @@ export default function PhoneWorkspaceHeader({ store = {}, onRefresh, compact = 
   const [refreshing, setRefreshing] = useState(false)
   const [message, setMessage] = useState('')
   const localOnly = store.liveSyncStatus === 'local-only'
+  const isInbox = typeof window !== 'undefined' && window.location.pathname === '/inbox'
   async function refresh() {
     if (refreshing) return
     setRefreshing(true)
-    try { setMessage(await (onRefresh || store.refreshSharedData)?.() ? 'Workspace updated' : 'Refresh failed. Please try again.') }
+    try {
+      if (isInbox && store.syncLeadInbox) {
+        const result = await store.syncLeadInbox()
+        setMessage(result.ok ? result.initialized ? 'Sync is ready; new mail will import next time.' : `Imported ${result.imported || 0} new messages.` : result.error || 'Inbox sync failed. Check the mailbox connection and try again.')
+      } else setMessage(await (onRefresh || store.refreshSharedData)?.() ? 'Workspace updated' : 'Refresh failed. Please try again.')
+    }
     catch { setMessage('Refresh failed. Please try again.') }
     finally { setRefreshing(false) }
   }
@@ -27,7 +33,7 @@ export default function PhoneWorkspaceHeader({ store = {}, onRefresh, compact = 
       <PhoneAccountMenu store={store} />
     </header>
     {!compact && <div className="mobile-sync-row"><span className="mobile-sync" data-status={store.liveSyncStatus || 'offline'} role="status"><i />{syncLabels[store.liveSyncStatus] || 'Sync unavailable'}<span>• {localOnly ? 'This device' : scope === 'global' ? 'Shared workspace' : 'Your workspace'}</span></span>
-      {!localOnly && <button type="button" className="mobile-refresh-button" aria-label="Refresh workspace" onClick={refresh} disabled={refreshing || store.liveSyncStatus === 'config-error'}><Icon name="refresh" size={16} /></button>}
+      {!localOnly && <button type="button" className="mobile-refresh-button" aria-label={isInbox ? 'Sync shared mail and refresh leads' : 'Refresh workspace'} title={isInbox ? 'Sync shared mail and refresh leads' : 'Refresh workspace'} onClick={refresh} disabled={refreshing || store.liveSyncStatus === 'config-error'}><Icon name="refresh" size={16} /></button>}
     </div>}
     {message && <p className="mobile-refresh-message" role="status">{message}</p>}
   </div>

@@ -35,9 +35,35 @@
   line-height:1.45;
   text-transform:none;
 }
-.lead-workspace .lead-decision-grid textarea.lead-location-input { max-height:160px; }
+.lead-workspace .lead-decision-grid textarea.lead-location-input { min-height:40px; max-height:160px; }
 .lead-workspace .decision-value-row:has(> .lead-location-input) { align-items:flex-start; }
 .lead-workspace .decision-value-row:has(> .lead-location-input) > .decision-status-icon { top:12px; transform:none; }
-.lead-location-tools { display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; margin-top:5px; font-size:11px; font-weight:400; letter-spacing:normal; text-transform:none; }
-.lead-location-tools button { padding:4px 7px; min-height:28px; font-size:11px; white-space:normal; }
-.lead-location-tools [role=status] { color:var(--text-secondary); }
+.lead-location-field { min-width:0; }
+.lead-address-shortcut { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; color:var(--text-secondary); font-size:11px; font-weight:400; letter-spacing:normal; text-transform:none; }
+.lead-location-field:focus-within .lead-address-shortcut { position:static; display:block; width:auto; height:auto; overflow:visible; clip-path:none; white-space:normal; margin-top:4px; }
+.lead-address-advisory { margin-top:4px; color:var(--text-secondary); font-size:12px; line-height:1.4; font-weight:400; letter-spacing:normal; text-transform:none; overflow-wrap:anywhere; white-space:normal; }
+.lead-address-advisory > div + div { margin-top:3px; }
+.lead-address-advisory button,
+.tablet-mode .lead-address-advisory button { margin:0; padding:2px 6px; min-height:24px; height:auto; font-size:11px; line-height:1.25; border-radius:5px; white-space:normal; }
+.lead-address-suggestion { display:flex; align-items:flex-start; flex-wrap:wrap; gap:3px 8px; }
+.lead-address-suggestion > span { flex:1 1 180px; min-width:0; }
+.lead-address-suggestion > button { flex:0 0 auto; }
+.lead-address-actions { display:flex; align-items:center; flex-wrap:wrap; gap:2px 8px; }
+.lead-address-details { margin:0; }
+.lead-address-details > summary { cursor:pointer; padding:3px 0; }
+.lead-address-details[open] { flex-basis:100%; order:1; }
+.lead-address-details p { margin:3px 0; }
+.lead-address-details > summary:focus-visible { outline:2px solid var(--focus-ring,#a43228); outline-offset:2px; }
+.lead-address-attribution { font-size:12px; }
+.lead-address-attribution a { color:inherit; font-family:Arial,sans-serif; font-size:12px; font-weight:400; white-space:nowrap; }
+@media (pointer:coarse) {
+  .lead-address-advisory button,
+  .tablet-mode .lead-address-advisory button { min-height:32px; padding:4px 7px; }
+}
+@media screen and (max-width:600px) {
+  html[data-workspace-theme] .shell.tablet-mode .mobile-content .lead-address-advisory :is(button, summary):not(table *) {
+    min-height:32px;
+    font-size:11px;
+    line-height:1.25;
+  }
+}

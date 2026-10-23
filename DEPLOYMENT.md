@@ -132,6 +132,59 @@ The `VITE_` values are public browser configuration. The service role, Gemini,
 GeoNames, and Gmail credentials must remain server-only. The server validates
 required production configuration before it starts.
 
+## Optional lead address validation
+
+Set server-only `GOOGLE_MAPS_API_KEY` separately in each Railway environment.
+Enable **Address Validation API** and **Geocoding API** in its Google Cloud project,
+attach billing, restrict the key to these APIs, and set usage quotas/budget alerts.
+Use server IP restrictions if stable outbound IPs are configured; browser referrer
+restrictions are not appropriate for these server requests. Never use `VITE_`,
+commit the key, or assume the existing Gemini connection enables Maps APIs.
+Free usage caps depend on API and billing-region eligibility; consult Google's
+[current pricing](https://developers.google.com/maps/billing-and-pricing/pricing).
+
+`POST /api/locations/validate` requires an active signed-in lead editor. It accepts
+`{ "fields": { "eucLocation": "...", "sellToCustomerLocation": "..." } }` with
+one or both nonempty fields, each at most 1,000 characters, and returns `results`
+keyed by field: `status`, `standardizedAddress`, `issues`, `confidence`, `source`
+and `canApply`. Calls are limited to 10 batches per account per minute and eight
+active batches per process. Keep one replica or share the limits before scaling.
+No address contents or keys are logged. Responses use `private, no-store`.
+
+Local demo testing is supported only in non-production mode with an explicit
+development header, loopback Host and Origin, and a loopback socket. Production
+never accepts that path. Put the Maps key in ignored `.env.local` and restart
+the API after changing it. When another app owns port 3000, set `PORT` to a free
+port in `.env.local`; Vite forwards `/api` and `/healthz` to that port on 127.0.0.1.
+Run both `npm run dev:client` and `npm run dev:server` (or `npm run dev`).
+
+Successful AI extraction starts one advisory check for both populated fields;
+matching addresses are deduplicated. The initial save never waits for Google.
+Users can also press Enter or click **Check address** to check only the current
+location; Shift+Enter inserts a new line. No city dropdown or AI location search
+is used in these two lead fields. Typing and blur do not request validation.
+Field-specific checks preserve the other location's results and pending requests.
+Address Validation input over its 280-character limit uses Geocoding without
+truncation. Missing coverage or absent address data also permits Geocoding;
+authentication, billing, quota and network failures do not trigger extra calls.
+Geocoding coordinates/partial matches never certify an address as valid.
+India Address Validation coverage is currently preview; unconfirmed industrial
+premises stay advisory. A missing key does not prevent server startup or leads.
+
+Before enabling, ensure public Terms of Use and Privacy Policy cover Google Maps
+requirements and sending entered addresses to Google. The UI provides Google Maps
+attribution without a map. Results are transient (at most 20 lead attempts per
+browser session, expiring after 30 minutes); raw provider data and coordinates
+are not persisted. Only explicit user confirmation of Address Validation output
+places corrected user data into a draft for normal saving. Geocoding suggestions
+cannot be applied directly. See Google's [policies](https://developers.google.com/maps/documentation/address-validation/policies)
+and [confirmation/storage terms](https://cloud.google.com/maps-platform/terms/maps-service-terms).
+
+Smoke-test desktop and phone: extract an address, save/qualify while checking,
+edit it before a response arrives, confirm a suggested correction, and repeat
+with the key disabled or quota exhausted. Reopening or typing must not initiate
+validation, and unavailable checks must never populate required-field errors.
+
 ## Admin AI integrations
 
 Apply `supabase/migrations/20261017110000_ai_integrations.sql` before using
@@ -185,6 +238,74 @@ The script defaults to a local server on port 55441, creates a uniquely named
 test database, and removes it after checking access restrictions, revision
 conflicts, concurrent saves and audit rollback. Override the local admin URL
 with `AI_INTEGRATIONS_TEST_ADMIN_URL` if needed; remote database URLs are rejected.
+
+## Microsoft 365 integration
+
+Configure Supabase Auth → Azure with the existing Entra application's client ID,
+secret **value**, and tenant URL. Add the Supabase `/auth/v1/callback` URL as an
+Entra **Web** redirect, then add each WinTrack origin's `/auth/callback` to
+Supabase Authentication → URL Configuration. Keep password sign-in available
+while existing users connect Microsoft from Personal settings; confirm the same
+Supabase user UUID and WinTrack role after linking. New Microsoft users without
+an active WinTrack roster profile have no workspace access.
+
+In each Railway environment, set server-only `MS_TENANT_ID`, `MS_CLIENT_ID`,
+`MS_CLIENT_SECRET`, `MS_REDIRECT_URI` (that environment's exact
+`https://<origin>/api/microsoft-auth/callback` Web redirect),
+`MS_SHAREPOINT_SITE_ID`, `MS_SHAREPOINT_DRIVE_ID`,
+`MS_SHAREPOINT_ROOT_ITEM_ID`, and `MS_SHARED_MAILBOX_UPN`. Keep staging and
+production resources distinct. The server uses application Graph permissions
+for the selected SharePoint site and the scoped shared mailbox; personal Outlook
+uses delegated `Mail.ReadWrite` and `Mail.Send`, so users must reconnect their
+personal account to grant the added draft and folder access. Grant site access
+with `Sites.Selected` and restrict application `Mail.Read`, `Mail.ReadWrite` /
+`Mail.Send` to the designated shared mailbox in Exchange. Test denied access to
+another site and mailbox before enabling either feature for users. Graph's send
+acceptance is not delivery confirmation; avoid automatic retries after a timeout.
+
+Sales users see lead records and unrepresented shared Outlook messages together
+in one date-sorted Lead Inbox list. All mail adds raw messages; the old `/mail`
+address opens the combined inbox. Non-sales users retain their existing mailbox
+access.
+All active WinTrack users can read shared mail.
+Lead/opportunity links and lead correspondence use WinTrack permissions. The
+existing proposal email approval flow remains separate. Set the build-time
+`VITE_MICROSOFT_GRAPH_ENABLED=true` only after the SharePoint root contains the
+expected opportunity folders and document bytes; otherwise the existing file
+backend remains active. Rebuild when changing that public flag. Apply
+`supabase/migrations/20261022140000_microsoft_mail_links.sql` to each Supabase
+project before deploying the mailbox UI; it keeps link metadata server-owned.
+
+The unified Lead Inbox also provides Inbox, Sent, Drafts, Starred, Archive,
+Spam and Trash views for the selected shared or personal mailbox. Search is
+scoped to the current folder. Shared drafts are stored in the shared Outlook
+mailbox for team visibility; personal drafts stay in the signed-in user's
+Outlook. The composer saves only when Save as draft or Send is clicked and supports
+To, Cc, Bcc and up to five 3 MB attachments. Send saves the latest contents before
+sending. Message actions include read state, star,
+reply, forward, archive, spam and move-to-trash; there is no permanent-delete
+action in WinTrack.
+
+In Lead Inbox, clicking Sync also imports new shared-mail messages as unassigned
+Global New leads, with message text and attachments. The first click sets the
+manual sync starting point and skips existing mailbox history. Later clicks
+import only new messages. Without notification configuration, scanning stays
+manual. Users need Lead Inbox access and lead creation permission. Application
+Graph permissions must include `Mail.Read` for the configured shared mailbox.
+Shared send still requires `Mail.Send`.
+
+To enable automatic shared-mail triage, set server-only `MS_MAIL_WEBHOOK_URL`
+to `https://<origin>/api/microsoft-notifications` and
+`MS_MAIL_WEBHOOK_SECRET` to a random secret of at least 32 characters. Grant
+Microsoft Graph application `Mail.Read` and restrict it to the configured
+shared mailbox in Exchange. The Railway service creates and renews the Graph
+Inbox subscription; its delta token and subscription ID are stored only in the
+server-owned `records` entity `mail_links`. Notifications are validated against
+the configured secret and only trigger a delta catch-up. AI-classified leads
+enter Lead Inbox as unassigned New records; low-confidence results and unreadable
+attachments remain visible as Needs review in Shared mail. Keep manual Sync
+available as a recovery path. Configure and verify this first in staging,
+including the public webhook handshake, before adding the production values.
 
 ## New staging Supabase project
 

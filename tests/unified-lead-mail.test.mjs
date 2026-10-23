@@ -1,0 +1,102 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+
+const read = path => readFileSync(new URL(path, import.meta.url), 'utf8')
+const app = read('../src/App.jsx')
+const tablet = read('../src/tablet/TabletApp.jsx')
+const inbox = read('../src/pages/Inbox.jsx')
+const desktopToolbar = read('../src/pages/InboxToolbar.jsx')
+const phoneToolbar = read('../src/pages/PhoneInbox.jsx')
+const mail = read('../src/pages/Mail.jsx')
+const sharedMailbox = read('../src/sharedMailbox.js')
+const microsoftApi = read('../api/microsoft.js')
+const microsoftGraph = read('../api/_microsoft-graph.js')
+const nonSales = read('../src/pages/NonSalesWorkspace.jsx')
+
+test('sales users get one combined lead and email list with legacy route redirect', () => {
+  assert.match(app, /<Route path="\/mail" element={<Navigate to="\/inbox" replace \/>} \/>/)
+  assert.match(tablet, /<Route path="\/mail" element={<Navigate to="\/inbox" replace \/>} \/>/)
+  assert.match(inbox, /useSharedMailbox\(\{ embedded: true \}\)/)
+  assert.match(inbox, /const emailRows = !showArchive && \(sharedMail\.folder !== 'inbox' \|\| sharedMail\.allMail\)/)
+  assert.match(inbox, /const unifiedRows = \[\.\.\.mailboxRows\.map\(lead => \(\{ kind: 'lead'/)
+  assert.match(inbox, /\.\.\.emailRows\][\s\S]*?\.sort\(\(a, b\) => compareInboxRows\(a, b\)\)/)
+  assert.match(inbox, /pageRows\.map\(row => \{\s*if \(row\.kind === 'email'\)/)
+  assert.match(inbox, /<SharedMessageDetails mailbox=\{sharedMail\}/)
+  assert.doesNotMatch(inbox, /<Mail embedded \/>/)
+  assert.match(inbox, /representedMessageIds\.has\(message\.id\)/)
+  assert.match(desktopToolbar, /inbox-all-mail-toggle/)
+  assert.doesNotMatch(desktopToolbar, /Mail folder/)
+  assert.match(inbox, /className="inbox-rail-folder-icons"/)
+  assert.match(inbox, /inbox-right-rail--compact/)
+  assert.match(inbox, /aria-label=\{label\} aria-current=\{sharedMail\.folder === folder/)
+  for (const folder of ['inbox', 'sent', 'drafts', 'starred', 'archive', 'spam', 'trash']) assert.match(inbox, new RegExp(`'${folder}'`))
+  assert.match(inbox, /title="Lead details" aria-label="Lead details" aria-pressed=\{railTab === 'lead'\}/)
+  assert.match(inbox, /const activeUnifiedRow = pageRows\.find\(row => row\.id === activeUnifiedRowId\)/)
+  assert.match(inbox, /const setAllMailView = value => \{\s*sharedMail\.setAllMail\(value\)\s*setActiveUnifiedRowId\(''\)\s*sharedMail\.clearSelection\(\)/)
+  assert.match(inbox, /const openLeadPreview = \(\) => \{ setActiveUnifiedRowId\(row\.id\); sharedMail\.clearSelection\(\); setInboxRailTab\('lead'\) \}/)
+  assert.match(desktopToolbar, /Search leads and email/)
+  assert.match(phoneToolbar, /phone-inbox-mail-actions/)
+  assert.match(phoneToolbar, /Search leads and email/)
+  assert.match(inbox, /await sharedMail\.refresh\(\)/)
+  assert.match(sharedMailbox, /embedded && store\.syncLeadInbox/)
+})
+
+test('Non-sales users keep their existing shared mailbox route', () => {
+  assert.match(nonSales, /<NavLink to="\/mail">Shared Outlook<\/NavLink>/)
+  assert.match(nonSales, /<Route path="\/mail" element={<Mail \/>} \/>/)
+})
+
+test('message preview exits loading on request failure and offers retry', () => {
+  assert.match(sharedMailbox, /setDetailsError\(reason\.message \|\| 'Could not load this message\.'\)/)
+  assert.match(sharedMailbox, /retryDetails = \(\) => \{ setDetailsError\(''\); setSelectionVersion/)
+  assert.match(mail, /selected && !details && detailsError[\s\S]*?onClick=\{retryDetails\}>Retry/)
+})
+
+test('mailbox status triggers one initial folder load and background loads retain a still-available preview', () => {
+  const statusEffect = sharedMailbox.match(/microsoftRequest\('status'\)[\s\S]*?return \(\) => \{ active = false \}/)?.[0] || ''
+  assert.doesNotMatch(statusEffect, /void load\(\)/)
+  assert.match(sharedMailbox, /if \(current && rows\.some\(row => row\.id === current\.id\)\) return current/)
+  assert.match(sharedMailbox, /loadedContext\.current === context/)
+  assert.match(sharedMailbox, /if \(changed\) \{[\s\S]*?setSelected\(null\)[\s\S]*?setDetails\(null\)/)
+})
+
+test('Graph 403s show safe draft stage and error code guidance', () => {
+  assert.match(microsoftGraph, /graphCode: code/)
+  assert.match(microsoftApi, /Microsoft Graph denied \$\{stage\}/)
+  assert.match(microsoftApi, /Mail\.ReadWrite/)
+  assert.match(microsoftApi, /Mail\.Send/)
+  assert.match(microsoftApi, /graph: diagnostic/)
+})
+
+test('Outlook composer supports spellcheck and AI proofreading without overwriting edits made mid-check', () => {
+  assert.match(mail, /contentEditable spellCheck/)
+  assert.match(mail, /runTaskResult\('email\.proofread'/)
+  assert.match(mail, /bodyEditor\.current\?\.innerHTML !== sourceHtml/)
+  assert.match(mail, /Proofread with AI/)
+  assert.match(mail, /disabled=\{proofreadBusy \|\| sendBusy\}/)
+  assert.match(mail, /sendBusy \? 'Sending…' : busy \? 'Saving…' : 'Send'/)
+})
+
+test('compose uses mail-style recipients, saves Outlook drafts and supports folder actions', () => {
+  assert.match(mail, /className="microsoft-mail-compose-recipient"/)
+  assert.match(mail, /placeholder="Recipients"/)
+  assert.match(mail, /Cc recipients/)
+  assert.match(mail, /Bcc recipients/)
+  assert.match(mail, /onBlur=\{\(\) => \{ if \(!cc\.trim\(\)\) setShowCc\(false\) \}\}/)
+  assert.match(mail, /onBlur=\{\(\) => \{ if \(!bcc\.trim\(\)\) setShowBcc\(false\) \}\}/)
+  assert.match(mail, /<form noValidate onSubmit=\{submitMessage\}>/)
+  assert.match(mail, /microsoft-mail-compose-error/)
+  assert.match(sharedMailbox, /microsoftRequest\('draftSave'/)
+  assert.match(mail, /placeholder="Add a subject"/)
+  assert.match(mail, /className="microsoft-mail-compose-body"/)
+  assert.match(mail, /Related lead/)
+  assert.match(mail, /status\?\.personalMail && <option value="personal">My Outlook/)
+  assert.match(mail, /microsoft-mail-compose-attachments/)
+  assert.match(mail, /mailAction\('trash'\)/)
+  assert.match(mail, /mailAction\(details\.message\.flag/)
+  assert.match(mail, /name="mail-send-to" type="text" autoComplete="off"/)
+  assert.doesNotMatch(mail, /Connect personal Outlook|autoComplete="email"|id="mail-send-to"[^>]*autoFocus/)
+  assert.match(sharedMailbox, /if \(!result\.personalMail\) setSender\(current => current === 'personal' \? 'shared' : current\)/)
+  assert.match(inbox, /sharedMail\.setLeadId\(previewLead\?\.id \|\| linkedLeadId\)/)
+})

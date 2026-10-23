@@ -1,3 +1,107 @@
+# 2026-10-23 — Resizable Lead Inbox preview
+
+- Show the copied WINTRACK/Opportunities SharePoint folders as the Documents
+  cards for users with Documents access. Match customer, owner and status labels
+  from WinTrack where available, keep unmatched folders visible, and scope
+  browsing and file preview/download to the copied Opportunities area.
+
+- Add an accessible desktop divider to resize the Inbox preview from 320px to
+  720px, with keyboard adjustment and Home/double-click reset. Keep the icon
+  rail fixed and omit the divider in compact folders and phone layouts.
+- Store the selected width in revision-checked, account-specific preferences.
+
+- Keep a selected Outlook message open during folder refreshes and avoid a
+  duplicate initial folder request. Close the preview when its mailbox context
+  changes or the message disappears from the refreshed folder.
+- Preserve the safe Microsoft Graph error code and identify whether a 403
+  happened while saving or sending a draft, with the relevant permission and
+  mailbox access checks. Do not expose Graph error details or message content.
+- Send JSON content types on shared and personal Outlook draft writes so Graph
+  does not interpret draft data as base64 MIME; limit permission advice to 403s.
+- Save Outlook drafts only on Save as draft or Send; switching sending accounts
+  no longer writes a draft. Send saves the latest contents before dispatch.
+
+## 2026-10-23 — Outlook composer proofreading
+
+- Enable browser spellcheck and AI proofreading in the Outlook composer. Keep
+  newer edits intact if they change while a proofread request is running.
+
+## 2026-10-23 — Automatic shared-mail triage
+
+- Add Graph Inbox notifications with validation, renewable subscriptions, and
+  persisted delta state. New messages are classified server-side with configured
+  AI; confident enquiries become unassigned leads, while uncertain or unreadable
+  messages remain visible for review. Manual Sync remains available.
+- Combine lead records and unrepresented shared-mail messages in one
+  date-sorted Lead Inbox list. All mail adds raw email rows; search and Sync
+  cover both sources, with one details panel. The former `/mail` address opens
+  the combined inbox. Preserve Non-sales access.
+- Put Outlook folders in the Lead Inbox side rail beside Lead details, and use a
+  centered compose dialog. Keep the shared mailbox as the default sender and
+  offer the account-matched personal Outlook address after connection.
+- Explain that an unsupported Microsoft operation needs a local dev-server
+  restart; retain typed unsupported HTML in drafts as escaped text.
+
+## 2026-10-22 — Microsoft 365 sign-in and Graph gateway
+
+- Add Microsoft sign-in through Supabase and account-linked enrollment from
+  Personal settings, preserving existing roster identity and roles.
+- Allow Microsoft users without a provider email to continue account lookup by
+  their stable Supabase user ID; show an error instead of hanging if that ID is missing.
+- Add a server-authenticated SharePoint document gateway and shared Outlook
+  mailbox screen. Active users can read mail; WinTrack edit permissions govern
+  linking and lead correspondence. Shared and personal sending use separate
+  Graph credentials; the existing proposal approval flow remains separate.
+- Keep the new SharePoint backend behind an explicit build-time flag until
+  site grants, file locations, and production credentials are verified.
+- Classify new shared-mail messages and readable attachments after a user clicks
+  Sync when notifications are not configured. See the 2026-10-23 entry for
+  automatic processing behavior.
+
+## 2026-10-22 — Opportunity editing and dark workspace contrast
+
+- Let authorized editors correct open opportunity details from completed
+  workflow views without moving the opportunity back. Closed records remain
+  read only; workflow, approval, and booking actions keep their existing gates.
+- Restore readable dark-theme surfaces and text in the opportunity workbench,
+  Create Opportunity form, and proposal workbook controls.
+
+## 2026-10-21 — Compact address checks
+
+- Start the lead Missing information panel collapsed on desktop and phone;
+  expand it from the heading and retain the chosen state while editing.
+
+- Start both address boxes at 40px with content wrapping and growth, show keyboard
+  hints on focus, and condense validation to a status/confidence line and wrapped
+  suggestion. Keep detailed issues under Details, with compact Check address and
+  Use address actions and visible Google Maps attribution.
+- Open the displayed address from the Google Maps link instead of the homepage,
+  with a typed-address fallback and safely encoded search text.
+
+## 2026-10-21 — Plain address entry with Enter to check
+
+- Remove lead city dropdowns and AI city lookup. Both location fields retain
+  wrapping and custom text; Enter checks the current address, Shift+Enter adds a
+  new line, and a Check address button supports mouse and phone users.
+- Preserve the other location's results and pending checks; ignore stale edited
+  values and duplicate pending requests. Keep checks optional and all saves and
+  qualification available, with explicit confirmation for corrections.
+
+## 2026-10-21 — Optional address checks after lead extraction
+
+- Check both lead locations asynchronously after successful AI extraction, using
+  server-only Google Address Validation and limited Geocoding fallback. Keep
+  address confidence separate from extraction confidence and never block actions.
+- Retain custom addresses; apply standardized corrections only after explicit
+  confirmation. Ignore stale results after edits, new attempts or account changes.
+  Keep provider results out of persisted leads/backups, with no typing/idle checks.
+- Wrap Sell-to Customer Location as well as EUC Location; document separate Maps
+  credentials, provider limits, attribution and deployment setup.
+- Let users explicitly check edited/custom addresses with Google, including
+  guarded loopback-only local demo testing. Distinguish AI city lookup and stop
+  its visible wait after 15 seconds. Follow the configured local API port in
+  Vite so an unrelated app on port 3000 cannot receive WinTrack requests.
+
 ## 2026-10-21 — Readable lead evidence and flexible location entry
 
 - Move lead evidence into a viewport-constrained popup with close, outside-click

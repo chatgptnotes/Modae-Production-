@@ -9,6 +9,7 @@ import { displayOpportunityId } from './seed.js'
 import { isAdminRole, canPriceProposal, canViewCommercial, displayRole, productList, solutionLabel, solutionList, rupeesToK } from './utils.js'
 import { fiscalQuarter } from './excelLogic.js'
 import CustomerPicker from './CustomerPicker.jsx'
+import { canEditOpportunityDetails } from './opportunityEditAccess.js'
 
 const Field = ({ label, children }) => (
   <div className="opportunity-field"><label>{label}</label>{children}</div>
@@ -162,7 +163,7 @@ const OpportunityDetailsEditor = forwardRef(function OpportunityDetailsEditor({ 
   const baseline = useRef(makeDraft(opp))
   const recordId = useRef(opp.id)
   const formRef = useRef(null)
-  const canEdit = editable && store.canPerform?.('opportunities.edit') !== false && (opp.owner === store.role || isAdminRole(store.role))
+  const canEdit = editable && canEditOpportunityDetails(opp, store.role, store.canPerform)
   const showValue = canPriceProposal(store.role)
   const showCost = showValue || canViewCommercial(store.role)
   const canTransfer = isAdminRole(store.role) || store.canPerform?.('commercial.view') === true

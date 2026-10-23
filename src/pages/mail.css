@@ -1,0 +1,245 @@
+.microsoft-mail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 100%;
+  max-width: none;
+  margin: 0;
+  padding-top: 14px;
+  padding-bottom: 20px;
+  color: var(--text-primary);
+}
+.microsoft-mail--embedded { flex: 0 0 auto; min-height: 0; padding: 18px 0 12px; border-top: 2px solid var(--border-default); }
+.microsoft-mail--embedded .microsoft-mail-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 10px; }
+.microsoft-mail--embedded .microsoft-mail-head h2 { margin: 0 0 2px; font-size: 16px; }
+
+.microsoft-mail-head { margin: 0 0 4px; }
+.microsoft-mail-head .hint { margin: 0; color: var(--text-secondary); font-size: 14px; }
+.microsoft-mail-toolbar { margin-bottom: 10px !important; }
+.microsoft-mail-message { flex: 0 0 auto; margin: 0 0 10px; }
+.microsoft-mail-workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, .8fr);
+  gap: 12px;
+  min-width: 0;
+  min-height: 430px;
+  height: clamp(430px, 58vh, 720px);
+}
+.microsoft-mail-list-panel,
+.microsoft-mail-preview {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--surface-default);
+}
+.microsoft-mail-list-panel { display: flex; flex-direction: column; }
+.microsoft-mail-list-head,
+.microsoft-mail-row {
+  display: grid;
+  grid-template-columns: minmax(116px, .75fr) minmax(150px, 1fr) minmax(220px, 1.8fr);
+  align-items: center;
+  gap: 12px;
+}
+.microsoft-mail-list-head {
+  flex: 0 0 auto;
+  min-height: 46px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-sunken);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+.microsoft-mail-list { min-height: 0; flex: 1; overflow: auto; }
+.microsoft-mail-row {
+  width: 100%;
+  min-height: 76px;
+  padding: 12px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+  transition: background .15s ease, box-shadow .15s ease;
+}
+.microsoft-mail-row:hover { background: var(--surface-raised); }
+.microsoft-mail-row[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--action-accent) 8%, var(--surface-default));
+  box-shadow: inset 3px 0 var(--action-accent);
+}
+.microsoft-mail-row:focus-visible { position: relative; z-index: 1; outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.microsoft-mail-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.microsoft-mail-date { color: var(--text-secondary); font-size: 12px; font-variant-numeric: tabular-nums; }
+.microsoft-mail-sender { color: var(--text-primary); font-size: 13px; font-weight: 600; }
+.microsoft-mail-subject { display: grid; gap: 4px; }
+.microsoft-mail-subject b { overflow: hidden; color: var(--text-primary); font-size: 13px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.microsoft-mail-subject small { overflow: hidden; color: var(--text-secondary); font-size: 12px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.microsoft-mail-empty {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  padding: 28px 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.microsoft-mail-empty svg { color: var(--text-tertiary); }
+.microsoft-mail-empty b { color: var(--text-primary); font-size: 14px; }
+.microsoft-mail-empty span { line-height: 1.45; }
+.microsoft-mail-load-more {
+  display: block;
+  width: calc(100% - 24px);
+  min-height: 38px;
+  margin: 12px;
+}
+.microsoft-mail-preview { display: flex; flex-direction: column; overflow-y: auto; padding: 14px 16px; }
+.microsoft-mail-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 11px; border-bottom: 1px solid var(--border-default); }
+.microsoft-mail-preview-head h2 { margin: 0; color: var(--text-primary); font-size: 15px; }
+.microsoft-mail-preview-head > span { overflow: hidden; color: var(--text-secondary); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.microsoft-mail-detail { display: grid; align-content: start; gap: 14px; min-width: 0; padding-top: 14px; }
+.microsoft-mail-detail > h3 { margin: 0; color: var(--text-primary); font-size: 18px; line-height: 1.35; overflow-wrap: anywhere; }
+.microsoft-mail-meta { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 7px 10px; font-size: 12px; }
+.microsoft-mail-meta span { color: var(--text-secondary); }
+.microsoft-mail-meta b { min-width: 0; color: var(--text-primary); font-weight: 500; overflow-wrap: anywhere; }
+.microsoft-mail-body { margin: 0; padding-top: 12px; border-top: 1px solid var(--border-subtle); color: var(--text-primary); font-size: 13px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.microsoft-mail-attachments { display: grid; gap: 7px; padding-top: 11px; border-top: 1px solid var(--border-subtle); }
+.microsoft-mail-attachments h3,
+.microsoft-mail-link-form h3 { margin: 0; color: var(--text-primary); font-size: 13px; }
+.microsoft-mail-attachments button { justify-self: start; min-height: 34px; max-width: 100%; overflow-wrap: anywhere; }
+.microsoft-mail-link-form { display: grid; gap: 9px; max-width: none; padding-top: 12px; border-top: 1px solid var(--border-subtle); }
+.microsoft-mail-link-form label,
+.microsoft-mail-compose form label { display: grid; gap: 5px; color: var(--text-secondary); font-size: 11px; font-weight: 600; }
+.microsoft-mail-link-form :is(input, select),
+.microsoft-mail-compose form :is(input, select, textarea) { width: 100%; min-width: 0; box-sizing: border-box; }
+.microsoft-mail-link-form button { justify-self: start; }
+.microsoft-mail-loading { color: var(--text-secondary); font-size: 13px; }
+.microsoft-mail-loading-error { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; color: var(--text-secondary); font-size: 13px; }
+.microsoft-mail-compose { min-width: 0; margin-top: 14px; padding: 16px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--surface-default); }
+.microsoft-mail-compose h2 { margin: 0 0 6px; color: var(--text-primary); font-size: 17px; }
+.microsoft-mail-compose > p { margin: 0 0 12px; color: var(--text-secondary); font-size: 13px; }
+.microsoft-mail-compose > button { margin-bottom: 10px; }
+.microsoft-mail-compose form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; max-width: 900px; }
+.microsoft-mail-compose form label:nth-last-of-type(1) { grid-column: 1 / -1; }
+.microsoft-mail-compose form textarea { resize: vertical; }
+.microsoft-mail-compose-trigger { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 8px; min-height: 42px; padding: 0 16px; border: 1px solid var(--action-accent); border-radius: 8px; background: var(--action-accent); color: #fff; font-weight: 600; }
+.microsoft-mail-compose-trigger:hover { filter: brightness(1.08); }
+.microsoft-mail-sync { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; min-height: 42px; padding: 0 13px; border: 1px solid var(--border-default); border-radius: 8px; background: var(--surface-default); color: var(--text-primary); font-size: 13px; font-weight: 600; }
+.microsoft-mail-sync:disabled { opacity: .6; cursor: wait; }
+.microsoft-mail-all-toggle { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; color: var(--text-secondary); font-size: 13px; font-weight: 600; }
+.microsoft-mail-all-toggle input { width: 15px; height: 15px; accent-color: var(--action-accent); }
+.microsoft-mail-compose-backdrop { position: fixed; z-index: 1200; inset: 0; display: grid; place-items: center; overflow: auto; padding: 24px; background: rgb(8 10 14 / 56%); backdrop-filter: blur(2px); }
+.microsoft-mail-compose { display: flex; flex-direction: column; width: min(760px, calc(100vw - 48px)); max-height: min(820px, calc(100dvh - 48px)); margin: auto; padding: 0; overflow: hidden; border: 1px solid var(--border-default); border-radius: 10px; background: var(--surface-default); color: var(--text-primary); box-shadow: 0 18px 55px #0008; }
+.microsoft-mail-compose-head { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; background: var(--surface-raised); border-bottom: 1px solid var(--border-default); }
+.microsoft-mail-compose-head h2 { margin: 0; color: var(--text-primary); font-size: 14px; font-weight: 650; }
+.microsoft-mail-compose-head > button { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); }
+.microsoft-mail-compose-head > button:hover { background: var(--surface-sunken); color: var(--text-primary); }
+.microsoft-mail-compose form { display: flex; flex: 1 1 auto; flex-direction: column; gap: 0; max-width: none; min-height: 0; overflow: auto; padding: 0 20px 14px; }
+.microsoft-mail-compose form :is(input, select, textarea) { color: var(--text-primary); font: inherit; }
+.microsoft-mail-compose-from { display: flex; align-items: center; gap: 12px; min-height: 44px; border-bottom: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 12px; }
+.microsoft-mail-compose-from select { width: auto !important; min-height: 30px; padding: 0 26px 0 0; border: 0 !important; background: transparent !important; box-shadow: none !important; color: var(--text-primary); font-size: 12px; }
+.microsoft-mail-compose-recipient { display: flex; align-items: center; gap: 12px; min-height: 43px; border-bottom: 1px solid var(--border-subtle); }
+.microsoft-mail-compose-recipient label { flex: 0 0 28px; color: var(--text-secondary); font-size: 13px; font-weight: 500; }
+.microsoft-mail-compose-recipient input { flex: 1 1 auto; width: 0; min-height: 38px; padding: 4px 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 13px; }
+.microsoft-mail-compose-recipient input:focus { outline: 0; }
+.microsoft-mail-compose-recipient:focus-within { border-bottom-color: var(--focus-ring); }
+.microsoft-mail-recipient-actions { display: flex; flex: 0 0 auto; gap: 8px; }
+.microsoft-mail-recipient-actions button { appearance: none; padding: 0; border: 0 !important; border-radius: 0 !important; background: none !important; box-shadow: none !important; color: var(--text-secondary); font-size: 12px; }
+.microsoft-mail-recipient-actions button:hover { color: var(--text-primary); text-decoration: underline; }
+.microsoft-mail-compose-subject { min-height: 48px; padding: 8px 0 !important; border: 0 !important; border-bottom: 1px solid var(--border-subtle) !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 16px !important; font-weight: 550; }
+.microsoft-mail-compose-subject::placeholder { color: var(--text-secondary); font-weight: 450; }
+.microsoft-mail-compose-body { flex: 1 1 220px; min-height: 190px; width: 100%; padding: 14px 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 13px !important; line-height: 1.55; resize: vertical; }
+.microsoft-mail-compose-body::placeholder { color: var(--text-tertiary); }
+.microsoft-mail-compose-related { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 38px; border-top: 1px solid var(--border-subtle); color: var(--text-secondary); font-size: 12px; }
+.microsoft-mail-compose-related label { flex: 0 0 auto; }
+.microsoft-mail-compose-related select { flex: 1; min-width: 0; padding: 4px 24px 4px 0; border: 0 !important; background: transparent !important; box-shadow: none !important; font-size: 12px; }
+.microsoft-mail-compose form footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-top: 10px; }
+.microsoft-mail-compose form footer button { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0 16px; border: 1px solid var(--action-accent) !important; border-radius: 6px; background: var(--action-accent) !important; color: var(--text-on-accent) !important; font-weight: 600; }
+.microsoft-mail-compose form footer button:disabled { cursor: wait; opacity: .65; }
+.microsoft-mail-compose form footer span { color: var(--text-tertiary); font-size: 11px; }
+.microsoft-mail-compose-error { margin: 8px 0 0; color: var(--danger-text, #b42318); font-size: 12px; }
+.microsoft-mail-connect { justify-self: start; margin-top: 8px; }
+
+@media (max-width: 900px) {
+  .microsoft-mail-workspace { grid-template-columns: minmax(0, 1fr); height: auto; min-height: 0; }
+  .microsoft-mail-list-panel { min-height: 360px; max-height: 55vh; }
+  .microsoft-mail-preview { min-height: 260px; max-height: 60vh; }
+}
+@media (max-width: 600px) {
+  .microsoft-mail { padding-inline: 10px; }
+  .microsoft-mail--embedded { padding-inline: 0; }
+  .microsoft-mail-toolbar { gap: 6px; }
+  .microsoft-mail-list-head,
+  .microsoft-mail-row { grid-template-columns: minmax(68px, .6fr) minmax(90px, .9fr) minmax(0, 1.4fr); gap: 6px; padding-inline: 10px; }
+  .microsoft-mail-list-head { font-size: 10px; }
+  .microsoft-mail-date, .microsoft-mail-sender { font-size: 11px; }
+  .microsoft-mail-subject b { font-size: 12px; }
+  .microsoft-mail-subject small { font-size: 11px; }
+  .microsoft-mail-compose-backdrop { padding: 12px; }
+  .microsoft-mail-compose { width: min(100%, 760px); max-height: calc(100dvh - 24px); }
+  .microsoft-mail-compose form { padding-inline: 14px; }
+  .microsoft-mail-compose-related { align-items: flex-start; flex-wrap: wrap; gap: 2px 8px; padding-block: 8px; }
+  .microsoft-mail-compose-related label { flex: 0 0 100%; }
+  .microsoft-mail-compose-related select { width: 100%; }
+  .microsoft-mail-compose-trigger { min-height: 38px; padding-inline: 10px; }
+  .microsoft-mail-sync { min-height: 38px; padding-inline: 9px; }
+  .microsoft-mail-all-toggle { font-size: 12px; }
+}
+
+/* Outlook compose is a docked window so users can keep the inbox in view. */
+.inbox-mail-folder-select { flex: 0 0 auto; max-width: 140px; min-height: 38px; padding-inline: 9px 26px; border: 1px solid var(--border-default); border-radius: 7px; background: var(--surface-default); color: var(--text-primary); font-size: 12px; }
+.microsoft-mail-detail-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.microsoft-mail-detail-actions button { min-height: 30px; padding: 4px 9px; border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface-default); color: var(--text-secondary); font-size: 11px; }
+.microsoft-mail-detail-actions button:hover { background: var(--surface-raised); color: var(--text-primary); }
+.microsoft-mail-compose-attachments { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 7px 0; border-top: 1px solid var(--border-subtle); }
+.microsoft-mail-compose-attachments label { position: relative; display: inline-flex !important; grid-auto-flow: column; align-items: center; gap: 5px !important; min-height: 28px; color: var(--text-secondary) !important; cursor: pointer; }
+.microsoft-mail-compose-attachments input { position: absolute; width: 1px !important; height: 1px; overflow: hidden; clip-path: inset(50%); }
+.microsoft-mail-compose-attachments span { display: inline-flex; align-items: center; gap: 6px; max-width: 200px; padding: 3px 7px; border-radius: 12px; background: var(--surface-sunken); color: var(--text-secondary); font-size: 11px; overflow-wrap: anywhere; }
+.microsoft-mail-compose-attachments span button { padding: 0 2px; border: 0; background: transparent; color: inherit; }
+.microsoft-mail-compose form footer .microsoft-mail-save-draft { border-color: var(--border-default) !important; background: transparent !important; color: var(--text-primary) !important; }
+.microsoft-mail-compose-backdrop { display: block; padding: 0; background: transparent; pointer-events: none; }
+.microsoft-mail-compose { position: absolute; right: 24px; bottom: 20px; margin: 0; border-radius: 12px; pointer-events: auto; }
+.microsoft-mail-compose-backdrop { position: fixed; z-index: 1200; inset: 0; display: grid; place-items: center; overflow: auto; padding: 24px; background: rgb(8 10 14 / 56%); pointer-events: auto; }
+.microsoft-mail-compose { position: relative; inset: auto; margin: auto; pointer-events: auto; }
+@media (max-width: 600px) {
+  .inbox-mail-folder-select { max-width: 118px; }
+  .microsoft-mail-compose { right: auto; bottom: auto; width: min(100%, 760px); max-height: calc(100dvh - 24px); }
+}
+.microsoft-mail-compose-head > div { display: flex; gap: 6px; }
+.microsoft-mail-compose-head > div button { display: grid; width: 34px; height: 34px; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 20px; }
+.microsoft-mail-compose-head > div button:hover { background: var(--surface-sunken); color: var(--text-primary); }
+.microsoft-mail-compose.is-minimized { height: auto; }
+.microsoft-mail-compose.is-minimized .microsoft-mail-compose-head { border-bottom: 0; }
+.microsoft-mail-format-toolbar { display: flex; flex: 0 0 auto; gap: 4px; padding: 6px 0; border-top: 1px solid var(--border-subtle); }
+.microsoft-mail-format-toolbar button { min-width: 34px; min-height: 30px; padding: 3px 8px; border: 0; border-radius: 5px; background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 650; }
+.microsoft-mail-format-toolbar button:hover { background: var(--surface-sunken); color: var(--text-primary); }
+.microsoft-mail-compose-body[contenteditable="true"] { overflow: auto; outline: none; white-space: pre-wrap; overflow-wrap: anywhere; }
+.microsoft-mail-proofread-error { margin: 4px 0; color: var(--color-danger, #b42318); font-size: 12px; }
+.microsoft-mail-compose-body[contenteditable="true"]:empty::before { content: attr(data-placeholder); color: var(--text-tertiary); pointer-events: none; }
+.shell .mailbox-page .mailbox-split.inbox-rail-compact { grid-template-columns: minmax(0, 1fr) 52px; gap: 12px; }
+.shell .mailbox-page .mailbox-split.inbox-rail-expanded { grid-template-columns: minmax(0, 1fr) calc(58px + var(--inbox-preview-width, 420px)); gap: 12px; }
+.inbox-right-rail { display: grid; grid-template-columns: 52px minmax(0, 1fr); gap: 10px; min-width: 0; min-height: 0; align-content: stretch; }
+.inbox-right-rail--expanded { grid-template-columns: 52px 6px minmax(0, var(--inbox-preview-width, 420px)); gap: 0; }
+.inbox-right-rail--compact { grid-template-columns: 52px; }
+.inbox-preview-resizer { display: flex; align-self: stretch; align-items: stretch; justify-content: center; width: 6px; min-width: 6px; min-height: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: col-resize; touch-action: none; }
+.inbox-preview-resizer::before { content: ''; display: block; width: 1px; height: 100%; background: var(--border-default); }
+.inbox-preview-resizer:hover::before, .inbox-preview-resizer:focus-visible::before { background: var(--action-accent); }
+.inbox-preview-resizer:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.inbox-rail-icons { display: flex; flex-direction: column; align-items: center; gap: 7px; min-width: 0; min-height: 0; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none; padding: 7px 5px; border: 1px solid var(--border-default); border-right: 0; border-radius: 9px 0 0 9px; background: var(--surface-default); }
+.inbox-rail-icons::-webkit-scrollbar { display: none; }
+.inbox-rail-folder-icons, .inbox-rail-detail-icons { display: grid; justify-items: center; gap: 5px; width: 100%; }
+.inbox-rail-detail-icons { padding-bottom: 7px; border-bottom: 1px solid var(--border-subtle); }
+.inbox-rail-icons button { display: grid; width: 40px; height: 40px; place-items: center; padding: 0; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.inbox-rail-icons button:hover, .inbox-rail-icons button[aria-current="page"], .inbox-rail-icons button[aria-pressed="true"] { background: color-mix(in srgb, var(--action-accent) 10%, var(--surface-default)); color: var(--action-accent); }
+.inbox-rail-icons button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.inbox-rail-icons button:disabled { cursor: not-allowed; opacity: .4; }
+.inbox-rail-detail-pane { min-width: 0; min-height: 0; overflow: auto; padding: 12px; border: 1px solid var(--border-default); border-left: 0; border-radius: 0 9px 9px 0; background: var(--surface-default); }
+.inbox-rail-detail-pane > .inbox-lead-details { height: 100%; }
+.inbox-rail-detail-pane > .microsoft-mail-preview { width: 100%; height: 100%; max-height: none; padding: 0; overflow: visible; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.inbox-lead-details { display: grid; align-content: start; gap: 12px; min-width: 0; overflow: auto; }
+.inbox-lead-details .mailbox-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.inbox-lead-details .mailbox-preview-toggle { flex: 0 0 auto; border: 1px solid var(--border-default); border-radius: 6px; background: var(--surface-default); color: var(--text-secondary); cursor: pointer; }
+.inbox-lead-details .mailbox-preview-toggle:hover { background: var(--surface-sunken); color: var(--text-primary); }
+.inbox-lead-details .mailbox-preview-content:not([hidden]) { display: grid; align-content: start; gap: 12px; min-width: 0; }

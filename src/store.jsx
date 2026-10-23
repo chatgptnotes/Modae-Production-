@@ -54,6 +54,7 @@ import { canPreviewAsUser } from './localPreviewAdmin.js'
 import { isLocalDemoSession } from './authMode.js'
 import { mergeLocalBackupState } from './localBackupState.js'
 import { workspaceSyncStatus } from './syncStatus.js'
+import { syncSharedMailbox } from './mailTriage.js'
 import { readLiveData } from './liveSync.js'
 import { purgeWorkspace } from './workspacePurge.js'
 import { fiscalQuarter, financials, mergeWorkbookData, applyCustomerChange } from './excelLogic.js'
@@ -782,7 +783,7 @@ export function StoreProvider({ children }) {
   // Fire-and-forget SharePoint folder side effects: localStorage stays the
   // instant source of truth; Graph results land in spSync for the pills.
   const spTrack = (oppId, folder, work) => {
-    if (filestore.activeBackend() !== 'sharepoint') return
+    if (!['sharepoint', 'microsoft'].includes(filestore.activeBackend())) return
     api.setSpSync(oppId, { state: 'pending', folder })
     work()
       .then(() => api.setSpSync(oppId, { state: 'synced', folder, error: '' }))
@@ -2920,6 +2921,18 @@ export function StoreProvider({ children }) {
       return ok && ((workspaceNeedsCatalogue(path, view) || catalogueUsersRef.current.size > 0) ? await loadApprovedPriceLists({ force: true }) : true)
     },
 
+    async syncLeadInbox() {
+      if (!datastore.dbEnabled() || stateRef.current.demoData || !stateRef.current.auth?.user) {
+        return { ok: false, error: 'Shared mailbox sync requires a connected workspace.' }
+      }
+      try {
+        const result = await syncSharedMailbox()
+        const view = workspaceViewForPath(window.location.pathname)
+        const ok = await ensureWorkspaceView(view, { force: true })
+        return { ...result, ok, hasMore: result.hasMore || false }
+      } catch (error) { return { ok: false, error: error.message || 'Shared mailbox sync failed.' } }
+    },
+
     // Sourcing has its own fast-load contract. Retrying it should not make
     // the BOQ depend on unrelated full-workspace reads (for example a
     // transient audit/config query failure).
@@ -3038,7 +3051,12 @@ export function StoreProvider({ children }) {
       return { ok: true }
     },
     loginExternal(user, session = null) {
-      if (!user?.id || !user.email) return Promise.resolve({ ok: false, err: 'Supabase did not return a valid user.' })
+      if (!user?.id) {
+        const error = 'Supabase did not return a valid user ID.'
+        setAuthProfileError(error)
+        setAuthReady(false)
+        return Promise.resolve({ ok: false, err: error })
+      }
       if (externalLoginRef.current?.id === user.id) return externalLoginRef.current.promise
       const epoch = ++authEpochRef.current
       pendingAuthUserRef.current = user

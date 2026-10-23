@@ -1,14 +1,17 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Link, useParams, useNavigate } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { useStore } from '../store.jsx'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
 import { SUBFOLDERS, displayOpportunityId } from '../seed.js'
 import { displayRole } from '../utils.js'
 import * as filestore from '../filestore.js'
-import { getConfig } from '../sharepoint.js'
+import { microsoftRequest } from '../microsoftApi.js'
+import { matchOpportunityFolder } from '../sharepointFolderMatch.js'
 import { Icon } from '../icons.jsx'
 import { PromptModal } from '../ui.jsx'
 import { useDocumentsNavigation } from '../ui/useDocumentsNavigation.js'
+
+const SharePointFilePreview = React.lazy(() => import('../AttachmentViewer.jsx').then(module => ({ default: module.BlobAttachmentViewer })))
 
 // SharePoint-inspired layered folders; business status remains visible in labels.
 function FolderIcon({ cls = 'open', size = 44 }) {
@@ -56,6 +59,115 @@ function FolderSection({ label, count, tone, expanded, onToggle, children }) {
   </section>
 }
 
+function SharePointDocuments({ store, search, statusFilter, sort, layout, collapsed, update, toggleGroup, pageRef }) {
+  const [path, setPath] = useState(['Opportunities'])
+  const [items, setItems] = useState(null)
+  const [error, setError] = useState('')
+  const [fileError, setFileError] = useState('')
+  const [refresh, setRefresh] = useState(0)
+  const [preview, setPreview] = useState(null)
+  const [openingFile, setOpeningFile] = useState('')
+  useEffect(() => {
+    let active = true
+    setItems(null); setError('')
+    microsoftRequest('status').then(result => {
+      if (!result.documents) throw new Error('SharePoint documents are not configured yet.')
+      return microsoftRequest('browseDocuments', { path: path.join('/') })
+    }).then(result => { if (active) setItems(result.items || []) })
+      .catch(failure => { if (active) setError(failure.message) })
+    return () => { active = false }
+  }, [path, refresh])
+  const openFile = async item => {
+    setOpeningFile(item.id)
+    setFileError('')
+    try {
+      const response = await microsoftRequest('browseDocument', { path: path.join('/'), itemId: item.id }, { raw: true })
+      setPreview({ filename: item.name, blob: await response.blob() })
+    } catch (failure) {
+      setFileError(failure.message)
+    } finally {
+      setOpeningFile('')
+    }
+  }
+  const atRoot = path.length === 1
+  const query = search.trim().toLowerCase()
+  const folders = (items || []).filter(item => item.folder).map(item => ({ ...item,
+    opportunity: atRoot ? matchOpportunityFolder(item.name, store.opportunities || []) : null,
+  }))
+  const filtered = folders.filter(item => !atRoot || [item.name, item.opportunity?.id, item.opportunity?.sellTo, item.opportunity?.oppName]
+    .some(value => String(value || '').toLowerCase().includes(query)))
+    .sort((a, b) => sort === 'customer' && atRoot
+      ? (a.opportunity?.sellTo || a.name).localeCompare(b.opportunity?.sellTo || b.name) || b.name.localeCompare(a.name)
+      : sort === 'ascending' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name))
+  const groups = [
+    { label: 'Open', cls: 'open' }, { label: 'WON', cls: 'won' },
+    { label: 'Closed', cls: 'lost' }, { label: 'Unlinked', cls: 'preserved' },
+  ]
+  const sections = groups.map(group => ({ ...group,
+    folders: filtered.filter(item => (item.opportunity ? groupFor(item.opportunity) : 'Unlinked') === group.label),
+  })).filter(group => group.folders.length && (statusFilter === 'All' || statusFilter === group.label))
+  const visibleCount = atRoot ? sections.reduce((sum, group) => sum + group.folders.length, 0) : folders.length + (items || []).filter(item => !item.folder).length
+  const card = (item, cls = 'open') => {
+    const status = item.opportunity ? groupFor(item.opportunity) : 'Unlinked'
+    return <button className="document-folder documents-sharepoint-card" key={item.id} disabled={openingFile === item.id}
+      onClick={() => item.folder ? setPath([...path, item.name]) : openFile(item)}
+      title={item.opportunity ? `${item.name} · ${item.opportunity.sellTo || ''}` : item.name}>
+      <span className="document-folder-main">{item.folder ? <FolderIcon cls={cls} size={58} /> : <Icon name="fileText" size={38} />}
+        <span className="document-folder-name"><strong>{atRoot && item.opportunity ? displayOpportunityId(item.opportunity.id) : item.name}</strong>
+          <span>{atRoot ? item.opportunity?.sellTo || 'No matching opportunity' : item.folder ? 'SharePoint folder' : 'SharePoint file'}</span></span>
+      </span>
+      <span className="document-folder-owner">{item.opportunity ? displayRole(item.opportunity.owner) : ''}</span>
+      <span className={`document-folder-status ${cls}`}>{atRoot ? status === 'WON' ? 'Won' : status : item.folder ? 'Folder' : 'File'}</span>
+      <span className="document-folder-tail"><Icon name="chevronRight" size={15} /></span>
+    </button>
+  }
+  return <div className="page documents-page" ref={pageRef}>
+    <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="folder" size={18} /> Documents</h2>
+    <nav className="documents-breadcrumb" aria-label="Folder path"><Icon name="cloud" size={17} />
+      <span>WINTRACK</span>{path.map((name, index) => <React.Fragment key={`${index}:${name}`}><Icon name="chevronRight" size={14} />
+        {index === path.length - 1 ? <span aria-current="page">{name}</span> : <button className="ghost" onClick={() => setPath(path.slice(0, index + 1))}>{name}</button>}
+      </React.Fragment>)}
+    </nav>
+    <header className="documents-heading"><div><h1>{atRoot ? 'Opportunity folders' : path.at(-1)}</h1>
+      <p>{atRoot ? 'Copied opportunity documents in SharePoint.' : 'Files in this SharePoint folder.'}</p></div>
+      <div className="documents-heading-actions">{!atRoot && <button className="ghost" onClick={() => setPath(path.slice(0, -1))}>Back</button>}
+        <button className="ghost" onClick={() => setRefresh(value => value + 1)}>Refresh</button>
+      </div>
+    </header>
+    {atRoot && <div className="documents-sticky-controls"><div className="documents-toolbar">
+      <label className="documents-search"><Icon name="search" size={18} /><input type="search" aria-label="Search opportunity folders"
+        placeholder="Search by customer or opportunity" value={search} onChange={e => update({ search: e.target.value }, true)} name="folders-search-opportunity-folders" /></label>
+      <label className="documents-sort">Sort by<select value={sort} onChange={e => update({ sort: e.target.value }, true)} aria-label="Sort folders" name="folders-sort-folders">
+        <option value="id">Opportunity ID: descending</option><option value="ascending">Opportunity ID: ascending</option><option value="customer">Customer name</option>
+      </select></label>
+      <div className="documents-view" role="group" aria-label="Folder view">
+        <button className="ghost" aria-label="Grid view" title="Grid view" aria-pressed={layout === 'grid'} onClick={() => update({ layout: 'grid' })}><Icon name="cards" size={17} /></button>
+        <button className="ghost" aria-label="List view" title="List view" aria-pressed={layout === 'list'} onClick={() => update({ layout: 'list' })}><Icon name="list" size={18} /></button>
+      </div>
+    </div><div className="documents-filterbar"><div className="documents-filters" role="group" aria-label="Filter folders by status">
+      {['All', ...groups.map(group => group.label)].map(label => <button className="ghost" key={label} aria-pressed={statusFilter === label}
+        onClick={() => update({ statusFilter: label }, true)}>{label === 'WON' ? 'Won' : label} <span>{label === 'All' ? folders.length : folders.filter(item => (item.opportunity ? groupFor(item.opportunity) : 'Unlinked') === label).length}</span></button>)}
+    </div><span className="documents-count" role="status">{visibleCount} {visibleCount === 1 ? 'folder' : 'folders'}</span></div></div>}
+    {error && <div role="alert" className="documents-empty"><h2>Could not load SharePoint files</h2><p>{error}</p><button onClick={() => setRefresh(value => value + 1)}>Retry</button></div>}
+    {fileError && <p role="alert" className="documents-error">Could not preview this file: {fileError}</p>}
+    {openingFile && <p role="status">Opening document preview…</p>}
+    {!items && !error && <p role="status">Loading SharePoint files…</p>}
+    {items && <div className={`documents-content documents-content--${layout}`}>
+      {atRoot ? sections.map(({ label, folders: rows, cls }) => <FolderSection key={label} label={label === 'WON' ? 'Won' : label} count={rows.length} tone={cls}
+        expanded={Boolean(query) || !collapsed.includes(label)} onToggle={() => toggleGroup(label)}>
+        {layout === 'list' && <div className="documents-list-head" aria-hidden="true"><span>Name / customer</span><span>Owner</span><span>Status</span><span /></div>}
+        <div className="documents-folders">{rows.map(item => card(item, cls))}</div>
+      </FolderSection>) : <div className="documents-folders">{items.map(item => card(item))}</div>}
+      {!visibleCount && <div className="documents-empty"><Icon name="folder" size={36} /><h2>{query && atRoot ? 'No matching folders' : 'No files in this SharePoint folder'}</h2>
+        <p>{query && atRoot ? 'Try another customer name or opportunity ID.' : 'The copied folder is empty.'}</p>
+        {atRoot && (query || statusFilter !== 'All') && <button onClick={() => update({ search: '', statusFilter: 'All' }, true)}>Clear filters</button>}</div>}
+    </div>}
+    {preview && <React.Suspense fallback={<p role="status">Preparing document preview…</p>}>
+      <SharePointFilePreview blob={preview.blob} filename={preview.filename} onClose={() => setPreview(null)} />
+    </React.Suspense>}
+  </div>
+}
+
 export default function Folders() {
   const store = useStore()
   const { scope } = useWorkspaceView()
@@ -65,12 +177,7 @@ export default function Folders() {
 
 function DocumentsBrowser({ store, scope, user }) {
   const { oppId, sub } = useParams()
-  const nav = useNavigate()
   const { search, statusFilter, sort, layout, collapsed, pageRef, update } = useDocumentsNavigation(user, scope)
-  const setSearch = value => update({ search: value }, true)
-  const setStatusFilter = value => update({ statusFilter: value }, true)
-  const setSort = value => update({ sort: value }, true)
-  const setLayout = value => update({ layout: value })
   const toggleGroup = label => update({ collapsed: collapsed.includes(label) ? collapsed.filter(item => item !== label) : [...collapsed, label] })
   const [confirmDel, setConfirmDel] = useState(null) // id of the item armed for deletion
   // The same component instance serves every /folders route — an armed delete
@@ -89,7 +196,6 @@ function DocumentsBrowser({ store, scope, user }) {
   const [cloudErr, setCloudErr] = useState('')
   const [prompt, setPrompt] = useState(null)
   const backend = filestore.activeBackend()
-  const spConnected = backend === 'sharepoint'
   // Cloud deletes run best-effort behind the store update; a failure surfaces
   // in the explorer bar but never blocks the UI.
   const cloud = fn => { fn().catch(e => setCloudErr(`File delete failed: ${e.message}`)) }
@@ -97,7 +203,7 @@ function DocumentsBrowser({ store, scope, user }) {
   // Cloud-backed files are the source of truth — merge the listing into the
   // local metadata cache so the subfolder views survive a reload.
   useEffect(() => {
-    if (!opp || !['sharepoint', 'supabase'].includes(filestore.activeBackend())) return
+    if (!opp || !['sharepoint', 'microsoft', 'supabase'].includes(filestore.activeBackend())) return
     let alive = true
     filestore.listOppFiles(opp).then(map => {
       if (!alive || !map) return
@@ -141,7 +247,7 @@ function DocumentsBrowser({ store, scope, user }) {
     event.stopPropagation()
     const tab = window.open('', '_blank', 'noopener')
     try {
-      const found = await filestore.getOppFile(opp, subfolder, file.name)
+      const found = await filestore.getOppFile(opp, subfolder, file)
       if (!found?.blob) throw new Error('The file could not be loaded.')
       const url = URL.createObjectURL(found.blob)
       if (tab) tab.location.href = url
@@ -156,104 +262,7 @@ function DocumentsBrowser({ store, scope, user }) {
     setPrompt({ kind: 'folder', title: 'Create subfolder', message: 'Enter a name for the new subfolder.', defaultValue: 'Site Photos' })
   }
 
-  // Root: the "Sales - Opportunities" wall, grouped by the four SharePoint status folders
-  if (!opp) {
-    const cfg = spConnected ? getConfig() : null
-    const scoped = store.opportunities.filter(o => scope !== 'my' || o.owner === store.role)
-    const query = search.trim().toLowerCase()
-    const matches = scoped.filter(o => [o.id, displayOpportunityId(o.id), o.sellTo, o.oppName]
-      .some(value => String(value || '').toLowerCase().includes(query)))
-      .sort((a, b) => sort === 'customer'
-        ? (a.sellTo || '').localeCompare(b.sellTo || '') || b.id.localeCompare(a.id)
-        : sort === 'ascending' ? a.id.localeCompare(b.id) : b.id.localeCompare(a.id))
-    const groups = [
-      { label: 'Open', cls: 'open' },
-      { label: 'WON', cls: 'won' },
-      { label: 'Closed', cls: 'lost' },
-    ]
-    const sections = groups.map(group => ({ ...group,
-      opps: matches.filter(o => groupFor(o) === group.label),
-    })).filter(group => group.opps.length && (statusFilter === 'All' || statusFilter === group.label))
-    const visibleCount = sections.reduce((sum, group) => sum + group.opps.length, 0)
-    // Preserved SharePoint folders remain separate from active opportunity records.
-    const notInList = Object.entries(store.spSync || {})
-      .filter(([id, e]) => e && e.folder === 'Not In Opp List' && id.toLowerCase().includes(query))
-      .sort(([a], [b]) => b.localeCompare(a))
-    return (
-      <div className="page documents-page" ref={pageRef}>
-        <h2 className="workspace-page-title workspace-page-title--topbar-duplicate"><Icon name="folder" size={18} /> Documents</h2>
-        <nav className="documents-breadcrumb" aria-label="Folder path">
-          <Icon name={spConnected ? 'cloud' : 'building'} size={17} />
-          <Link to="/folders">{spConnected ? cfg.siteHostname : 'ModAE Private Limited'}</Link>
-          <Icon name="chevronRight" size={14} />
-          <span>{spConnected ? cfg.rootFolder || 'Opportunities' : 'Sales - Opportunities'}</span>
-        </nav>
-        <header className="documents-heading">
-          <div><h1>Opportunity folders</h1><p>Every opportunity. All its documents, in one place.</p></div>
-          <button className="documents-create primary" onClick={() => nav('/new')} title="Create an opportunity to add its document folder">
-            <Icon name="plus" size={17} /> New opportunity
-          </button>
-        </header>
-        {cloudErr && <p role="alert" className="documents-error">{cloudErr}</p>}
-        <div className="documents-sticky-controls">
-        <div className="documents-toolbar">
-          <label className="documents-search"><Icon name="search" size={18} />
-            <input type="search" aria-label="Search opportunity folders" placeholder="Search by customer or opportunity" value={search} onChange={e => setSearch(e.target.value)} name="folders-search-opportunity-folders" />
-          </label>
-          <label className="documents-sort">Sort by
-            <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Sort folders" name="folders-sort-folders">
-              <option value="id">Opportunity ID: descending</option><option value="ascending">Opportunity ID: ascending</option><option value="customer">Customer name</option>
-            </select>
-          </label>
-          <div className="documents-view" role="group" aria-label="Folder view">
-            <button className="ghost" aria-label="Grid view" title="Grid view" aria-pressed={layout === 'grid'} onClick={() => setLayout('grid')}><Icon name="cards" size={17} /></button>
-            <button className="ghost" aria-label="List view" title="List view" aria-pressed={layout === 'list'} onClick={() => setLayout('list')}><Icon name="list" size={18} /></button>
-          </div>
-        </div>
-        <div className="documents-filterbar">
-          <div className="documents-filters" role="group" aria-label="Filter folders by status">
-            {['All', ...groups.map(g => g.label)].map(label => (
-              <button className="ghost" key={label} aria-pressed={statusFilter === label} onClick={() => setStatusFilter(label)}>
-                {label === 'WON' ? 'Won' : label} <span>{label === 'All' ? scoped.length : scoped.filter(o => groupFor(o) === label).length}</span>
-              </button>
-            ))}
-          </div>
-          <span className="documents-count" role="status">{visibleCount} {visibleCount === 1 ? 'folder' : 'folders'}</span>
-        </div>
-        </div>
-        <div className={`documents-content documents-content--${layout}`}>
-          {sections.map(({ label, opps, cls }) => (
-            <FolderSection key={label} label={label === 'WON' ? 'Won' : label} count={opps.length} tone={cls}
-              expanded={Boolean(query) || !collapsed.includes(label)} onToggle={() => toggleGroup(label)}>
-              {layout === 'list' && <div className="documents-list-head" aria-hidden="true"><span>Name / customer</span><span>Owner</span><span>Status</span><span /></div>}
-              <div className="documents-folders">{opps.map(o => (
-                <Link className="document-folder" key={o.id} to={`/folders/${o.id}`} title={`${displayOpportunityId(o.id)} · ${o.sellTo || ''} · ${o.oppName || ''}`}>
-                  <div className="document-folder-main"><FolderIcon cls={cls} size={58} />
-                    <span className="document-folder-name"><strong>{displayOpportunityId(o.id)}</strong><span>{o.sellTo || 'Customer not specified'}</span></span>
-                  </div>
-                  <span className="document-folder-owner">{displayRole(o.owner)}</span>
-                  <span className={`document-folder-status ${cls}`}>{label === 'WON' ? 'Won' : label}</span>
-                  <span className="document-folder-tail"><SyncPill sync={(store.spSync || {})[o.id]} /><Icon name="chevronRight" size={15} /></span>
-                </Link>
-              ))}</div>
-            </FolderSection>
-          ))}
-          {!visibleCount && <div className="documents-empty"><Icon name="folder" size={36} /><h2>{query ? 'No matching folders' : 'No folders in this view'}</h2><p>{query ? 'Try another customer name or opportunity ID.' : 'Folders appear here when opportunities are created.'}</p>{(query || statusFilter !== 'All') && <button onClick={() => update({ search: '', statusFilter: 'All' }, true)}>Clear filters</button>}</div>}
-          {statusFilter === 'All' && notInList.length > 0 && (
-            <FolderSection label="Preserved folders" count={notInList.length} expanded={Boolean(query) || !collapsed.includes('Preserved')} onToggle={() => toggleGroup('Preserved')}>
-              <p className="hint">Preserved SharePoint folders for removed opportunities.</p>
-              <div className="documents-preserved">{notInList.map(([id, e]) => (
-                <a className="document-folder" key={id} href={e.webUrl || undefined} target="_blank" rel="noreferrer">
-                  <div className="document-folder-main"><FolderIcon size={44} cls="preserved" /><span className="document-folder-name"><strong>{id}</strong><span>Folder preserved{e.ts ? ` · ${String(e.ts).slice(0, 10)}` : ''}</span></span></div>
-                </a>
-              ))}</div>
-            </FolderSection>
-          )}
-        </div>
-        <footer className="documents-footer"><Icon name="folder" size={14} /> Folders are created automatically with each opportunity.</footer>
-      </div>
-    )
-  }
+  if (!opp) return <SharePointDocuments store={store} search={search} statusFilter={statusFilter} sort={sort} layout={layout} collapsed={collapsed} update={update} toggleGroup={toggleGroup} pageRef={pageRef} />
 
   const folderPath = <nav className="documents-breadcrumb" aria-label="Folder path">
     <Link to="/folders">Opportunity folders</Link><Icon name="chevronRight" size={14} />
@@ -291,7 +300,7 @@ function DocumentsBrowser({ store, scope, user }) {
               )}
               {(files[subfolder] || []).map(fl => {
                 const isWorkbook = subfolder === 'Proposal' && fl.name.endsWith('.xlsx')
-                const href = fl.backend === 'supabase' ? '' : fl.webUrl || fl.url || fl.dataUrl
+                const href = ['supabase', 'microsoft'].includes(fl.backend) ? '' : fl.webUrl || fl.url || fl.dataUrl
                 const delId = `${opp.id}/${subfolder}/${fl.name}`
                 return (
                   <tr key={fl.name}
@@ -301,7 +310,7 @@ function DocumentsBrowser({ store, scope, user }) {
                       <Icon name={isWorkbook ? 'fileSheet' : 'fileText'} size={13} />{' '}
                       {isWorkbook ? <Link to={`/proposal/${opp.id}`}>{fl.name}</Link>
                         : href ? <a href={href} download={href.startsWith('data:') ? fl.name : undefined} target={href.startsWith('data:') ? undefined : '_blank'} rel="noreferrer" onClick={e => e.stopPropagation()}>{fl.name}</a>
-                        : fl.backend === 'supabase' || ['supabase', 'mock'].includes(backend) ? <a href="#" onClick={e => openSupabaseFile(fl, e)}>{fl.name}</a>
+                        : ['supabase', 'microsoft'].includes(fl.backend) || ['supabase', 'mock', 'microsoft'].includes(backend) ? <a href="#" onClick={e => openSupabaseFile(fl, e)}>{fl.name}</a>
                         : fl.name}
                     </td>
                     <td>{fl.date}</td><td>{fl.size}</td>

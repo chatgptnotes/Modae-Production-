@@ -21,7 +21,8 @@ test('short login view remains reachable and preserves email/password auth actio
   assert.match(login, /onSubmit=\{submitSignIn\}/)
   assert.match(login, /onSubmit=\{submitRegister\}/)
   assert.doesNotMatch(login, /Quick login|quickLogin|quickAccounts|ql-title|ql-grid|ql-btn/)
-  assert.doesNotMatch(login, /Sign in with Microsoft|microsoftSignIn|msNotice/)
+  assert.match(login, /Sign in with Microsoft/)
+  assert.match(login, /signInWithMicrosoft\(\)/)
 })
 
 test('password fields provide an accessible visibility toggle', () => {

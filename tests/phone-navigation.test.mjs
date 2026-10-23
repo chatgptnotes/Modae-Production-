@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 
 test('inbox list and detail routes always call the pagination hook before returning', () => {
   const source = readFileSync(new URL('../src/pages/Inbox.jsx', import.meta.url), 'utf8').split('export default function Inbox()')[1]
-  const pagination = source.indexOf('usePagedRows(mailboxRows')
+  const pagination = source.indexOf('usePagedRows(unifiedRows')
   const detailReturn = source.indexOf('if (sel) {')
   assert.ok(pagination > 0 && detailReturn > pagination, 'An early detail return changes the hook count when opening a lead')
 })

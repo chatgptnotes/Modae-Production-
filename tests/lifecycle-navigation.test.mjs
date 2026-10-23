@@ -179,10 +179,11 @@ test('commercial decisions appear before sourcing, not inside the proposal edito
 })
 
 test('source and opportunity details keeps pipeline metadata as a live read-only reference', () => {
-  const start = workbench.indexOf('function RequirementTab({ opp, onContinueToScope, onContinueToRate })')
+  const start = workbench.indexOf('function RequirementTab({ opp, onEditDetails, onContinueToScope, onContinueToRate })')
   const end = workbench.indexOf('// ---------------------------------------------------------------------------', start + 1)
   const requirement = workbench.slice(start, end)
   assert.match(requirement, /Reference only\. Update pipeline fields in Opportunity details/)
+  assert.match(requirement, /onEditDetails && <button type="button"[^>]*onClick=\{onEditDetails\}/)
   assert.match(requirement, /\['Stage', opp\.stage \|\| '—'\]/)
   assert.match(requirement, /\['Probability', opp\.prob \|\| '—'\]/)
   assert.match(requirement, /\['Equipment \/ Product Family', productDisplayLabel\(opp\.product\)/)

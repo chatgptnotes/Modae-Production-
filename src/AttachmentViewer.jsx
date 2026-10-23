@@ -190,6 +190,29 @@ function PdfPreview({ blob }) {
   )
 }
 
+export function BlobAttachmentViewer({ blob, filename, onClose }) {
+  const [url, setUrl] = useState('')
+  useEffect(() => {
+    const made = URL.createObjectURL(blob)
+    setUrl(made)
+    return () => { URL.revokeObjectURL(made); setUrl('') }
+  }, [blob])
+  const type = blob.type || ''
+  const body = isPdf(filename, type) ? <PdfPreview blob={blob} />
+    : isImage(filename, type) && url ? <div className="att-view-canvas"><img src={url} alt={filename} /></div>
+      : isOfficeDocument(filename, type) ? <OfficeDocumentPreview blob={blob} filename={filename} />
+        : isSpreadsheet(filename, type) ? <SpreadsheetPreview blob={blob} />
+          : isText(filename, type) ? <TextFilePreview blob={blob} />
+            : <p className="hint att-view-note">No inline preview for this file type. Download it to open the original.</p>
+  return <Modal title="Document preview" onClose={onClose} wide className={`attachment-viewer-modal ${isSpreadsheet(filename, type) ? 'workbook-preview-modal' : ''}`}>
+    <header className="att-view-file-head"><div className="att-view-file-icon"><Icon name="fileText" size={18} /></div>
+      <div className="att-view-file-copy"><strong title={filename}>{filename}</strong><span>SharePoint file</span></div></header>
+    <div className="att-view-body">{body}</div>
+    <footer className="att-view-foot">{url && <a className="btn" href={url} download={filename}><Icon name="download" size={13} /> Download</a>}
+      <button className="primary" onClick={onClose}>Close</button></footer>
+  </Modal>
+}
+
 export default function AttachmentViewer({ leadId, attachment, onClose, dialogTitle = 'Attachment preview' }) {
   // Default popup title: title="Attachment preview"
   const [blob, setBlob] = useState(null)

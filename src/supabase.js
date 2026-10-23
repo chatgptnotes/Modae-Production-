@@ -49,6 +49,7 @@ function makeClient() {
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: false,
+        flowType: 'pkce',
       },
     })
   } catch (e) {
@@ -59,6 +60,51 @@ function makeClient() {
 export const supabase = makeClient()
 
 export const supabaseAuth = supabase?.auth || null
+
+export async function signInWithMicrosoft() {
+  if (!supabase) throw new Error('Microsoft sign-in is unavailable in this workspace.')
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'azure',
+    options: { scopes: 'email', redirectTo: `${window.location.origin}/auth/callback` },
+  })
+  if (error) throw error
+}
+
+const microsoftLinkKey = 'wintrack-microsoft-link-auth-id'
+
+export async function linkMicrosoftIdentity() {
+  if (!supabase) throw new Error('Microsoft sign-in is unavailable in this workspace.')
+  const { data, error: userError } = await supabase.auth.getUser()
+  if (userError || !data?.user?.id) throw new Error('Sign in to your existing WinTrack account first.')
+  sessionStorage.setItem(microsoftLinkKey, data.user.id)
+  const { error } = await supabase.auth.linkIdentity({
+    provider: 'azure',
+    options: { scopes: 'email', redirectTo: `${window.location.origin}/auth/callback` },
+  })
+  if (error) { sessionStorage.removeItem(microsoftLinkKey); throw error }
+}
+
+export async function completeMicrosoftSignIn(location = window.location) {
+  if (location.pathname !== '/auth/callback') return false
+  const url = new URL(location.href)
+  const code = url.searchParams.get('code')
+  const linkedAuthId = sessionStorage.getItem(microsoftLinkKey)
+  sessionStorage.removeItem(microsoftLinkKey)
+  let error = url.searchParams.get('error_description') || url.searchParams.get('error') || ''
+  if (code && supabase) {
+    const result = await supabase.auth.exchangeCodeForSession(code)
+    error = result.error?.message || ''
+    if (!error && linkedAuthId && result.data?.user?.id !== linkedAuthId) {
+      await clearSupabaseSession()
+      error = 'Microsoft connected to a different WinTrack account. Sign in with your existing account and contact an administrator.'
+    }
+  } else if (!error) error = 'Microsoft did not return a sign-in code.'
+  const destination = linkedAuthId
+    ? error ? `/personal-settings?microsoft_error=${encodeURIComponent(error)}` : '/personal-settings?microsoft=connected'
+    : error ? `/?auth_error=${encodeURIComponent(error)}` : '/my-dashboard'
+  window.history.replaceState(null, '', destination)
+  return true
+}
 
 export async function changeSupabasePassword(accountId, currentPassword, password, confirmation, isCurrent) {
   if (!supabase) throw new Error('The login provider is not configured.')

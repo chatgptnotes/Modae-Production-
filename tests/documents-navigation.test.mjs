@@ -29,3 +29,11 @@ test('document preferences validate corrupt values and survive unavailable stora
   assert.equal(remounted.read().search,'pump')
   assert.equal(createDocumentsPreferences('alice','my',blocked,blocked).read().search,'')
 })
+
+test('unlinked SharePoint folder filter persists for the current tab', () => {
+  const local = storage(), session = storage()
+  const prefs = createDocumentsPreferences('alice', 'global', local, session)
+  prefs.save({ statusFilter: 'Unlinked', collapsed: ['Unlinked'] })
+  assert.equal(prefs.read().statusFilter, 'Unlinked')
+  assert.deepEqual(prefs.read().collapsed, ['Unlinked'])
+})

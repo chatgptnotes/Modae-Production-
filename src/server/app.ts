@@ -6,6 +6,8 @@ import adminIntegrationsHandler from '../../api/admin-integrations.js'
 import adminBackupsHandler from '../../api/admin-backups.js'
 import restoredFilesHandler from '../../api/restored-files.js'
 import userPreferencesHandler from '../../api/user-preferences.js'
+import addressValidationHandler from '../../api/address-validation.js'
+import { createMicrosoftHandlers } from '../../api/microsoft.js'
 import opportunityNumberHandler from '../../api/opportunity-number.js'
 import { convertOfficeToPdf } from '../../api/_office-convert.js'
 import { controller } from './controllers/legacy.js'
@@ -65,6 +67,8 @@ export function createApp({
   const workspaceCache = new WorkspaceCache(workspaceReader || createWorkspaceReader() || (async () => {
     throw new Error('Workspace cache is not configured.')
   }), createWorkspaceGenerationReader() || undefined)
+  const microsoft = createMicrosoftHandlers({ invalidate: () => workspaceCache.invalidate() })
+  microsoft.startAutomaticMail()
   const gateway = {
     authenticate: approvalAuth || configuredApprovalGateway?.authenticate,
     read: approvalReader || configuredApprovalGateway?.read,
@@ -81,6 +85,8 @@ export function createApp({
   app.use('/api/workspace/data', express.json({ limit: '32mb' }))
   app.use('/api/send-proposal-email', express.json({ limit: '32mb' }))
   app.use('/api/ai', express.json({ limit: '4mb' }))
+  app.use('/api/microsoft', express.json({ limit: '15mb' }))
+  app.use('/api/microsoft-auth', express.json({ limit: '32kb' }))
   app.use('/api/document-preview', express.raw({ type: 'application/octet-stream', limit: '10mb' }))
   app.use(express.json({ limit: '2mb' }))
   app.use(['/api/workspace/save','/api/workspace/import'], (req,res,next) => {
@@ -151,6 +157,12 @@ export function createApp({
   })
   app.post('/api/opportunity-number', controller(opportunityNumberHandler))
   app.post('/api/ai', ai)
+  app.get('/api/microsoft', controller(microsoft.handler))
+  app.post('/api/microsoft', controller(microsoft.handler))
+  app.get('/api/microsoft-notifications', controller(microsoft.notificationHandler))
+  app.post('/api/microsoft-notifications', controller(microsoft.notificationHandler))
+  app.post('/api/microsoft-auth', controller(microsoft.personalHandler))
+  app.get('/api/microsoft-auth/callback', controller(microsoft.personalHandler))
   app.post('/api/document-preview', async (req, res) => {
     const localDemo = process.env.NODE_ENV !== 'production'
       && String(req.get('x-wintrack-local-preview') || '').toLowerCase() === 'true'
@@ -186,6 +198,7 @@ export function createApp({
   })
   app.get('/api/app-version', appVersion)
   app.get('/api/locations', locations)
+  app.post('/api/locations/validate', controller(addressValidationHandler))
   app.post('/api/purge-workspace', async (req, res, next) => {
     try {
       await purgeWorkspace(req, res, next)

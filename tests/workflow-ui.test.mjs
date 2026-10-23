@@ -87,20 +87,20 @@ test('follow-up communications keep message bodies inside expandable rows', () =
   assert.doesNotMatch(workbench, /<div className="hint">\{c\.body\}<\/div>/)
 })
 
-test('completed workflow stages can be moved back with a recorded reason', () => {
+test('open opportunity details can be edited without moving a completed stage back', () => {
   const workbench = read('src/pages/Workbench.jsx')
+  assert.match(workbench, /canEditOpportunityDetails\(opp, store\.role, store\.canPerform\)/)
+  assert.match(workbench, /onEdit=\{\(\) => setEditingDetails\(true\)\}/)
+  assert.match(workbench, /<Modal title="Edit opportunity details"/)
+  assert.match(workbench, /<OpportunityDetailsEditor[^>]*opp=\{opp\}[^>]*store=\{store\}/)
+  assert.match(workbench, /const closeDetailsEditor = \(\) => \{/)
+  assert.match(workbench, /modalDetailsRef\.current\?\.confirmDiscard\(\)/)
   assert.match(workbench, /onBack=\{step => \{/)
-  assert.match(workbench, /onEdit=\{step => openBackwardTransition\(step\)\}/)
-  assert.match(workbench, /className="progress-edit-stage"/)
-  assert.match(workbench, /aria-label=\{`Edit \$\{steps\[activeIndex\]\?\.label \|\| 'reviewed stage'\}`\}/)
-  assert.doesNotMatch(workbench, /Reviewing completed stage:/)
-  assert.doesNotMatch(workbench, /Move back to \{activeStepConfig\?\.label \|\| 'this stage'\} to edit/)
-  assert.match(workbench, /targetIndex >= currentIndex\) return/)
   assert.match(workbench, /targetStep: step, reason: ''/)
   assert.match(workbench, /moveBackwardToStep\(transition\.targetStep/)
-  assert.match(workbench, /Returning from \{opp\.milestone\} to \{transition\.target\} is allowed for corrections/)
-  assert.match(workbench, /!reason\?\.trim\(\)/)
-  assert.match(workbench, /disabled=\{!transition\.reason\?\.trim\(\)\}/)
+  assert.match(workbench, /disabled=\{workflowReadOnly && viewTab !== 'comms'/)
+  const phone = read('src/pages/PhoneOpportunityViews.jsx')
+  assert.match(phone, /canEditDetails && <button[^>]*onClick=\{onEdit\}/)
 })
 
 test('Workbench waits for sync before showing not-found and keeps loaded hooks stable', () => {

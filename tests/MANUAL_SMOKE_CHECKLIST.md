@@ -571,3 +571,32 @@ Our Ref 2511096RS) are retained with the local reference documents.
 - Scan the sample spares enquiry. Supplier warranty/freight requirements and absent
   EMD must not become customer questions; unknown quantities/specifications must
   remain. Draft only relevant clarification questions and preserve sent history.
+
+### Microsoft 365 staging rollout
+
+- Sign in with an existing password account, connect Microsoft in Personal settings,
+  sign out, then use the Microsoft button. Confirm the Supabase user UUID, WinTrack
+  role, ownership and permissions are unchanged. Check inactive and unrostered users.
+- As an active Non-sales user, read and download from Shared Outlook on desktop
+  and phone. Confirm link and send controls are absent and forged API requests fail.
+- As a sales user, confirm leads and raw shared-mail messages appear in one
+  date-sorted Lead Inbox list on desktop and phone. Confirm All mail adds
+  unrepresented messages without duplicating lead emails. Confirm Compose,
+  Sync, attachment download and record linking remain available; `/mail` should
+  open the combined Lead Inbox.
+- As an editor, link one shared message to a visible lead and one to a visible
+  opportunity. Confirm an inaccessible record is rejected and no lead is created
+  merely by reading mail. Check links after refresh and concurrent linking.
+- On first Shared Outlook/Lead Inbox sync, confirm existing mailbox history is
+  skipped. Send a new sales enquiry with a readable PDF or spreadsheet and a
+  non-sales message; click Sync and confirm only the enquiry becomes a lead.
+  Check **All mail** to see the non-sales message in the same list, and confirm an unreadable or
+  oversized attachment is marked Needs review. With notifications configured,
+  confirm a new enquiry is processed automatically; without them, confirm Sync
+  catches it up manually.
+- Send one lead correspondence email through the shared mailbox and one from a
+  connected personal Outlook account. Confirm the actual From address and Sent
+  Items; a Graph acceptance message alone is not delivery confirmation.
+- With the Graph file flag enabled, list, upload, download and delete documents
+  under an authorized opportunity. Try an unauthorized opportunity and a forged
+  item ID; both must fail. Verify documents remain in the approved SharePoint root.

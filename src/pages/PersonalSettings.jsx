@@ -4,6 +4,7 @@ import { fontAvailable } from '../workspaceFonts.js'
 import { useWorkspaceFont } from '../ui/WorkspaceFontContext.jsx'
 import { useStore } from '../store.jsx'
 import ChangePasswordSettings from '../ui/ChangePasswordSettings.jsx'
+import { linkMicrosoftIdentity, supabase } from '../supabase.js'
 
 export default function PersonalSettings() {
   const store = useStore()
@@ -12,7 +13,20 @@ export default function PersonalSettings() {
   const [draft, setDraft] = useState(font)
   const [available, setAvailable] = useState(null)
   const [notice, setNotice] = useState('')
+  const [identityError, setIdentityError] = useState('')
+  const [microsoftLinked, setMicrosoftLinked] = useState(null)
+  const microsoftQuery = typeof window === 'undefined' ? new URLSearchParams() : new URLSearchParams(window.location.search)
   useEffect(() => { setDraft(font) }, [font, rev])
+  useEffect(() => {
+    let active = true
+    if (!supabase || !store.auth?.user) { setMicrosoftLinked(null); return }
+    supabase.auth.getUserIdentities().then(({ data, error }) => {
+      if (!active) return
+      if (error) { setIdentityError(error.message); setMicrosoftLinked(false) }
+      else setMicrosoftLinked((data?.identities || []).some(identity => identity.provider === 'azure'))
+    })
+    return () => { active = false }
+  }, [store.auth?.user?.id])
   useEffect(() => {
     let active = true
     setAvailable(null)
@@ -50,6 +64,16 @@ export default function PersonalSettings() {
         {remote && <button type="button" disabled={saving || loading} onClick={() => { setNotice(''); void refresh() }}>Reload settings</button>}
       </div>
     </div>
+    {supabase && store.auth?.user && <div className="personal-settings-card">
+      <h3>Microsoft sign-in</h3>
+      <p className="personal-settings-description">Connect Microsoft to this WinTrack account before using the Microsoft button on the sign-in page. Your WinTrack role and account ID stay the same.</p>
+      {identityError && <p role="alert">{identityError}</p>}
+      {microsoftQuery.get('microsoft_error') && <p role="alert">{microsoftQuery.get('microsoft_error')}</p>}
+      {microsoftQuery.get('microsoft') === 'connected' && <p role="status">Microsoft connected to your WinTrack account.</p>}
+      {microsoftLinked
+        ? <p role="status">Microsoft is connected to this account.</p>
+        : <button type="button" disabled={microsoftLinked === null} onClick={() => { setIdentityError(''); void linkMicrosoftIdentity().catch(error => setIdentityError(error.message)) }}>Connect Microsoft sign-in</button>}
+    </div>}
     {store.auth?.user && <ChangePasswordSettings key={`${store.auth.source}:${store.auth.user.id}`} />}
   </section>
 }

@@ -10,6 +10,7 @@ import { isActiveUser } from '../userManagement.js'
 import { supabase } from '../supabase.js'
 import { workspaceDeploymentHeaders } from '../workspaceDeployment.js'
 import PersonalSettings from './PersonalSettings.jsx'
+import Mail from './Mail.jsx'
 import './nonSalesWorkspace.css'
 
 const empty = () => ({ customerName: '', contactPerson: '', contactEmail: '', contactPhone: '', location: '', region: '', subject: '', body: '', assignedOwner: '', forwardingDepartment: '', source: '' })
@@ -103,8 +104,8 @@ export default function NonSalesWorkspace() {
   const location = useLocation()
   // Keep the form mounted while appearance settings are open, preserving drafts.
   return <div className="non-sales-workspace">
-    <header><strong>WinTrack ModAE</strong><nav aria-label="Main navigation"><NavLink to="/new-lead">New Lead</NavLink><NavLink to="/personal-settings">Personal settings</NavLink><button onClick={() => store.logout()}>Sign out</button></nav></header>
+    <header><strong>WinTrack ModAE</strong><nav aria-label="Main navigation"><NavLink to="/new-lead">New Lead</NavLink><NavLink to="/mail">Shared Outlook</NavLink><NavLink to="/personal-settings">Personal settings</NavLink><button onClick={() => store.logout()}>Sign out</button></nav></header>
     <div hidden={location.pathname !== "/new-lead"}><NewLead /></div>
-    <Routes><Route path="/new-lead" element={null} /><Route path="/personal-settings" element={<PersonalSettings />} /><Route path="*" element={<Navigate to="/new-lead" replace />} /></Routes>
+    <Routes><Route path="/new-lead" element={null} /><Route path="/mail" element={<Mail />} /><Route path="/personal-settings" element={<PersonalSettings />} /><Route path="*" element={<Navigate to="/new-lead" replace />} /></Routes>
   </div>
 }

@@ -12,7 +12,7 @@ test('active opportunity details remain editable only for the owner or admins', 
   const workbench = read('src/pages/Workbench.jsx')
   const store = read('src/store.jsx')
   assert.match(editor, /editable = true/)
-  assert.match(editor, /const canEdit = editable && store\.canPerform\?\.\('opportunities\.edit'\) !== false/ )
+  assert.match(editor, /const canEdit = editable && canEditOpportunityDetails\(opp, store\.role, store\.canPerform\)/)
   assert.match(editor, /if \(!canEdit\) return <OpportunityDetailsView/)
   assert.match(workbench, /opp\.status !== 'Closed'/)
   assert.match(workbench, /opp\.owner === store\.role \|\| isAdminRole\(store\.role\)/)

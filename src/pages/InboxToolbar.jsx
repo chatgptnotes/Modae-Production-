@@ -41,15 +41,17 @@ function ToolbarMenu({ label, className = '', trigger, items, disabled = false }
   </div>
 }
 
-export default function InboxToolbar({ query, onQuery, filterCount, onFilters, view, counts, onView, archive, onArchive, archiveCount, onRefresh, onNew, canCreate = true, actions, selectionCount }) {
+export default function InboxToolbar({ query, onQuery, filterCount, onFilters, view, counts, onView, archive, onArchive, archiveCount, onRefresh, onNew, canCreate = true, actions, selectionCount, allMail, onAllMail, onCompose, canCompose, mailFolder = 'inbox', onMailFolder, mailSender = 'shared', onMailSender, personalMail = false }) {
   return <div className="inbox-toolbar" role="group" aria-label="Inbox search and actions">
-    <div className="inbox-toolbar-search"><Icon name="search" size={19} /><input type="search" aria-label="Search mail" placeholder="Search leads…" value={query} onChange={event => onQuery(event.target.value)} name="inbox-toolbar-search-mail" />
+    <div className="inbox-toolbar-search"><Icon name="search" size={19} /><input type="search" aria-label="Search leads and email" placeholder="Search leads and email…" value={query} onChange={event => onQuery(event.target.value)} name="inbox-toolbar-search-mail" />
       <button type="button" className="inbox-toolbar-icon" aria-label="Filter leads" title={filterCount ? `${filterCount} active filters` : 'Filter leads'} aria-haspopup="dialog" onClick={onFilters}><Icon name="sliders" size={19} />{filterCount > 0 && <span className="inbox-filter-count">{filterCount}</span>}</button>
     </div>
     <ToolbarMenu label="Inbox view" className="inbox-view-trigger" disabled={archive}
       trigger={<><span>{archive ? 'Archive' : INBOX_VIEWS.find(item => item.key === view)?.label || 'All leads'}</span><Icon name="chevronDown" size={15} /></>}
       items={INBOX_VIEWS.map(item => ({ key: item.key, view: item.key, label: item.label, count: counts[item.key], checked: view === item.key, onClick: () => onView(item.key) }))} />
-    <button type="button" className="inbox-toolbar-icon" aria-label="Refresh inbox" title="Refresh inbox" onClick={onRefresh}><Icon name="refresh" size={20} /></button>
+    {!archive && mailFolder === 'inbox' && <label className="inbox-all-mail-toggle"><input type="checkbox" name="inbox-all-mail" checked={allMail} onChange={event => onAllMail(event.target.checked)} />All mail</label>}
+    {canCompose && <button type="button" className="inbox-toolbar-icon inbox-toolbar-compose" onClick={onCompose} aria-label="Compose shared mail" title="Compose shared mail"><Icon name="edit" size={18} /><span>Compose</span></button>}
+    <button type="button" className="inbox-toolbar-icon" aria-label="Sync shared mail and refresh leads" title="Sync shared mail and refresh leads" onClick={onRefresh}><Icon name="refresh" size={20} /></button>
     <ToolbarMenu label="More inbox actions" className="inbox-toolbar-icon" trigger={<><Icon name="moreHorizontal" size={20} />{selectionCount > 0 && <span className="inbox-filter-count">{selectionCount}</span>}</>}
       items={[{ label: archive ? 'Back to inbox' : `Archive (${archiveCount})`, onClick: onArchive }, ...actions]} />
     <button type="button" className="inbox-toolbar-new" aria-label="New Lead" aria-haspopup="dialog" disabled={!canCreate} onClick={onNew}><Icon name="plus" size={18} /><span>New Lead</span></button>

@@ -21,7 +21,7 @@ test('new enquiry action is disabled when lead creation is revoked', () => {
 })
 test('desktop toolbar shows only everyday actions and hides advanced menus initially', () => {
   const html = render()
-  for (const label of ['Search mail', 'Filter leads', 'Inbox view', 'Refresh inbox', 'More inbox actions', 'New Lead']) assert.ok(html.includes(`aria-label="${label}"`))
+  for (const label of ['Search leads and email', 'Filter leads', 'Inbox view', 'Sync shared mail and refresh leads', 'More inbox actions', 'New Lead']) assert.ok(html.includes(`aria-label="${label}"`))
   assert.doesNotMatch(html, /role="menu"|role="menuitem"|<select/)
   assert.match(html, /All leads/)
   assert.doesNotMatch(html, /Needs review|All statuses|All routes|Archive \(2\)/)

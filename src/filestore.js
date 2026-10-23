@@ -4,6 +4,7 @@ import { supabase } from './supabase.js'
 import { replaceUserFile, listUserFiles, getUserFile, deleteUserFile, deleteUserFiles } from './userFiles.js'
 import * as sp from './sharepoint.js'
 import { putLocalDocumentFile, getLocalDocumentFile, deleteLocalDocumentFile } from './localDocumentFiles.js'
+import { microsoftRequest, fileBase64 } from './microsoftApi.js'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -14,6 +15,7 @@ export function fmtSize(bytes) {
 }
 
 export function activeBackend() {
+  if (import.meta.env?.VITE_MICROSOFT_GRAPH_ENABLED === 'true') return 'microsoft'
   if (sp.isConfigured() && sp.getAccount()) return 'sharepoint'
   return supabase ? 'supabase' : 'mock'
 }
@@ -28,6 +30,11 @@ export async function uploadAdminTemplate(lane, file) {
 export async function uploadOppFile(opp, subfolder, file) {
   const backend = activeBackend()
   try {
+    if (backend === 'microsoft') {
+      const result = await microsoftRequest('upload', { oppId: opp.id, folder: subfolder, name: file.name, mimeType: file.type,
+        base64: await fileBase64(file) }, { method: 'POST' })
+      return { ...result.file, size: fmtSize(result.file.size), date: result.file.date || today() }
+    }
     if (backend === 'sharepoint') {
       // ensureOppFolder returns the folder's ACTUAL status location — upload
       // there so listFiles (which prefers the real location) sees the file.
@@ -57,6 +64,11 @@ export async function uploadOppFile(opp, subfolder, file) {
 // SharePoint is the source of truth for its files; other backends return null
 // so callers keep using the store's own file records.
 export async function listOppFiles(opp) {
+  if (activeBackend() === 'microsoft') {
+    const result = await microsoftRequest('documents', { oppId: opp.id })
+    return Object.fromEntries(Object.entries(result.folders || {}).map(([folder, files]) => [folder,
+      files.map(file => ({ ...file, size: fmtSize(file.size) }))]))
+  }
   if (activeBackend() === 'supabase') {
     const rows = await listUserFiles({ recordType: 'opportunity', recordId: opp.id, folder: null })
     return rows.reduce((out, row) => {
@@ -84,6 +96,12 @@ export async function listOppFiles(opp) {
 }
 
 export async function getOppFile(opp, subfolder, name) {
+  if (activeBackend() === 'microsoft') {
+    const record = typeof name === 'object' ? name : (await listOppFiles(opp))[subfolder]?.find(file => file.name === name)
+    if (!record?.itemId) throw new Error('The SharePoint document was not found.')
+    const response = await microsoftRequest('document', { oppId: opp.id, folder: subfolder, itemId: record.itemId }, { raw: true })
+    return { name: record.name, blob: await response.blob() }
+  }
   if (activeBackend() === 'mock') return getLocalDocumentFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, name })
   return getUserFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, fileName: name })
 }
@@ -91,6 +109,10 @@ export async function getOppFile(opp, subfolder, name) {
 export async function deleteOppFile(opp, subfolder, fileRec) {
   const backend = activeBackend()
   try {
+    if (backend === 'microsoft') {
+      await microsoftRequest('delete', { oppId: opp.id, folder: subfolder, itemId: fileRec.itemId }, { method: 'POST' })
+      return
+    }
     if (backend === 'sharepoint') {
       if (fileRec?.backend === 'supabase') await deleteUserFile({ recordType: 'opportunity', recordId: opp.id, folder: subfolder, fileName: fileRec.name })
       else if (fileRec && fileRec.itemId) await sp.deleteItem(fileRec.itemId)
@@ -111,6 +133,7 @@ export async function removeOppPrefix(oppId, subfolder = null) {
 }
 
 export async function ensureOppFolder(opp) {
+  if (activeBackend() === 'microsoft') return microsoftRequest('ensure', { oppId: opp.id }, { method: 'POST' })
   if (activeBackend() !== 'sharepoint') return
   try {
     await sp.ensureOppFolder(opp)
@@ -120,6 +143,7 @@ export async function ensureOppFolder(opp) {
 }
 
 export async function moveOppFolder(opp, from, to) {
+  if (activeBackend() === 'microsoft') return microsoftRequest('move', { oppId: opp.id, to }, { method: 'POST' })
   if (activeBackend() !== 'sharepoint') return
   try {
     await sp.moveOppFolder(opp, from, to)
@@ -133,6 +157,7 @@ export async function moveOppFolder(opp, from, to) {
 export async function removeOpp(opp) {
   const backend = activeBackend()
   try {
+    if (backend === 'microsoft') return microsoftRequest('move', { oppId: opp.id, to: 'Not In Opp List' }, { method: 'POST' })
     if (backend === 'sharepoint') {
       await sp.moveOppFolder(opp, sp.statusFolderFor(opp), 'Not In Opp List')
     } else if (backend === 'supabase') {

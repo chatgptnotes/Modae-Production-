@@ -61,7 +61,7 @@ export function projectWorkspace(state, user) {
   const projected = {
     config, workspaceGeneration: state.workspaceGeneration, demoData: false,
     opportunities: opportunitiesVisible ? (state.opportunities || []).map(row => canReadPricing(user, row, config, state) ? row : { ...pick(row, PUBLIC_OPPORTUNITY), ...(row.booking ? { booking: projectBooking(row.booking) } : {}) }) : [],
-    leads: leadVisible ? (state.leads || []).map(row => commercial || row.assignedOwner === user?.role ? row : pick(row, PUBLIC_LEAD)) : [],
+    leads: leadVisible ? (state.leads || []).map(row => commercial || row.assignedOwner === user?.role || row.sharedMailboxImport && !row.assignedOwner ? row : pick(row, PUBLIC_LEAD)) : [],
     users: freshUsers.map(row => pick(row, ['id', 'name', 'email', 'role', 'roles', 'status', ...(row.id === user.id ? ['authId'] : [])])),
     approvals: canAccessPage(user, 'approvals', config) ? (state.approvals || []).filter(row => commercial || row.needed?.includes(user?.role) || row.approver === user?.role || row.requestedBy === user?.role).map(row => canReadPricing(user,row,config,state) ? row : pick(row,['id','oppId','leadId','type','status','needed','approver','anyOf','requestedBy','ts','decisions','decisionTs','decisionNote','conditions','supersededBy','cancelledAt','cancelledBy','cancellationReason','__sv'])) : [],
     customers: canAccessPage(user, 'customers', config) || leadVisible ? state.customers || [] : [],

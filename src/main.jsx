@@ -9,6 +9,7 @@ import { DrawerProvider } from './drawer.jsx'
 import { registerSW } from './pwa.js'
 import { deploymentNeedsReset, resetAndReload, watchDeployment } from './deployment.js'
 import { KEY } from './appState.js'
+import { completeMicrosoftSignIn } from './supabase.js'
 import './styles.css'
 import './ui/workspaceHeadings.css'
 import './tablet/phoneDarkTheme.css'
@@ -20,6 +21,9 @@ async function boot() {
     await resetAndReload()
     return
   }
+  await completeMicrosoftSignIn().catch(error => {
+    window.history.replaceState(null, '', `/?auth_error=${encodeURIComponent(error?.message || 'Microsoft sign-in failed.')}`)
+  })
   try {
     if (localStorage.getItem('wintrack-backup-restore-pending')) {
       const { recoverLocalBackupRestore } = await import('./localBackupJournal.js')

@@ -256,6 +256,9 @@ directory convention, or validation requirement changes.
   lifecycle state, decrease sequence counters, or replace retained audit evidence.
 - AI credentials use server-only `INTEGRATIONS_ENCRYPTION_KEY`; archive signatures
   use `BACKUP_SIGNING_KEY`. Never add either secret to browser state or backups.
+- Microsoft mailbox links use server-only `records.entity = 'mail_links'` after
+  `20261022140000_microsoft_mail_links.sql`; every link read/write must pass
+  the active roster and projected lead/opportunity access checks in `api/microsoft.js`.
 
 ## Personal appearance preferences
 

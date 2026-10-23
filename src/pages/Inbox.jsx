@@ -1,6 +1,8 @@
 import LeadEvidence from '../ui/LeadEvidence.jsx'
 import AutosizeTextarea from '../ui/AutosizeTextarea.jsx'
 import LeadLocationInput from '../ui/LeadLocationInput.jsx'
+import LeadAddressAdvisory from '../ui/LeadAddressAdvisory.jsx'
+import { beginAddressExtraction, rememberAddressExtraction, leadAddressValidation, validateExtractedLeadLocations, checkLeadLocations } from '../leadAddressValidationApi.js'
 import { filterLeadMissing, leadMissingSource } from '../leadMissing.js'
 import { isLocalDemoSession } from '../authMode.js'
 import { workspaceSyncState } from '../workspaceSyncState.js'
@@ -31,6 +33,8 @@ import { listFiles } from '../leadBlobs.js'
 import AttachmentViewer from '../AttachmentViewer.jsx'
 import { inboxViewCounts, matchesInboxView } from './inboxViews.js'
 import InboxToolbar from './InboxToolbar.jsx'
+import { MailComposeDialog, SharedMessageDetails } from './Mail.jsx'
+import { useSharedMailbox } from '../sharedMailbox.js'
 import usePhoneLayout from '../tablet/usePhoneLayout.js'
 import PhoneFilters from '../tablet/PhoneFilters.jsx'
 import { PhoneInboxToolbar, PhoneLeadRow } from './PhoneInbox.jsx'
@@ -66,7 +70,9 @@ import { LEAD_LABELS, extractLabeledValue } from '../leadLabels.js'
 import CustomerPicker from '../CustomerPicker.jsx'
 import { findLeadById } from '../leadInboxSelection.js'
 import { useWorkspaceView } from '../ui/WorkspaceViewContext.jsx'
+import { canPerform } from '../accessPolicy.js'
 import { useWorkspaceFont } from '../ui/WorkspaceFontContext.jsx'
+import { DEFAULT_INBOX_PREVIEW_WIDTH, MIN_INBOX_PREVIEW_WIDTH, MAX_INBOX_PREVIEW_WIDTH } from '../userFontPreferences.js'
 export { matchCustomer, customerStatusForLead } from '../leadCustomerClass.js'
 // Common-mailbox lead inbox: AI parses each inquiry, a human decides whether it
 // becomes an opportunity (Qualify → registration / intake form) or is dropped.
@@ -82,38 +88,31 @@ function PreviewFieldText({ value }) {
   return parts.map((part, index) => <React.Fragment key={index}>{part}{/[@._/-]/.test(part) && <wbr />}</React.Fragment>)
 }
 
-function InboxLeadPreview({ lead: indexLead, collapsed, onToggle, toggleDisabled }) {
+function InboxLeadPreview({ lead: indexLead, onCollapse }) {
   const store = useStore(), storeRef = useRef(store)
   storeRef.current = store
   const [details, setDetails] = useState({ status: 'loading' })
   const [retry, setRetry] = useState(0)
   const expectedRev = store.workspaceLeadRevisions?.[indexLead.id] || 0
   useEffect(() => {
-    if (collapsed) return
     let active = true
     setDetails({ status: 'loading' })
     void storeRef.current.loadLeadDetails(indexLead.id, { expectedRev, force: retry > 0 }).then(ok => {
       if (active) setDetails({ status: ok ? 'ready' : 'error' })
     }).catch(() => { if (active) setDetails({ status: 'error' }) })
     return () => { active = false }
-  }, [indexLead.id, collapsed, expectedRev, retry])
+  }, [indexLead.id, expectedRev, retry])
   const lead = details.status === 'ready' ? store.loadedLead(indexLead.id) || indexLead : indexLead
   const nav = useNavigate()
   const [panel, setPanel] = useState('overview')
   const [viewing, setViewing] = useState(null)
   const converted = lead.status === 'Converted' && lead.oppId
   const fields = lead.ai?.fields || []
-  return <aside className={`mailbox-preview${collapsed ? ' mailbox-preview--collapsed' : ''}`} aria-label="Selected lead preview">
-    <div className="mailbox-preview-head">
-      {!collapsed && <><h2>Lead details</h2><span className={`pill ${PILL[lead.status] || 'Blue'}`}>{lead.status || 'Unknown'}</span></>}
-      <button type="button" className="mailbox-preview-toggle" onClick={onToggle} disabled={toggleDisabled}
-        aria-label={collapsed ? 'Expand Lead details' : 'Collapse Lead details'} title={collapsed ? 'Expand Lead details' : 'Collapse Lead details'}
-        aria-expanded={!collapsed} aria-controls="mailbox-preview-content">
-        <Icon name={collapsed ? 'chevronLeft' : 'chevronRight'} size={16} />
-        {collapsed && <span>Lead details</span>}
-      </button>
+  return <div className="inbox-lead-details" aria-label="Selected lead preview">
+    <div className="mailbox-preview-head"><h2>Lead details</h2><span className={`pill ${PILL[lead.status] || 'Blue'}`}>{lead.status || 'Unknown'}</span>
+      <button type="button" className="mailbox-preview-toggle" aria-label="Collapse Lead details" title="Collapse Lead details" onClick={onCollapse}><Icon name="chevronRight" size={16} /></button>
     </div>
-    <div className="mailbox-preview-content" id="mailbox-preview-content" hidden={collapsed}>
+    <div className="mailbox-preview-content">
     {details.status !== 'ready' ? <p role="status">{details.status === 'error' ? <>Could not load lead details. <button onClick={() => setRetry(n => n + 1)}>Retry</button></> : 'Loading lead details…'}</p> : <>
     <h3>{lead.subject || 'Untitled enquiry'}</h3>
     <p className="mailbox-preview-sender"><PreviewFieldText value={`${lead.sender || lead.from || 'Sender not recorded'} · ${ddMmmYY((lead.ts || '').slice(0, 10))}`} /></p>
@@ -148,7 +147,7 @@ function InboxLeadPreview({ lead: indexLead, collapsed, onToggle, toggleDisabled
     {viewing && <AttachmentViewer leadId={lead.id} attachment={viewing} onClose={() => setViewing(null)} />}
     </>}
     </div>
-  </aside>
+  </div>
 }
 export const isUnavailableAiSummary = lead => /^AI extraction was unavailable\b/i.test(String(lead?.ai?.summary || '').trim())
 
@@ -206,7 +205,14 @@ const ConfBadge = ({ c }) => (
 // The model returns the lead.ai shape the three-panel view already renders; we
 // only stamp state:'pending' on each field, because "AI proposes, humans decide"
 // is enforced by that state — nothing is accepted until someone accepts it.
-export async function extractLead({ from, subject, body, attachments = [], aiAttachments = [] }, store) {
+export async function extractLead(input, store) {
+  const context = beginAddressExtraction(store, input?.id)
+  const extracted = await readLeadSource(input, store)
+  rememberAddressExtraction(extracted, context)
+  return extracted
+}
+
+async function readLeadSource({ from, subject, body, attachments = [], aiAttachments = [] }, store) {
   const completeAiAttachments = await completeAiAttachmentPayload(attachments, aiAttachments)
   const attachmentText = (attachments || [])
     .filter(a => a.text?.trim())
@@ -952,7 +958,9 @@ function PasteLeadModal({ onClose }) {
         return
       }
       const id = 'LD-' + Date.now()
-      store.addLead({ ...mergeLeadIntake(extracted, newLead(id)), assignedOwner: assignedOwner || opportunityOwnerFor({location: customerLocation || extracted.sellToCustomerLocation || extracted.location || extracted.region || leadIdentity(extracted, extracted.ai?.fields).eucLocation, config:store.config}), duplicateRisk: 'Low' }, { scheduleSave: false })
+      const submittedLead = { ...mergeLeadIntake(extracted, newLead(id)), assignedOwner: assignedOwner || opportunityOwnerFor({location: customerLocation || extracted.sellToCustomerLocation || extracted.location || extracted.region || leadIdentity(extracted, extracted.ai?.fields).eucLocation, config:store.config}), duplicateRisk: 'Low' }
+      store.addLead(submittedLead, { scheduleSave: false })
+      validateExtractedLeadLocations(store, id, extracted, submittedLead)
       pendingLead.current = id
       store.recordAiAction(id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.extract', result: { completeness: extracted.completeness, missing: extracted.ai?.missing || [], route: extracted.route } })
       hold(id, files.map(f => f.file))
@@ -1151,6 +1159,7 @@ function LeadSourceContext({ lead, canAct, phoneLayout = false }) {
       lineItems: extracted.ai.lineItems || source.ai?.lineItems || [],
     } }
     store.updateLead(lead.id, next, detail)
+    validateExtractedLeadLocations(store, lead.id, extracted, next)
     store.recordAiAction(lead.id, { provider: store.config?.aiModel?.provider, model: store.config?.aiModel?.model, action: 'lead.re-extract', result: { completeness: next.completeness, missing: next.ai?.missing || [], route: next.route } })
     setReNote('Source context saved and extraction updated.')
     return true
@@ -1636,6 +1645,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
     // an unassigned lead keeps its prior suggested owner until a user changes it.
     next.suggestedOwner = routeOwnerForLocation(source.region || source.location, store.config, next.suggestedOwner || source.suggestedOwner)
     store.updateLead(lead.id, next, detail || '')
+    validateExtractedLeadLocations(store, lead.id, extracted, refreshedDraft)
     if (next.ai?.fields) {
       decisionDraftRef.current = refreshedDraft
       setDecisionDraft(refreshedDraft)
@@ -1880,7 +1890,7 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   }
 
   const missingInformationPanel = displayedMissing.length > 0 && (
-    <details className="compact-rail-section compact-missing-rail" open>
+    <details key={lead.id} className="compact-rail-section compact-missing-rail">
       <summary><span><Icon name="alert" size={13} /> Missing information</span><Icon name="chevronDown" size={13} /></summary>
       <div className="compact-rail-body">
         <ul className="ws-missing compact-missing-list">
@@ -2215,11 +2225,17 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
   }
 
   const updateDecisionField = (key, value) => {
+    if (['eucLocation', 'sellToCustomerLocation'].includes(key)) leadAddressValidation.invalidate(store.auth?.user?.id, lead.id, key)
     touchedLocationFieldsRef.current.add(key)
     setDecisionDraft(previous => ({ ...previous, [key]: value }))
     setDecisionErr('')
     setDecisionSaved(false)
   }
+
+  const addressAdvisory = field => <LeadAddressAdvisory account={store.auth?.user?.id} leadId={lead.id}
+    field={field} value={decisionDraft[field]} disabled={lead.status === 'Dropped'}
+    onCheck={() => checkLeadLocations(store, lead.id, { [field]: decisionDraft[field] })}
+    onApply={value => updateDecisionField(field, value)} />
 
   const detailContent = (
     <div className={compact ? 'compact-workflow-content' : ''}>
@@ -2519,8 +2535,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               {decisionAiStatus('sellTo')}
             </div>
           <label data-phone-field="Sell-to customer location"><span className="decision-field-heading">Sell To Customer Location </span>
-            <div className="decision-value-row"><input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
-              onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" name="inbox-sell-to-customer-location" /></div>
+            <LeadLocationInput value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
+              onChange={value => updateDecisionField('sellToCustomerLocation', value)} ariaLabel="Sell-to customer location or custom address"
+              onCheck={() => checkLeadLocations(store, lead.id, { sellToCustomerLocation: decisionDraft.sellToCustomerLocation })} name="inbox-sell-to-customer-location" />
+            {addressAdvisory('sellToCustomerLocation')}
           </label>
           <label><span className="decision-field-heading">Opportunity scope {decisionAiMeta('scope', false)}</span>
             <div className="decision-value-row"><AutosizeTextarea className="lead-scope-input" value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
@@ -2532,7 +2550,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
             </label>
           <label><span className="decision-field-heading">EUC Location  {decisionAiMeta('eucLocation', false)}</span>
             <LeadLocationInput value={decisionDraft.eucLocation} disabled={lead.status === 'Dropped'}
+              onCheck={() => checkLeadLocations(store, lead.id, { eucLocation: decisionDraft.eucLocation })}
               onChange={value => updateDecisionField('eucLocation', value)} status={decisionAiStatus('eucLocation')} name="inbox-search-euc-city-or-state" />
+            {addressAdvisory('eucLocation')}
           </label>
           <label><span className="decision-field-heading">Contact Person  {decisionAiMeta('contactPerson', false)}</span>
             <div className="decision-value-row"><input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
@@ -2882,8 +2902,10 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
                   onChange={value => updateDecisionField('sellTo', value)} allowCreate={false} label="" ariaLabel="Sell to customer" />
               </label>
               <label>Sell To Customer Location
-                <input type="text" value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
-                  onChange={e => updateDecisionField('sellToCustomerLocation', e.target.value)} placeholder="Enter customer location" name="inbox-sell-to-customer-location-2" />
+                <LeadLocationInput value={decisionDraft.sellToCustomerLocation} disabled={lead.status === 'Dropped'}
+                  onChange={value => updateDecisionField('sellToCustomerLocation', value)} ariaLabel="Sell-to customer location or custom address"
+                  onCheck={() => checkLeadLocations(store, lead.id, { sellToCustomerLocation: decisionDraft.sellToCustomerLocation })} name="inbox-sell-to-customer-location-2" />
+                {addressAdvisory('sellToCustomerLocation')}
               </label>
               <label>Opportunity scope {decisionAiMeta('scope')}
                 <AutosizeTextarea className="lead-scope-input" value={decisionDraft.scope} disabled={lead.status === 'Dropped'}
@@ -2895,7 +2917,9 @@ function AiLeadDetail({ lead, compact = false, compactItems = [], phoneLayout = 
               </label>
               <label>EUC Location  {decisionAiMeta('eucLocation')}
                 <LeadLocationInput value={decisionDraft.eucLocation} disabled={lead.status === 'Dropped'}
+                  onCheck={() => checkLeadLocations(store, lead.id, { eucLocation: decisionDraft.eucLocation })}
                   onChange={value => updateDecisionField('eucLocation', value)} status={decisionAiStatus('eucLocation')} name="inbox-search-euc-city-or-state-2" />
+                {addressAdvisory('eucLocation')}
               </label>
               <label>Contact Person  {decisionAiMeta('contactPerson')}
                 <input type="text" value={decisionDraft.contactPerson} disabled={lead.status === 'Dropped'}
@@ -3347,13 +3371,30 @@ export default function Inbox() {
   const { OPP_TYPES, labelFor } = useFieldLists()
 
   const store = useStore()
+  const preferences = useWorkspaceFont()
+  const sharedMail = useSharedMailbox({ embedded: true })
   const narrow = usePhoneLayout()
   const phone = narrow && store.viewMode === 'tablet'
   const [phoneFilterPanel, setPhoneFilterPanel] = useState(false)
+  const [phoneMailDetails, setPhoneMailDetails] = useState(false)
+  const [inboxRailTab, setInboxRailTab] = useState('folders')
+  const [previewWidth, setPreviewWidth] = useState(DEFAULT_INBOX_PREVIEW_WIDTH)
+  const previewWidthRef = useRef(previewWidth)
+  previewWidthRef.current = previewWidth
+  useEffect(() => { if (preferences?.loaded) setPreviewWidth(preferences.inboxPreviewWidth || DEFAULT_INBOX_PREVIEW_WIDTH) }, [preferences?.loaded, preferences?.inboxPreviewWidth])
+  const previewResizeRef = useRef(null)
+  const resizePreview = event => {
+    const bounds = previewResizeRef.current?.getBoundingClientRect()
+    if (!bounds) return
+    setPreviewWidth(Math.max(MIN_INBOX_PREVIEW_WIDTH, Math.min(MAX_INBOX_PREVIEW_WIDTH, Math.round(bounds.right - event.clientX - 3))))
+  }
+  const savePreviewWidth = width => { void preferences?.saveLayout({ inboxPreviewWidth: width }).catch(() => {}) }
+  const resetPreviewWidth = () => { setPreviewWidth(DEFAULT_INBOX_PREVIEW_WIDTH); savePreviewWidth(DEFAULT_INBOX_PREVIEW_WIDTH) }
   const { scope, setScope } = useWorkspaceView()
   const nav = useNavigate()
   const { leadId } = useParams()
   const [q, setQ] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:q`, '')
+  useEffect(() => { sharedMail.setSearch(q) }, [q])
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   const [statusF, setStatusF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:statusF`, '')
   const [routeF, setRouteF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:routeF`, '')
@@ -3364,10 +3405,7 @@ export default function Inbox() {
   const [ownerF, setOwnerF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:ownerF`, '')
   const [ageF, setAgeF] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:ageF`, '')
   const [selectedIds, setSelectedIds] = useState(() => new Set())
-  const [previewLeadId, setPreviewLeadId] = useState('')
-  const preferences = useWorkspaceFont()
-  const leadDetailsCollapsed = preferences.leadDetailsCollapsed
-  const toggleLeadDetails = () => { void preferences.saveLayout({ leadDetailsCollapsed: !leadDetailsCollapsed }).catch(() => {}) }
+  const [activeUnifiedRowId, setActiveUnifiedRowId] = useState('')
   const [inboxView, setInboxView] = useState('all')
   const [openHeaderFilter, setOpenHeaderFilter] = useState(null)
   const [repairingAi, setRepairingAi] = useState(false)
@@ -3383,6 +3421,9 @@ export default function Inbox() {
   const [simQuality, setSimQuality] = useState('')
   const [simRegister, setSimRegister] = useState(true)
   const globalScope = scope === 'global'
+  const refreshInbox = async () => {
+    await sharedMail.refresh()
+  }
   const [showArchive, setShowArchive] = useListState(`${store.auth?.user?.id || store.role}:${store.role}:${scope}:inbox:showArchive`, false)
   const mailboxListRef = useRef(null)
   const mailboxScrollRef = useRef(null)
@@ -3502,10 +3543,6 @@ export default function Inbox() {
   // list can explain when matching leads are outside My View.
   const ownerVisible = l => globalScope || l.assignedOwner === store.role || l.suggestedOwner === store.role
   const matchesFilters = l => {
-    if (q) {
-      const hay = `${l.subject} ${l.sender || ''} ${l.from} ${l.ref || ''}`.toLowerCase()
-      if (!hay.includes(q.toLowerCase())) return false
-    }
     if (statusF && l.status !== statusF) return false
     const source = l.source || l.channel || ''
     const route = l.route || l.parse?.oppType || ''
@@ -3532,13 +3569,62 @@ export default function Inbox() {
     }
     return true
   }
-  const rows = listSource.filter(l => ownerVisible(l) && matchesFilters(l))
+  const matchesQuery = (subject, sender, preview = '', ref = '') => {
+    if (!q.trim()) return true
+    return `${subject || ''} ${sender || ''} ${preview || ''} ${ref || ''}`.toLocaleLowerCase().includes(q.trim().toLocaleLowerCase())
+  }
+  const rows = listSource.filter(l => ownerVisible(l) && matchesFilters(l) && matchesQuery(l.subject, l.sender || l.from, l.body, l.ref))
   const viewCounts = inboxViewCounts(rows)
   const activeInboxView = showArchive ? 'all' : inboxView
-  const mailboxRows = rows.filter(lead => matchesInboxView(lead, activeInboxView)).sort(compareInboxRows)
-  const { pageSize, pagerRef } = useViewportPageSize(mailboxRows.length, { enabled: !phone && !sel, listRef: mailboxListRef, rowSelector: ':scope > .mail-row', leadingSelector: ':scope > .mail-column-head', heightSource: 'list' })
-  const { pagedRows: pageRows, pagination } = usePagedRows(mailboxRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF, activeInboxView, showArchive]), phone ? 10 : pageSize, pagerRef)
-  useWorkspaceWatch((sel ? [sel] : pageRows).map(r=>({entity:'leads',id:r.id})), sel ? [] : [{entity:'leads',page:0,pageSize:50}])
+  const mailboxRows = (sharedMail.folder === 'inbox' ? rows.filter(lead => matchesInboxView(lead, activeInboxView)) : []).sort(compareInboxRows)
+  const allStoredLeads = [...(store.leads || []), ...(store.leadArchive || [])]
+  const representedMessageIds = new Set(allStoredLeads.map(lead => lead.mailboxMessageId).filter(Boolean))
+  const representedLeadIds = new Set(allStoredLeads.map(lead => String(lead.id)))
+  const emailRows = !showArchive && (sharedMail.folder !== 'inbox' || sharedMail.allMail) ? sharedMail.messages.filter(message => {
+    if (sharedMail.folder === 'inbox' && (representedMessageIds.has(message.id) || (message.link?.targetType === 'lead' && representedLeadIds.has(String(message.link.targetId))))) return false
+    if (!matchesQuery(message.subject, message.from?.emailAddress?.address, message.bodyPreview)) return false
+    const age = ageDays(message.receivedDateTime)
+    if (receivedF && (receivedF === 'today' ? !isTodayIST(message.receivedDateTime) : age == null || age > (receivedF === '7' ? 6 : 29))) return false
+    if (ageF) {
+      if (age == null) return false
+      if (ageF === 'today' && !isTodayIST(message.receivedDateTime)) return false
+      if (ageF === '7' && (age < 7 || age > 29)) return false
+      if (ageF === '30' && age < 30) return false
+    }
+    return true
+  }).map(message => ({ kind: 'email', id: `email:${message.id}`, ts: message.receivedDateTime, message })) : []
+  const unifiedRows = [...mailboxRows.map(lead => ({ kind: 'lead', id: `lead:${lead.id}`, ts: inboxReceivedAt(lead), lead })), ...emailRows]
+    .sort((a, b) => compareInboxRows(a, b))
+  const { pageSize, pagerRef } = useViewportPageSize(unifiedRows.length, { enabled: !phone && !sel, listRef: mailboxListRef, rowSelector: ':scope > .mail-row', leadingSelector: ':scope > .mail-column-head', heightSource: 'list' })
+  const { pagedRows: pageRows, pagination } = usePagedRows(unifiedRows, JSON.stringify([scope, q, statusF, sourceF, routeF, urgencyF, ownerF, completenessF, receivedF, ageF, activeInboxView, showArchive, sharedMail.allMail, sharedMail.messages.length]), phone ? 10 : pageSize, pagerRef)
+  const visibleLeadRows = pageRows.filter(row => row.kind === 'lead').map(row => row.lead)
+  const activeUnifiedRow = pageRows.find(row => row.id === activeUnifiedRowId)
+  const previewLead = activeUnifiedRow?.kind === 'lead' ? activeUnifiedRow.lead : null
+  const railTab = (inboxRailTab === 'lead' && !previewLead) || (inboxRailTab === 'message' && !sharedMail.selected) ? 'folders' : inboxRailTab
+  useEffect(() => { if (railTab !== inboxRailTab) setInboxRailTab(railTab) }, [railTab, inboxRailTab])
+  const openCompose = () => {
+    const linkedLeadId = sharedMail.selected?.link?.targetType === 'lead' ? sharedMail.selected.link.targetId : ''
+    sharedMail.setLeadId(previewLead?.id || linkedLeadId)
+    sharedMail.setComposeOpen(true)
+  }
+  const setAllMailView = value => {
+    sharedMail.setAllMail(value)
+    setActiveUnifiedRowId('')
+    sharedMail.clearSelection()
+    setInboxRailTab('folders')
+  }
+  useEffect(() => {
+    if (activeUnifiedRow?.kind === 'email') {
+      setInboxRailTab('message')
+      if (sharedMail.selected?.id !== activeUnifiedRow.message.id) sharedMail.open(activeUnifiedRow.message)
+    }
+    else if (activeUnifiedRow?.kind === 'lead' && sharedMail.selected) sharedMail.clearSelection()
+    else if (!activeUnifiedRow) {
+      if (sharedMail.selected) sharedMail.clearSelection()
+      setInboxRailTab('folders')
+    }
+  }, [activeUnifiedRow?.id])
+  useWorkspaceWatch((sel ? [sel] : visibleLeadRows).map(r=>({entity:'leads',id:r.id})), sel ? [] : [{entity:'leads',page:0,pageSize:50}])
   if (sel) {
     if (phone && sel.ai) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><StructuredLeadDetail key={sel.id} lead={sel} converted={sel.status === 'Converted'} phoneLayout /></WorkspaceRecordBoundary>
     if (phone) return <WorkspaceRecordBoundary records={[{entity:"leads",id:sel.id}]}><LegacyLeadDetail key={sel.id} lead={sel} phoneLayout /></WorkspaceRecordBoundary>
@@ -3569,8 +3655,13 @@ export default function Inbox() {
       </div>
     )
   }
+  if (phone && phoneMailDetails && sharedMail.selected) return <div className="page mailbox-page phone-inbox-page phone-mail-detail-page">
+    <button type="button" className="phone-mail-back" onClick={() => { setPhoneMailDetails(false); sharedMail.clearSelection() }}><Icon name="chevronLeft" size={18} /> Back to inbox</button>
+    {sharedMail.error && <p role="alert" className="err-text">{sharedMail.error}</p>}
+    <SharedMessageDetails mailbox={sharedMail} canEditMailRecords={canPerform(store.auth?.user, 'leads.edit', store.config) || canPerform(store.auth?.user, 'opportunities.edit', store.config)} />
+    <MailComposeDialog mailbox={sharedMail} canSendLeadMail={canPerform(store.auth?.user, 'leads.edit', store.config)} />
+  </div>
   const inboxPagination = React.cloneElement(pagination, { alwaysVisible: true, label: 'Inbox pages' })
-  const previewLead = pageRows.find(lead => String(lead.id) === previewLeadId) || pageRows[0]
   const dateFilterActive = !!receivedF || !!ageF
   const inboxInsights = [
     { count: mailboxRows.filter(lead => lead.status === 'New' && (lead.ai?.fields || []).some(field => field.state === 'pending' || field.state === 'needs-review')).length, label: 'leads need field review', tone: 'warning' },
@@ -3579,7 +3670,7 @@ export default function Inbox() {
   ]
   const staleAiLeads = (store.leads || []).filter(isUnavailableAiSummary)
   // Rows this view would show if they were yours. Surfaced rather than dropped.
-  const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l) && matchesInboxView(l, activeInboxView)).length
+  const hiddenByOwner = listSource.filter(l => !ownerVisible(l) && matchesFilters(l) && matchesQuery(l.subject, l.sender || l.from, l.body, l.ref) && matchesInboxView(l, activeInboxView)).length
   const toggleSelected = id => setSelectedIds(prev => {
     const next = new Set(prev)
     if (next.has(id)) next.delete(id); else next.add(id)
@@ -3587,8 +3678,8 @@ export default function Inbox() {
   })
   const selectVisible = () => setSelectedIds(prev => {
     const next = new Set(prev)
-    const allSelected = pageRows.length > 0 && pageRows.every(l => next.has(l.id))
-    pageRows.forEach(l => allSelected ? next.delete(l.id) : next.add(l.id))
+    const allSelected = visibleLeadRows.length > 0 && visibleLeadRows.every(l => next.has(l.id))
+    visibleLeadRows.forEach(l => allSelected ? next.delete(l.id) : next.add(l.id))
     return next
   })
   const setReadForSelected = read => {
@@ -3596,7 +3687,7 @@ export default function Inbox() {
     setSelectedIds(new Set())
   }
   const selectAllVisible = () => {
-    setSelectedIds(new Set(pageRows.map(lead => lead.id)))
+    setSelectedIds(new Set(visibleLeadRows.map(lead => lead.id)))
   }
   const clearSelection = () => {
     setSelectedIds(new Set())
@@ -3815,7 +3906,7 @@ export default function Inbox() {
   const filterSelect = (...args) => filterMenu(...args)
 
   return (
-    <div className={`page mailbox-page${phone ? ' phone-inbox-page' : ' mailbox-page--desktop'}`}>
+    <div className={`page mailbox-page mailbox-page--unified${phone ? ' phone-inbox-page' : ' mailbox-page--desktop'}`}>
       {clearSimulatedConfirm && <ConfirmModal title="Clear simulated leads" tone="danger"
         message={`Clear ${simulatedLeadCount} simulated lead${simulatedLeadCount === 1 ? '' : 's'}? Only rows generated by this simulator go. Seeded and hand-entered leads stay, and a simulated lead already converted to an opportunity is kept.`}
         confirmLabel="Clear simulated leads" onClose={() => setClearSimulatedConfirm(false)} onConfirm={clearSimulated} />}
@@ -3825,19 +3916,23 @@ export default function Inbox() {
           <p className="hint">{showArchive ? 'Discarded lead archive' : scope === 'my' ? 'Your assigned leads · AI structures, humans decide' : 'Common sales mailbox · AI structures, humans decide'}</p>
         </div>
       </div>
-      {phone && <PhoneInboxToolbar store={store} query={q} onQuery={setQ} view={inboxView}
+      {phone && <PhoneInboxToolbar store={store} query={q} onQuery={value => { setQ(value); sharedMail.setSearch(value) }} view={inboxView}
         onView={view => { setInboxView(view); setSelectedIds(new Set()) }} archive={showArchive}
         onArchive={() => { setShowArchive(value => !value); setSelectedIds(new Set()) }}
         selecting={mobileFiltersOpen} onSelecting={() => setMobileFiltersOpen(value => !value)}
-        onRefresh={() => store.refreshSharedData()} onFilters={() => setPhoneFilterPanel(true)}
+        onRefresh={refreshInbox} onFilters={() => setPhoneFilterPanel(true)}
+        allMail={sharedMail.allMail} onAllMail={setAllMailView} mailFolder={sharedMail.folder} onMailFolder={sharedMail.setFolder} mailSender={sharedMail.sender} onMailSender={sharedMail.setSender} personalMail={Boolean(sharedMail.status?.personalMail)}
+        canCompose={canPerform(store.auth?.user, 'leads.edit', store.config)} onCompose={openCompose}
         filterCount={[statusF, routeF, sourceF, ownerF, urgencyF, receivedF, completenessF, ageF].filter(Boolean).length}
         onNew={() => setPasteOpen(true)} />}
 
-      {!phone && <InboxToolbar query={q} onQuery={setQ} view={inboxView} counts={viewCounts}
+      {!phone && <InboxToolbar query={q} onQuery={value => { setQ(value); sharedMail.setSearch(value) }} view={inboxView} counts={viewCounts}
         onView={view => { setInboxView(view); setSelectedIds(new Set()) }}
         archive={showArchive} archiveCount={(store.leadArchive || []).length}
         onArchive={() => { setShowArchive(value => !value); setSelectedIds(new Set()) }}
-        onRefresh={() => { void store.refreshSharedData() }} onFilters={() => setPhoneFilterPanel(true)}
+        onRefresh={() => { void refreshInbox() }} onFilters={() => setPhoneFilterPanel(true)}
+        allMail={sharedMail.allMail} onAllMail={setAllMailView} mailFolder={sharedMail.folder} onMailFolder={sharedMail.setFolder} mailSender={sharedMail.sender} onMailSender={sharedMail.setSender} personalMail={Boolean(sharedMail.status?.personalMail)}
+        canCompose={canPerform(store.auth?.user, 'leads.edit', store.config)} onCompose={openCompose}
         filterCount={[statusF, routeF, sourceF, ownerF, urgencyF, receivedF, completenessF, ageF].filter(Boolean).length}
         onNew={() => setPasteOpen(true)} canCreate={store.canPerform?.('leads.create') !== false} selectionCount={selectedIds.size}
         actions={[
@@ -3848,6 +3943,9 @@ export default function Inbox() {
           { label: 'Delete selected leads', onClick: deleteSelected, disabled: !selectedIds.size || store.canPerform?.('records.delete') === false },
           ...(staleAiLeads.length ? [{ label: repairingAi ? 'Repairing AI summaries…' : `Repair ${staleAiLeads.length} stale AI summaries`, onClick: repairStaleAi, disabled: repairingAi }] : []),
         ]} />}
+      {sharedMail.error && <p role="alert" className="err-text microsoft-mail-message">{sharedMail.error}</p>}
+      {sharedMail.notice && <p role="status" className="hint microsoft-mail-message">{sharedMail.notice}</p>}
+      {sharedMail.status && !sharedMail.status.sharedMail && <p role="status" className="hint microsoft-mail-message">Shared Outlook is not configured on this server yet. Lead Inbox is still available.</p>}
       {pasteOpen && <PasteLeadModal onClose={() => setPasteOpen(false)} />}
       {phoneFilterPanel && <PhoneFilters title="Filter leads" className={phone ? '' : 'inbox-filter-dialog'} showCancel={!phone} onClose={() => setPhoneFilterPanel(false)} fields={[
         { key: 'status', label: 'Status', value: statusF, options: [['', 'All statuses'], ...STATUS_OPTIONS] },
@@ -3939,14 +4037,14 @@ export default function Inbox() {
         </Modal>
       )}
 
-      <div className={`mailbox-split${previewLead && !phone ? leadDetailsCollapsed ? ' mailbox-split--collapsed-preview' : '' : ' mailbox-split--no-preview'}`}>
+      <div ref={previewResizeRef} style={{ '--inbox-preview-width': `${previewWidth}px` }} className={`mailbox-split ${phone ? 'mailbox-split--no-preview' : railTab === 'folders' ? 'inbox-rail-compact' : 'inbox-rail-expanded'}`}>
       <div className="mailbox-list-panel">
       <div className="mailbox-list" ref={mailboxListRef} id="mailbox-lead-list" onScroll={updateMailboxScrollMetrics}>
         {phone && mobileFiltersOpen && <div className="phone-inbox-selection" role="group" aria-label="Selected lead actions"><button type="button" onClick={selectAllVisible}>Select visible</button><button type="button" onClick={() => setReadForSelected(true)} disabled={showArchive || !selectedIds.size}>Mark read</button><button type="button" onClick={() => setReadForSelected(false)} disabled={showArchive || !selectedIds.size}>Mark unread</button><button type="button" onClick={deleteSelected} disabled={!selectedIds.size || store.canPerform?.('records.delete') === false}>Delete</button><button type="button" onClick={() => { clearSelection(); setMobileFiltersOpen(false) }}>Done</button><span>{selectedIds.size} selected</span></div>}
         {!phone && mobileFiltersOpen && <button type="button" className="mobile-record-view" aria-expanded={mobileFiltersOpen} onClick={() => setMobileFiltersOpen(false)}>Done selecting</button>}
         <div className="mail-column-head" data-mobile-open={mobileFiltersOpen}>
           <div className="mail-list-toolbar">
-          <label className="mail-check"><input type="checkbox" checked={pageRows.length > 0 && pageRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible messages" name="inbox-select-visible-messages" /></label>
+          <label className="mail-check"><input type="checkbox" checked={visibleLeadRows.length > 0 && visibleLeadRows.every(l => selectedIds.has(l.id))} onChange={selectVisible} aria-label="Select visible leads" name="inbox-select-visible-messages" /></label>
           {selectedIds.size > 0 && <span className="mail-selection-count">{selectedIds.size} selected</span>}
           </div>
           <span className="mail-head-filter-cell">{filterMenu('received', receivedF, setReceivedF, 'Received date', [['today', 'Today'], ['7', 'Last 7 days'], ['30', 'Last 30 days']], 'Date', 'All dates')}</span>
@@ -3958,16 +4056,42 @@ export default function Inbox() {
           <span className="mail-head-filter-cell mail-status-head">{filterMenu('status', statusF, setStatusF, 'Status', STATUS_OPTIONS, 'Status', 'All statuses')}</span>
           <span className="mail-head-filter-cell mail-age-head">{filterMenu('age', ageF, setAgeF, 'Age', [['today', 'Today'], ['7', '7–29 days'], ['30', '30+ days']], 'Age', 'All ages')}</span>
         </div>
-        {pageRows.map(l => {
+        {pageRows.map(row => {
+          if (row.kind === 'email') {
+            const message = row.message
+            const classification = message.triage?.classification
+            const label = classification === 'needs_review' ? 'Needs review' : classification === 'not_lead' ? 'Not a lead' : classification === 'lead' ? 'Lead email' : 'Unclassified'
+            const mailDate = message.sentDateTime || message.receivedDateTime
+            const age = ageDays(mailDate)
+            const displaySender = sharedMail.folder === 'sent' ? (message.toRecipients || []).map(recipient => recipient.emailAddress?.address).filter(Boolean).join(', ') || 'No recipient' : message.from?.emailAddress?.address || 'Unknown sender'
+            const openEmail = () => { setActiveUnifiedRowId(row.id); if (phone) setPhoneMailDetails(true) }
+            if (phone) return <button key={row.id} type="button" className={`phone-email-row${activeUnifiedRow?.id === row.id ? ' is-selected' : ''}`} onClick={openEmail}>
+              <span className="phone-email-icon"><Icon name="mail" size={18} /></span>
+              <span className="phone-email-copy"><b>{displaySender}</b><strong>{message.subject || '(no subject)'}</strong><small>{message.bodyPreview || 'No preview available'}</small><span className="phone-email-status">{label}</span></span>
+              <time>{mailDate ? ddMmmYY(mailDate.slice(0, 10)) : '—'}</time>
+            </button>
+            return <div key={row.id} className={`mail-row unified-email-row${!message.isRead ? ' unread' : ''}${activeUnifiedRow?.id === row.id ? ' preview-active' : ''}`} role="button" tabIndex={0} aria-label={`Open email ${message.subject || 'without subject'}`} onClick={() => setActiveUnifiedRowId(row.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setActiveUnifiedRowId(row.id) } }}>
+              <span className="mail-check" aria-hidden="true" />
+              <button type="button" className={`mail-star ${message.flag?.flagStatus === 'flagged' ? 'starred' : ''}`} aria-label={message.flag?.flagStatus === 'flagged' ? 'Remove star' : 'Star'} onClick={event => { event.stopPropagation(); void sharedMail.mailAction(message.flag?.flagStatus === 'flagged' ? 'unstar' : 'star', message) }}><Icon name="star" size={15} /></button>
+              <div className="mail-date"><b>{ddMmmYY((mailDate || '').slice(0, 10))}</b><small>{receivedTime(mailDate)}</small></div>
+              <div className="mail-sender"><b>{sharedMail.folder === 'sent' ? 'Sent' : 'Email'}</b><small>{displaySender}</small></div>
+              <div className="mail-content"><div className="mail-content-stack"><b className="mail-subject-title">{message.subject || '(no subject)'}</b><small>{message.bodyPreview || 'No preview available'}</small></div></div>
+              <div><Chip tone="grey">{label}</Chip></div><div>—</div><div>—</div><div className="mail-owner">—</div>
+              <div className="mail-status"><span className={`pill ${classification === 'needs_review' ? 'Amber' : classification === 'not_lead' ? 'Grey' : 'Blue'}`}>{label}</span></div>
+              <div className="mail-age">{age == null ? '—' : age === 0 ? 'Today' : `${age} d old`}</div>
+            </div>
+          }
+          const l = row.lead
           const completeness = l.completeness ?? (l.parse?.confidence != null ? Math.round(l.parse.confidence * 100) : null)
           const route = l.route || l.parse?.oppType || '—'
           const unread = l.status === 'New' && !l.readAt
           const age = ageDays(l.ts)
-          if (phone) return <PhoneLeadRow key={l.id} lead={l} archived={showArchive} selecting={mobileFiltersOpen}
+          if (phone) return <PhoneLeadRow key={row.id} lead={l} archived={showArchive} selecting={mobileFiltersOpen}
             selected={selectedIds.has(l.id)} onSelect={() => toggleSelected(l.id)}
-            onOpen={() => nav('/inbox/' + l.id)} onStar={() => store.updateLead(l.id, { starred: !l.starred })} />
+            onOpen={() => { sharedMail.clearSelection(); nav('/inbox/' + l.id) }} onStar={() => store.updateLead(l.id, { starred: !l.starred })} />
+          const openLeadPreview = () => { setActiveUnifiedRowId(row.id); sharedMail.clearSelection(); setInboxRailTab('lead') }
           return (
-            <div key={l.id} className={`mail-row ${unread ? 'unread' : ''} ${selectedIds.has(l.id) ? 'selected' : ''} ${String(previewLead?.id) === String(l.id) ? 'preview-active' : ''}`} role="button" tabIndex={0} aria-label={`Open ${l.subject}`} onClick={() => nav('/inbox/' + l.id)} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); nav('/inbox/' + l.id) } }}>
+            <div key={row.id} className={`mail-row ${unread ? 'unread' : ''} ${selectedIds.has(l.id) ? 'selected' : ''} ${activeUnifiedRow?.id === row.id ? 'preview-active' : ''}`} role="button" tabIndex={0} aria-label={`Open ${l.subject}`} onClick={openLeadPreview} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openLeadPreview() } }}>
               <label className="mail-check" onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.has(l.id)} onChange={() => toggleSelected(l.id)} aria-label={`Select ${l.subject}`} name="inbox-checkbox" /></label>
               <button className={`mail-star ${l.starred ? 'starred' : ''}`} title={l.starred ? 'Remove star' : 'Star'} onClick={e => { e.stopPropagation(); store.updateLead(l.id, { starred: !l.starred }) }}><Icon name="star" size={15} /></button>
               <div className="mail-date"><b>{ddMmmYY((l.ts || '').slice(0, 10))}</b><small>{receivedTime(l.ts)}</small></div>
@@ -3993,7 +4117,7 @@ export default function Inbox() {
             </div>
           )
         })}
-        {!mailboxRows.length && (
+        {!unifiedRows.length && (
           <div className="mail-empty">
             <Icon name="mail" size={28} />
              {hiddenByOwner > 0 ? <>
@@ -4012,7 +4136,7 @@ export default function Inbox() {
         ref={mailboxScrollRef}
         className={`mailbox-horizontal-scrollbar${mailboxHasHorizontalOverflow ? ' is-visible' : ''}`}
         role="scrollbar"
-        aria-label="Scroll lead list horizontally"
+          aria-label="Scroll combined inbox horizontally"
         aria-controls="mailbox-lead-list"
         aria-orientation="horizontal"
         aria-valuemin={0}
@@ -4028,13 +4152,52 @@ export default function Inbox() {
         <span className="mailbox-horizontal-scrollbar-thumb" style={{ width: `${mailboxThumbWidth}px`, transform: `translateX(${mailboxThumbLeft}px)` }} />
       </div>
       </div>
-      {previewLead && !phone && <InboxLeadPreview key={previewLead.id} lead={previewLead} collapsed={leadDetailsCollapsed} onToggle={toggleLeadDetails} toggleDisabled={!preferences.loaded || preferences.saving} />}
+      {!phone && <aside className={`inbox-right-rail${railTab === 'folders' ? ' inbox-right-rail--compact' : ' inbox-right-rail--expanded'}`} aria-label="Inbox side panel">
+        <nav className="inbox-rail-icons" aria-label="Mail folders and details">
+          <div className="inbox-rail-detail-icons" role="group" aria-label="Inbox details">
+            <button type="button" title="Lead details" aria-label="Lead details" aria-pressed={railTab === 'lead'} disabled={!previewLead}
+              onClick={() => setInboxRailTab('lead')}><Icon name="fileText" size={19} /></button>
+            {sharedMail.selected && <button type="button" title="Message details" aria-label="Message details" aria-pressed={railTab === 'message'}
+              onClick={() => setInboxRailTab('message')}><Icon name="mail" size={19} /></button>}
+          </div>
+          <div className="inbox-rail-folder-icons" role="group" aria-label="Outlook folders">
+            {[
+              ['inbox', 'inbox', 'Inbox'], ['send', 'sent', 'Sent'], ['edit', 'drafts', 'Drafts'],
+              ['star', 'starred', 'Starred'], ['archive', 'archive', 'Archive'], ['ban', 'spam', 'Spam'], ['trash', 'trash', 'Trash'],
+            ].map(([icon, folder, label]) => <button type="button" key={folder} title={label} aria-label={label} aria-current={sharedMail.folder === folder ? 'page' : undefined}
+              onClick={() => { setInboxRailTab('folders'); sharedMail.setFolder(folder) }}><Icon name={icon} size={19} /></button>)}
+          </div>
+          {sharedMail.status?.personalMail && <button type="button" className="inbox-rail-account" title={sharedMail.sender === 'shared' ? 'Switch to My Outlook' : 'Switch to shared mailbox'}
+            aria-label={sharedMail.sender === 'shared' ? 'Switch to My Outlook' : 'Switch to shared mailbox'}
+            onClick={() => sharedMail.setSender(sharedMail.sender === 'shared' ? 'personal' : 'shared')}><Icon name={sharedMail.sender === 'shared' ? 'users' : 'inbox'} size={19} /></button>}
+        </nav>
+        {railTab !== 'folders' && <button type="button" className="inbox-preview-resizer" role="separator" aria-orientation="vertical"
+          aria-label="Resize lead preview" aria-valuemin={MIN_INBOX_PREVIEW_WIDTH} aria-valuemax={MAX_INBOX_PREVIEW_WIDTH} aria-valuenow={previewWidth}
+          tabIndex={0} title="Drag to resize; Home resets to default" onDoubleClick={resetPreviewWidth}
+          onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); resizePreview(event) }}
+          onPointerMove={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) resizePreview(event) }}
+          onPointerUp={event => { if (event.currentTarget.hasPointerCapture(event.pointerId)) { event.currentTarget.releasePointerCapture(event.pointerId); savePreviewWidth(previewWidthRef.current) } }}
+          onPointerCancel={() => savePreviewWidth(previewWidthRef.current)}
+          onKeyDown={event => {
+            if (event.key === 'Home') { event.preventDefault(); resetPreviewWidth() }
+            else if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.preventDefault()
+              const width = Math.max(MIN_INBOX_PREVIEW_WIDTH, Math.min(MAX_INBOX_PREVIEW_WIDTH, previewWidth + (event.key === 'ArrowLeft' ? 20 : -20)))
+              setPreviewWidth(width)
+            }
+          }} onKeyUp={event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') savePreviewWidth(previewWidthRef.current) }} />}
+        {railTab === 'lead' && previewLead && <div className="inbox-rail-detail-pane"><InboxLeadPreview key={previewLead.id} lead={previewLead} onCollapse={() => setInboxRailTab('folders')} /></div>}
+        {railTab === 'message' && sharedMail.selected && <div className="inbox-rail-detail-pane"><SharedMessageDetails mailbox={sharedMail} canEditMailRecords={canPerform(store.auth?.user, 'leads.edit', store.config) || canPerform(store.auth?.user, 'opportunities.edit', store.config)} /></div>}
+      </aside>}
       </div>
       {inboxPagination}
+      {sharedMail.cursor && <button type="button" className="microsoft-mail-load-more" onClick={() => void sharedMail.load(sharedMail.cursor)} disabled={sharedMail.busy}>{sharedMail.busy ? 'Loading…' : 'Load more shared mail'}</button>}
       {!showArchive && <WorkspaceInsights signals={inboxInsights} />}
       <p className="hint" style={{ marginTop: 8 }}>
         Dropped leads are kept as a minimal record — reason and source only — for future demand analytics.
       </p>
+      {sharedMail.busy && !sharedMail.hasLoaded && <p role="status" className="hint">Loading shared mail…</p>}
+      <MailComposeDialog mailbox={sharedMail} canSendLeadMail={canPerform(store.auth?.user, 'leads.edit', store.config)} />
     </div>
   )
 }

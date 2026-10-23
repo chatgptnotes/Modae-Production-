@@ -69,6 +69,15 @@ test('sidebar choices restore independently per account and survive a font chang
  assert.equal(other.leadDetailsCollapsed, false)
 })
 
+test('inbox preview width is bounded and persists per account', async () => {
+ const cache = storage()
+ const session = createFontPreferenceSession({ key: 'local:a', storage: cache })
+ await session.saveLayout({ inboxPreviewWidth: 560 })
+ assert.equal(createFontPreferenceSession({ key: 'local:a', storage: cache }).getSnapshot().inboxPreviewWidth, 560)
+ assert.equal(createFontPreferenceSession({ key: 'local:b', storage: cache }).getSnapshot().inboxPreviewWidth, 420)
+ await assert.rejects(session.saveLayout({ inboxPreviewWidth: 800 }), /valid sidebar preference/)
+})
+
 test('sidebar save is optimistic and rolls back on failure without changing font', async () => {
  const pending = deferred()
  const session = createFontPreferenceSession({ key: 'a', remote: true, request: async method => method === 'GET'

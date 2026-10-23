@@ -137,6 +137,7 @@ function TabletWorkspace() {
       <Route path="/opportunities" element={<TabletGate page="tracker"><Opportunities /></TabletGate>} />
       <Route path="/my" element={<TabletGate page="my"><MyOpps /></TabletGate>} />
       <Route path="/inbox" element={<TabletGate page="inbox"><Inbox /></TabletGate>} />
+      <Route path="/mail" element={<Navigate to="/inbox" replace />} />
       <Route path="/inbox/:leadId" element={<TabletGate page="inbox"><Inbox /></TabletGate>} />
       <Route path="/register/:leadId" element={<TabletGate page="inbox"><Register /></TabletGate>} />
       <Route path="/opp/:oppId" element={<TabletGate page="tracker"><Workbench /></TabletGate>} />

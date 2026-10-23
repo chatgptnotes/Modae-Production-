@@ -1,10 +1,16 @@
 import { validFont } from './fontChoices.js'
 export { FONT_CHOICES, validFont } from './fontChoices.js'
 export const fontPreferenceKey = key => `wintrack-font:${encodeURIComponent(key)}`
+export const DEFAULT_INBOX_PREVIEW_WIDTH = 420
+export const MIN_INBOX_PREVIEW_WIDTH = 320
+export const MAX_INBOX_PREVIEW_WIDTH = 720
 export const normalizeUserPreferences = value => ({
   font: validFont(value?.font) ? value.font : 'candara',
   sidebarCompact: value?.sidebarCompact === true,
   leadDetailsCollapsed: value?.leadDetailsCollapsed === true,
+  inboxPreviewWidth: Number.isFinite(value?.inboxPreviewWidth)
+    ? Math.max(MIN_INBOX_PREVIEW_WIDTH, Math.min(MAX_INBOX_PREVIEW_WIDTH, Math.round(value.inboxPreviewWidth)))
+    : DEFAULT_INBOX_PREVIEW_WIDTH,
 })
 const readCache = (storage, key) => {
   try { return normalizeUserPreferences(JSON.parse(storage?.getItem(fontPreferenceKey(key)) || 'null')) } catch { return normalizeUserPreferences(null) }
@@ -56,8 +62,12 @@ export function createFontPreferenceSession({ key, remote = false, storage, requ
       return saveChanges({ font })
     },
     async saveLayout(patch) {
-      if (!patch || !Object.keys(patch).length || Object.entries(patch).some(([field, value]) =>
-        !['sidebarCompact', 'leadDetailsCollapsed'].includes(field) || typeof value !== 'boolean')) {
+      const keys = Object.keys(patch || {})
+      const validLayout = keys.length > 0 && Object.entries(patch).every(([field, value]) =>
+        ['sidebarCompact', 'leadDetailsCollapsed'].includes(field) && typeof value === 'boolean')
+      const validPreviewWidth = keys.length === 1 && Number.isInteger(patch?.inboxPreviewWidth)
+        && patch.inboxPreviewWidth >= MIN_INBOX_PREVIEW_WIDTH && patch.inboxPreviewWidth <= MAX_INBOX_PREVIEW_WIDTH
+      if (!validLayout && !validPreviewWidth) {
         throw new Error('Choose a valid sidebar preference.')
       }
       return saveChanges(patch, true)

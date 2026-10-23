@@ -55,6 +55,7 @@ import usePhoneLayout from '../tablet/usePhoneLayout.js'
 import { PhoneOpportunityProgress } from './PhoneOpportunityViews.jsx'
 import PhoneTaskFocus from './PhoneTaskFocus.jsx'
 import { hasValidatedUploadedWorkbook, validatedWorkbookPreview } from '../proposal/validatedWorkbook.js'
+import { canEditOpportunityDetails } from '../opportunityEditAccess.js'
 
 const statusPill = s =>
   s === 'Approved' ? 'Green' : s === 'Rejected' ? 'Red' : s === 'Approved with conditions' ? 'Amber' : 'Blue'
@@ -171,13 +172,13 @@ const titleCase = value => String(value || '').toLowerCase().split(/\s+/).map((w
   return small ? word : word.charAt(0).toUpperCase() + word.slice(1)
 }).join(' ').replace(/\bBoq\b/g, 'BOQ').replace(/\bKyc\b/g, 'KYC').replace(/\bRfq\b/g, 'RFQ')
 
-function OpportunityProgress({ activeStep, completedThrough, reviewing = false, onStep, onBack, onNext, onEdit, allowFutureNavigation = false, steps = WORKFLOW_STEPS }) {
+function OpportunityProgress({ activeStep, completedThrough, reviewing = false, onStep, onBack, onNext, onEdit, canEditDetails = false, allowFutureNavigation = false, steps = WORKFLOW_STEPS }) {
   const narrow = usePhoneLayout()
   const store = useStore()
   const activeIndex = steps.findIndex(step => step.slug === activeStep)
   const currentIndex = reviewing ? completedThrough : activeIndex
   const currentStep = steps[currentIndex]
-  if (narrow && store.viewMode === 'tablet') return <PhoneOpportunityProgress {...{ activeStep, completedThrough, reviewing, onStep, onBack, onNext, onEdit, allowFutureNavigation, steps }} />
+  if (narrow && store.viewMode === 'tablet') return <PhoneOpportunityProgress {...{ activeStep, completedThrough, reviewing, onStep, onBack, onNext, onEdit, canEditDetails, allowFutureNavigation, steps }} />
   return (
     <nav className="opportunity-progress" aria-label="Opportunity progress">
       <div className="progress-head">
@@ -192,9 +193,9 @@ function OpportunityProgress({ activeStep, completedThrough, reviewing = false, 
             <Icon name="chevronLeft" size={17} />
           </button>
           <span>{reviewing ? `Review: ${steps[activeIndex]?.label}` : steps[activeIndex]?.label}</span>
-          {reviewing && <button type="button" className="progress-edit-stage" onClick={() => onEdit?.(steps[activeIndex])}
-            aria-label={`Edit ${steps[activeIndex]?.label || 'reviewed stage'}`} title={`Edit ${steps[activeIndex]?.label || 'reviewed stage'}`}>
-            Edit stage
+          {canEditDetails && <button type="button" className="progress-edit-stage" onClick={onEdit}
+            aria-label="Edit opportunity details" title="Edit opportunity details">
+            Edit opportunity details
           </button>}
           <button type="button" className="progress-arrow" disabled={activeIndex < 0 || activeIndex >= steps.length - 1}
             aria-label="Next workflow step" title="Next workflow step"
@@ -353,6 +354,13 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
   const [pendingTransition, setPendingTransition] = useState(null)
   const [createdNotice, setCreatedNotice] = useState(() => searchParams.get('created') === '1')
   const detailsRef = useRef(null)
+  const modalDetailsRef = useRef(null)
+  const [editingDetails, setEditingDetails] = useState(false)
+  useEffect(() => setEditingDetails(false), [opp.id])
+  const closeDetailsEditor = () => {
+    if (modalDetailsRef.current?.confirmDiscard() === false) return
+    setEditingDetails(false)
+  }
 
   const dismissCreatedNotice = () => {
     setCreatedNotice(false)
@@ -411,6 +419,8 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
   const activeStepConfig = workflowBySlug[activeStep]
   const viewTab = activeStepConfig?.tab || 'overview'
   const workflowReadOnly = reviewingCompletedStep || viewingFutureStep
+  const canEditDetails = canEditOpportunityDetails(opp, store.role, store.canPerform)
+  const showDetailsAction = canEditDetails && !viewingFutureStep && (viewTab !== 'overview' || workflowReadOnly)
   useEffect(() => {
     if (tab !== 'overview' || requestedStep !== activeStep) {
       nav(`/opp/${opp.id}?step=${encodeURIComponent(activeStep)}`, { replace: true })
@@ -769,8 +779,9 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
       </div>
       </SummaryShell>
       <OpportunityProgress steps={workflowSteps} activeStep={activeStep} completedThrough={persistedStepIndex} reviewing={workflowReadOnly}
+        canEditDetails={showDetailsAction}
         allowFutureNavigation={serviceOpenNavigation}
-        onEdit={step => openBackwardTransition(step)}
+        onEdit={() => setEditingDetails(true)}
         onStep={selectStep}
         onBack={step => {
           const activeIndex = workflowSteps.findIndex(item => item.slug === activeStep)
@@ -778,6 +789,9 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
           else selectStep(step.slug)
         }}
         onNext={nextWorkflowStep} />
+      {editingDetails && canEditDetails && <Modal title="Edit opportunity details" onClose={closeDetailsEditor} wide>
+        <OpportunityDetailsEditor ref={modalDetailsRef} opp={opp} store={store} />
+      </Modal>}
       {phone && activeStep !== workflowSteps[0]?.slug && <button type="button" className="phone-opportunity-details-link" onClick={() => selectStep(workflowSteps[0].slug)}>Opportunity details<Icon name="chevronRight" size={16} /></button>}
       {transition && (
         <Modal title={transition.kind === 'blocked' ? `Cannot move from ${opp.milestone} to ${transition.target}` : `Return to ${transition.target} for correction`} onClose={() => setTransition(null)} wide>
@@ -837,8 +851,8 @@ function WorkbenchWorkspace({ oppId, tab = 'overview', store, searchParams, opp,
       <fieldset className={`wb-body workflow-edit-boundary ${workflowReadOnly ? 'workflow-edit-boundary--readonly' : ''}`} disabled={workflowReadOnly && viewTab !== 'comms' && !(phone && viewTab === 'sourcing')} aria-readonly={workflowReadOnly || undefined}>
         {viewTab === 'overview' && opp.route === 'Spares' && <SparesIntakeTab opp={opp} detailsRef={detailsRef} />}
         {viewTab === 'overview' && opp.route !== 'Spares' && <OverviewTab opp={opp} detailsRef={detailsRef} />}
-        {viewTab === 'requirement' && <RequirementTab opp={opp} onContinueToScope={opp.route === 'Service' ? () => advanceStep('service-scope') : undefined} onContinueToRate={opp.route === 'Service' ? () => advanceStep('service-rate') : undefined} />}
-        {viewTab === 'requirement-validation' && <SparesRequirementTab opp={opp} sourceText={sourceText} onContinueToSourcing={() => advanceStep('sourcing')} />}
+        {viewTab === 'requirement' && <RequirementTab opp={opp} onEditDetails={!workflowReadOnly && canEditDetails ? () => setEditingDetails(true) : undefined} onContinueToScope={opp.route === 'Service' ? () => advanceStep('service-scope') : undefined} onContinueToRate={opp.route === 'Service' ? () => advanceStep('service-rate') : undefined} />}
+        {viewTab === 'requirement-validation' && <SparesRequirementTab opp={opp} sourceText={sourceText} onEditDetails={!workflowReadOnly && canEditDetails ? () => setEditingDetails(true) : undefined} onContinueToSourcing={() => advanceStep('sourcing')} />}
         {viewTab === 'customer' && <CustomerKycTab opp={opp} />}
         {viewTab === 'registration' && <RegistrationTab opp={opp} goTab={goTab} />}
         {viewTab === 'clarifications' && <WorkspaceCatalogueBoundary><ClarificationsTab opp={opp} sourceText={sourceText} /></WorkspaceCatalogueBoundary>}
@@ -1048,7 +1062,7 @@ function CommercialDecisionPanel({ opp }) {
   )
 }
 
-function SparesRequirementTab({ opp, sourceText = '', onContinueToSourcing }) {
+function SparesRequirementTab({ opp, sourceText = '', onEditDetails, onContinueToSourcing }) {
   return (
     <div className="spares-merged-workflow">
       <CommercialDecisionPanel opp={opp} />
@@ -1060,7 +1074,7 @@ function SparesRequirementTab({ opp, sourceText = '', onContinueToSourcing }) {
       <div className="workbench-panel">
         <div className="workbench-section-title">Source &amp; opportunity details</div>
         <p className="hint">Use this reference to confirm the requested parts, quantities, specifications, compatibility, and delivery requirements.</p>
-        <RequirementTab opp={opp} />
+        <RequirementTab opp={opp} onEditDetails={onEditDetails} />
       </div>
       <div className="forms-actions workflow-next-actions">
         <button type="button" className="primary" onClick={onContinueToSourcing}>
@@ -1105,7 +1119,7 @@ function RegistrationTab({ opp, goTab, detailsRef, spares = false }) {
 }
 
 // ---------------------------------------------------------------------------
-function RequirementTab({ opp, onContinueToScope, onContinueToRate }) {
+function RequirementTab({ opp, onEditDetails, onContinueToScope, onContinueToRate }) {
   const store = useStore()
   if (opp.route === 'Service') {
     return <>
@@ -1151,7 +1165,10 @@ function RequirementTab({ opp, onContinueToScope, onContinueToRate }) {
         )}
       </div>
       <div className="ana-card c-6">
-        <div className="ana-title">Pipeline metadata</div>
+        <div className="requirement-metadata-heading">
+          <div className="ana-title">Pipeline metadata</div>
+          {onEditDetails && <button type="button" className="secondary" onClick={onEditDetails}>Edit opportunity details</button>}
+        </div>
         <p className="hint metadata-reference-note">Reference only. Update pipeline fields in Opportunity details; workflow progress advances through gated actions.</p>
         <table className="cost-table" style={{ width: '100%' }}>
           <tbody>

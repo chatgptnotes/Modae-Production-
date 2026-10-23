@@ -28,7 +28,7 @@ export const MOBILE_DESTINATIONS = [
 export function mobileDestinations(store, query = '') {
   const search = query.trim().toLowerCase()
   return MOBILE_DESTINATIONS.filter(([label, to, page]) =>
-    canSeePage(store.roles || store.role, page)
+    (!page || canSeePage(store.roles || store.role, page))
     && (to !== '/launcher' || store.demoData !== false)
     && label.toLowerCase().includes(search))
 }

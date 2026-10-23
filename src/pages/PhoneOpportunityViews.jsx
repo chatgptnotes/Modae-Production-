@@ -31,7 +31,7 @@ export function PhoneOpportunityRow({ opportunity: opp, canSeeValue, due, regist
   </article>
 }
 
-export function PhoneOpportunityProgress({ activeStep, completedThrough, reviewing = false, onStep, onBack, onNext, onEdit, allowFutureNavigation = false, steps = [] }) {
+export function PhoneOpportunityProgress({ activeStep, completedThrough, reviewing = false, onStep, onBack, onNext, onEdit, canEditDetails = false, allowFutureNavigation = false, steps = [] }) {
   const activeIndex = steps.findIndex(step => step.slug === activeStep)
   const currentIndex = reviewing ? completedThrough : activeIndex
   return <nav className="phone-opportunity-progress" aria-label="Opportunity progress">
@@ -41,7 +41,7 @@ export function PhoneOpportunityProgress({ activeStep, completedThrough, reviewi
       <button type="button" disabled={activeIndex < 0 || activeIndex >= steps.length - 1} aria-label="Next workflow step" onClick={() => onNext?.(steps[activeIndex + 1], activeIndex < completedThrough)}><Icon name="chevronRight" size={20} /></button>
     </div>
     <div className="phone-progress-dots" aria-hidden="true">{steps.map((step, index) => <i key={step.slug} className={index === currentIndex ? 'current' : index < currentIndex ? 'done' : ''} />)}</div>
-    {reviewing && <button type="button" className="phone-progress-edit" onClick={() => onEdit?.(steps[activeIndex])}>Edit stage</button>}
+    {canEditDetails && <button type="button" className="phone-progress-edit" onClick={onEdit}>Edit opportunity details</button>}
     <details className="phone-progress-disclosure"><summary>View all steps</summary><div>{steps.map((step, index) => <button key={step.slug} type="button" disabled={!allowFutureNavigation && index > completedThrough} aria-label={`${step.label}${index > completedThrough && !allowFutureNavigation ? ', locked future stage' : ''}`} aria-current={index === currentIndex ? 'step' : undefined} onClick={() => onStep?.(step.slug)}><span>{index < completedThrough ? '✓' : String(index + 1).padStart(2, '0')}</span>{step.label}{index > completedThrough && !allowFutureNavigation && <Icon name="lock" size={14} />}</button>)}</div></details>
   </nav>
 }

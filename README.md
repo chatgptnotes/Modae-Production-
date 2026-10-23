@@ -50,11 +50,35 @@ submission, and follow-up.
   without browsing sales records.
 - Lead evidence opens in a readable popup outside the form, with Close and Escape.
   EUC addresses wrap and grow; Opportunity Scope grows to display its contents.
-  Custom EUC addresses can be saved immediately. **Find with AI** explicitly uses
-  the configured server AI connection for optional location suggestions; typing
-  does not request AI search. Suggestions dismiss on leaving the field or Escape.
+  Custom EUC and Sell-to addresses can be saved immediately. Both fields are plain
+  wrapping text boxes: Enter checks the current address, Shift+Enter adds a new
+  line, and **Check address** supports mouse and phone use. Typing and blur make
+  no location requests; these fields have no city dropdown or AI search button.
+  Address boxes start at 40px and grow as text wraps. Keyboard hints appear on
+  focus. Address checks use a compact status/confidence line, a wrapped suggestion
+  with **Use address**, and collapsed **Details** for issues; Google attribution
+  remains visible. Its Google Maps link opens the suggested address (or the typed
+  address when no suggestion exists) in a new tab. Saving remains optional
+  regardless of the check result.
   Missing-information questions exclude supplier offer requirements and unsupported
   EMD requests; normal clarification drafts ask only the outstanding questions.
+  The Missing information panel starts collapsed; click its heading to expand.
+  It keeps the chosen state while editing and starts collapsed on reopening.
+- After successful AI extraction or Re-run, connected lead review checks EUC and
+  Sell-to Customer locations in the background using Google Address Validation.
+  Each optional advisory shows status, issues, suggested formatting and address
+  confidence separately from extraction confidence. Saving, qualification and
+  navigation remain available, including during failures. Original/custom
+  addresses stay unchanged until a user confirms a suggested correction; Save
+  changes persists the draft. Geocoding fallback supplies advisory matches only.
+  Checks do not run while typing or simply reopening a lead. Results stay in
+  session memory and are excluded from shared state and backups. See deployment
+  instructions for the separate Google Maps key and provider requirements.
+  **Check address** also checks a custom or edited address on demand.
+  Local development supports the same checks through a loopback-only endpoint;
+  production always requires an active lead editor. Checking one field preserves
+  the other field's advisory, including a pending check. Suggestions require
+  explicit confirmation before they change the draft.
 - Lead extraction keeps explicit Scope summaries, separates adjacent RFQ numbers
   and dates, and leaves clearly marked placeholder phone numbers missing. Delivery
   addresses may suggest EUC Location but require end-user confirmation. Generate
@@ -110,7 +134,31 @@ submission, and follow-up.
 - Connected lead conversion requires
   `supabase/migrations/20261016122935_stage_one_non_sales_access.sql` after the
   atomic approval migration. Apply it before deploying this application version.
-  SharePoint and shared-mailbox integration are separate setup work.
+  Microsoft sign-in, server-mediated SharePoint documents, and a shared Outlook
+  inbox are available when their Microsoft 365 and Railway settings are configured.
+  Documents users see the copied WINTRACK/Opportunities SharePoint folders as
+  the folder list. Matching WinTrack opportunities supply customer, owner and
+  status labels; unmatched folders remain visible as Unlinked. Folder and file
+  browsing stays inside that copied area, with file preview and download.
+  Existing users connect Microsoft from Personal settings while signed in with
+  their current WinTrack account; this keeps the same account ID and permissions.
+  Active users may read the shared mailbox. Sales users see leads and shared-mail
+  messages in one date-sorted Lead Inbox list; All mail adds messages that are
+  not already represented by leads, and `/mail` opens this combined inbox.
+  Search and Sync cover both sources. Clicking Sync checks new mail and classifies the message plus readable
+  attachment contents. With Microsoft notifications configured, new messages
+  are classified automatically using Graph delta sync; manual Sync remains a
+  recovery option. Only sales enquiries become Global New leads; other mail
+  stays in Shared mail when All mail is checked. Unreadable attachments and
+  uncertain classifications are flagged for review. Unassigned leads
+  are visible to users with Lead Inbox access; normal ownership rules apply
+  after assignment.
+  Linking messages and sending about leads still require the relevant WinTrack
+  edit permission. Lead Inbox also includes shared and personal Outlook folders,
+  saved drafts, attachments, and common message actions in the same page. The
+  composer saves to Outlook when Save as draft is clicked; Send saves the latest
+  contents before sending. See
+  `DEPLOYMENT.md` for the Microsoft setup and rollout.
 
 - Personal settings → Appearance lets each signed-in user choose Candara (default),
   Inter, Roboto, Open Sans, Merriweather, Lora or their device's system font. Account-backed choices follow the user across
@@ -171,6 +219,9 @@ submission, and follow-up.
   The Details preview uses Save/Cancel and warns before discarding a draft.
   Workflow transitions, customer-master status, calculated fields and bookings
   retain their existing controls.
+- Open opportunity details can also be corrected from completed workflow views
+  through **Edit opportunity details**, without moving the workflow stage back.
+  Closed opportunity workbench views remain read only.
 
 - Desktop navigation keeps company and workspace-view controls on one row at
   browser zoom. Narrow headers collapse search to an icon and move the clock,

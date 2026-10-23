@@ -6,7 +6,7 @@ import { displayRoleLabel } from '../utils.js'
 import { Icon, ModaeImageLogo } from '../icons.jsx'
 import { InstallBanner } from '../install.jsx'
 import BrandWatermark from '../branding/BrandWatermark.jsx'
-import { supabase, signInWithPassword, signUpWithPassword } from '../supabase.js'
+import { supabase, signInWithPassword, signUpWithPassword, signInWithMicrosoft } from '../supabase.js'
 import { canUseLocalDemoAuth } from '../authMode.js'
 
 // Roles a new registrant may request: the sales owners plus the technical
@@ -21,7 +21,7 @@ export default function Login() {
   const [pw, setPw] = useState('')
   const [name, setName] = useState('')
   const [role, setRole] = useState('RS')
-  const [err, setErr] = useState('')
+  const [err, setErr] = useState(() => new URLSearchParams(window.location.search).get('auth_error') || '')
   const [ok, setOk] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [signingIn, setSigningIn] = useState(false)
@@ -59,6 +59,13 @@ export default function Login() {
     } finally {
       setSigningIn(false)
     }
+  }
+
+  const microsoftSignIn = async () => {
+    if (signingIn) return
+    setSigningIn(true); setErr('')
+    try { await signInWithMicrosoft() }
+    catch (error) { setErr(error?.message || 'Microsoft sign-in failed.'); setSigningIn(false) }
   }
 
   const submitRegister = async e => {
@@ -112,6 +119,7 @@ export default function Login() {
               <button className="primary" type="submit" disabled={signingIn} aria-busy={signingIn}>
                 {signingIn ? <><span className="auth-loading__spinner auth-loading__spinner-inline" aria-hidden="true" /> Signing in…</> : 'Sign in'}
               </button>
+              <button className="microsoft-signin" type="button" onClick={microsoftSignIn} disabled={signingIn}>Sign in with Microsoft</button>
             </div>
             <div className="login-switch">
               Need an account? <a onClick={() => switchMode('register')}>Request access</a>

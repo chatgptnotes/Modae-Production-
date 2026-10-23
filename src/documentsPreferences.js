@@ -4,13 +4,13 @@ export const documentsKeys = (user, scope) => ({
   tab: `wintrack-modae-documents-tab-v1:${encodeURIComponent(user)}:${scope}`,
 })
 const unavailableStorage = new Map()
-const groups = ['Open', 'WON', 'Closed', 'Preserved']
+const groups = ['Open', 'WON', 'Closed', 'Unlinked', 'Preserved']
 function normalize(value = {}) {
   return {
     layout: value?.layout === 'list' ? 'list' : 'grid',
     sort: ['id', 'ascending', 'customer'].includes(value?.sort) ? value.sort : 'id',
     search: typeof value?.search === 'string' ? value.search : '',
-    statusFilter: ['All', ...groups.slice(0, 3)].includes(value?.statusFilter) ? value.statusFilter : 'All',
+    statusFilter: ['All', 'Open', 'WON', 'Closed', 'Unlinked'].includes(value?.statusFilter) ? value.statusFilter : 'All',
     collapsed: Array.isArray(value?.collapsed) ? value.collapsed.filter(v => groups.includes(v)) : [],
     scroll: Object.fromEntries(Object.entries(value?.scroll && typeof value.scroll === 'object' ? value.scroll : {})
       .filter(([key, n]) => /^\/folders(?:\/|$)/.test(key) && Number.isFinite(n) && n >= 0)),

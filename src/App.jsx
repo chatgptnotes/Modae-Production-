@@ -281,7 +281,7 @@ function LoadedAppShell() {
     : ''
   const userInitials = signedInName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]?.toUpperCase()).join('')
   const items = NAV
-    .filter(t => canSeePage(store.roles || role, t.page) && (typeof t.show !== 'function' || t.show(role)))
+    .filter(t => (!t.page || canSeePage(store.roles || role, t.page)) && (typeof t.show !== 'function' || t.show(role)))
     .map(t => t.to === '/order' && isSalesOwner(role) ? { ...t, label: 'My Purchase Orders' } : t)
   const withConnectivity = content => content
   useEffect(() => startAutoTitle(mainRef.current), [])
@@ -329,6 +329,7 @@ function LoadedAppShell() {
       <Route path="/home" element={<Navigate to="/opportunities" replace />} />
       <Route path="/my" element={<PageGate page="my"><MyOpps /></PageGate>} />
       <Route path="/inbox" element={<PageGate page="inbox"><Inbox /></PageGate>} />
+      <Route path="/mail" element={<Navigate to="/inbox" replace />} />
       <Route path="/inbox/:leadId" element={<PageGate page="inbox"><Inbox /></PageGate>} />
       <Route path="/register/:leadId" element={<PageGate page="inbox"><Register /></PageGate>} />
       <Route path="/opp/:oppId" element={<PageGate page="tracker"><Workbench /></PageGate>} />

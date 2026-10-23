@@ -219,3 +219,10 @@ The optional Railway `WORKSPACE_SYNC_ENABLED` flag adds bounded authenticated
 metadata reads for visible screens. It does not enable Realtime, add application
 tables, or persist typing heartbeats. Row commits still use existing revision-aware
 RPCs. Checks run on activation, never an idle timer. See `DEPLOYMENT.md` for explicit-save limits and staging verification.
+
+## Microsoft mailbox link metadata
+
+Apply `migrations/20261022140000_microsoft_mail_links.sql` before enabling the
+Microsoft mailbox UI. It adds no table: links use `records.entity = 'mail_links'`
+and `save_rows`, but browser SQL access to those rows is denied. The service
+role reads and writes links only after the API applies WinTrack permissions.
