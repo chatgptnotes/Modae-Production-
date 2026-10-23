@@ -38,6 +38,7 @@ export function matchesOpportunityDate(row, date, now) {
 
 export function scopedOpportunityRows(rows, scope, actor, sheet) {
   return rows.filter(row => (scope !== 'my' || row.owner === actor)
+    && (sheet === 'Archived' ? Boolean(row.pipelineArchivedAt) : !row.pipelineArchivedAt)
     && (sheet !== 'My Orders' || (row.status === 'Closed' && row.stage === 'Won')))
 }
 

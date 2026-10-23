@@ -94,3 +94,23 @@ test('dashboard model uses the same exact and configured forecast weights as KPI
   ]
   assert.equal(dashboardModel(state).weightedK, 150)
 })
+
+test('dashboard summaries use active opportunities and update when rows are edited or archived', () => {
+  const state = seedState()
+  state.opportunities = [
+    { ...state.opportunities[0], id: 'ACTIVE', owner: 'RS', status: 'Open', valueK: 100, pipelineArchivedAt: null },
+    { ...state.opportunities[0], id: 'ARCHIVED', owner: 'OLD', status: 'Open', valueK: 900, pipelineArchivedAt: '2026-10-01T00:00:00.000Z' },
+  ]
+  const active = dashboardModel(state)
+  assert.equal(active.opportunityCounts.total, 1)
+  assert.equal(active.headlinePipelineK, 100)
+  assert.deepEqual(active.visible.map(row => row.id), ['ACTIVE'])
+  assert.equal(active.team.some(row => row.owner === 'OLD'), false)
+
+  state.opportunities[0] = { ...state.opportunities[0], valueK: 250 }
+  assert.equal(dashboardModel(state).headlinePipelineK, 250)
+  state.opportunities[0] = { ...state.opportunities[0], pipelineArchivedAt: '2026-10-02T00:00:00.000Z' }
+  assert.equal(dashboardModel(state).opportunityCounts.total, 0)
+  state.opportunities.push({ ...state.opportunities[0], id: 'NEW', pipelineArchivedAt: null, valueK: 50 })
+  assert.equal(dashboardModel(state).headlinePipelineK, 50)
+})

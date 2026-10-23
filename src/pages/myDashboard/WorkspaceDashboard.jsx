@@ -7,6 +7,7 @@ import { displayOpportunityId } from '../../seed.js'
 import { FY_QUARTERS } from '../../kpi.js'
 import { canPriceProposal, ddMMyyyy } from '../../utils.js'
 import { dashboardModel } from './model.js'
+import { scopedOpportunityRows } from '../../opportunityFilters.js'
 import { useWorkspaceView } from '../../ui/WorkspaceViewContext.jsx'
 import './workspace.css'
 import usePhoneLayout from '../../tablet/usePhoneLayout.js'
@@ -136,7 +137,7 @@ export default function WorkspaceDashboard({ store, nav }) {
   const phone = usePhoneLayout()
   const { scope, period, setPeriod, topPeriod, setTopPeriod, owner } = useWorkspaceView()
   const showMoney = canPriceProposal(store.role)
-  const knownOwners = [...new Set([...(store.opportunities || []).map(row => row.owner), ...Object.keys(store.sales?.targets || {})])].filter(Boolean)
+  const knownOwners = [...new Set([...scopedOpportunityRows(store.opportunities || [], 'global', store.role, 'Opportunities').map(row => row.owner), ...Object.keys(store.sales?.targets || {})])].filter(Boolean)
   const effectiveOwner = knownOwners.includes(owner) ? owner : 'all'
   const model = useMemo(() => dashboardModel(store, { scope, owner: effectiveOwner, period, topPeriod }), [store, scope, effectiveOwner, period, topPeriod])
   const fy = store.sales?.fy || 'current FY'

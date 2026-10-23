@@ -5,6 +5,7 @@ import { ageDays, ddMMyyyy, isTodayIST, isHiddenDashboardOpportunity, canPricePr
 import { fieldBase } from '../../workbookGovernance.js'
 import { bookingRegister } from '../../orderBookings.js'
 import { currentFiscalQuarter } from '../../ui/workspacePeriods.js'
+import { scopedOpportunityRows } from '../../opportunityFilters.js'
 
 export const PAGE_SIZE = 6
 
@@ -85,7 +86,8 @@ const periodLabel = (period, fy) => period === 'all' ? 'All history' : period ==
 export function dashboardModel(store, { scope = 'global', owner = 'all', period = 'all', now = new Date(), topPeriod = currentFiscalQuarter(now) } = {}) {
   const role = store.role
   const range = dashboardPeriod(period, store.sales?.fy, now)
-  const visible = (store.opportunities || []).filter(o => !isHiddenDashboardOpportunity(o))
+  const visible = scopedOpportunityRows(store.opportunities || [], 'global', role, 'Opportunities')
+    .filter(o => !isHiddenDashboardOpportunity(o))
   // Performance and Top 5 have their own periods. Operational work and the
   // funnel/outcomes always use the complete eligible opportunity history.
   const opportunities = visible
